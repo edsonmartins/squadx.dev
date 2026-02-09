@@ -45,6 +45,7 @@ public class SquadService {
         return mapToResponse(squad);
     }
 
+    @Transactional(readOnly = true)
     public SquadResponse getById(Long id, User currentUser) {
         Squad squad = squadRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Squad not found"));
@@ -54,6 +55,7 @@ public class SquadService {
         return mapToResponse(squad);
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<SquadResponse> getByOrganizationId(Long organizationId, Pageable pageable, User currentUser) {
         validateUserAccess(organizationId, currentUser.getId());
 

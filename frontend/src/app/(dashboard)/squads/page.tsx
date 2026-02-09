@@ -28,19 +28,19 @@ export default function SquadsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch organizations for the current user
+  // Fetch organizations from API (same pattern as projects page)
   const { data: organizations } = useQuery({
     queryKey: ["organizations"],
     queryFn: () => organizationsApi.list(),
   });
 
-  const defaultOrgId = organizations?.content?.[0]?.id;
+  const organizationId = organizations?.content?.[0]?.id;
 
   // Fetch squads
   const { data: squads, isLoading } = useQuery({
-    queryKey: ["squads", defaultOrgId],
-    queryFn: () => squadsApi.list(defaultOrgId!),
-    enabled: !!defaultOrgId,
+    queryKey: ["squads", organizationId],
+    queryFn: () => squadsApi.list(organizationId!),
+    enabled: !!organizationId,
   });
 
   // Delete mutation
@@ -48,6 +48,7 @@ export default function SquadsPage() {
     mutationFn: (id: number) => squadsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["squads"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
       toast({
         title: "Squad deleted",
         description: "The squad has been deleted successfully.",
@@ -66,8 +67,9 @@ export default function SquadsPage() {
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: (id: number) => squadsApi.toggleActive(id),
-    onSuccess: (_, id) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["squads"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
       toast({
         title: "Squad updated",
         description: "The squad status has been updated.",
@@ -177,14 +179,14 @@ export default function SquadsPage() {
         open={isModalOpen}
         onClose={handleCloseModal}
         squad={selectedSquad}
-        organizationId={defaultOrgId}
+        organizationId={organizationId}
       />
 
       {/* Squad Detail Sheet */}
       <SquadDetailSheet
         squad={detailSquad}
         onClose={() => setDetailSquad(null)}
-        organizationId={defaultOrgId}
+        organizationId={organizationId}
       />
 
       {/* Delete Confirmation */}

@@ -141,10 +141,10 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     (column: BoardItem) => {
       const color = getColumnColor(column.id);
       return (
-        <div className="flex items-center gap-2 p-3 border-b">
-          <div className={`h-3 w-3 rounded-full ${color}`} />
-          <h3 className="font-medium">{column.title}</h3>
-          <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+        <div className="kanban-column-header flex items-center gap-2">
+          <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
+          <h3 className="font-medium text-sm">{column.title}</h3>
+          <span className="ml-auto badge-pill bg-background text-muted-foreground text-xs">
             {column.children.length}
           </span>
         </div>
@@ -155,11 +155,11 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
   // Column wrapper styles
   const columnWrapperClassName = useCallback(() => {
-    return "flex w-80 shrink-0 flex-col rounded-lg bg-muted/50";
+    return "kanban-column flex w-72 shrink-0 flex-col";
   }, []);
 
   const columnListContentClassName = useCallback(() => {
-    return "flex-1 space-y-3 p-3 min-h-[200px]";
+    return "flex-1 space-y-2 p-2 min-h-[180px]";
   }, []);
 
   return (

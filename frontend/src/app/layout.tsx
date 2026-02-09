@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { DM_Sans, Fragment_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({ subsets: ["latin"] });
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: ["400", "500", "600", "700"],
+});
+
+const fragmentMono = Fragment_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400"],
+});
 
 export const metadata: Metadata = {
   title: "SquadX.dev - AI Development Squad Orchestration",
@@ -20,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${dmSans.variable} ${fragmentMono.variable} font-sans`}>
         <Providers>{children}</Providers>
         <Toaster />
       </body>

@@ -77,6 +77,7 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["squads"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
       toast({
         title: "Squad created",
         description: "Your AI squad has been created successfully.",
@@ -97,6 +98,7 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
       squadsApi.update(squad!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["squads"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
       toast({
         title: "Squad updated",
         description: "Your squad has been updated successfully.",

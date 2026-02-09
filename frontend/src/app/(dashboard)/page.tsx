@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -29,16 +29,34 @@ interface MetricsData {
 export default function DashboardPage() {
   const router = useRouter();
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const { selectedOrganization, fetchOrganizations } = useOrganizationStore();
-
-  useEffect(() => {
-    fetchOrganizations();
-  }, [fetchOrganizations]);
+  const { selectedOrganization, selectOrganization } = useOrganizationStore();
 
   const { data: orgsData } = useQuery({
     queryKey: ["organizations"],
     queryFn: () => organizationsApi.list(),
   });
+
+  // Keep selectedOrganization in sync with fresh data from query
+  const currentOrganization = useMemo(() => {
+    if (!orgsData?.content || orgsData.content.length === 0) return selectedOrganization;
+
+    // Find the selected org in fresh data, or default to first
+    const freshOrg = selectedOrganization
+      ? orgsData.content.find(o => o.id === selectedOrganization.id)
+      : orgsData.content[0];
+
+    return freshOrg || orgsData.content[0];
+  }, [orgsData, selectedOrganization]);
+
+  // Update store when fresh data is available
+  useEffect(() => {
+    if (currentOrganization && currentOrganization.id !== selectedOrganization?.id) {
+      selectOrganization(currentOrganization);
+    } else if (currentOrganization && selectedOrganization &&
+               currentOrganization.squads_count !== selectedOrganization.squads_count) {
+      selectOrganization(currentOrganization);
+    }
+  }, [currentOrganization, selectedOrganization, selectOrganization]);
 
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
@@ -46,22 +64,22 @@ export default function DashboardPage() {
   });
 
   const { data: activeSessions } = useQuery({
-    queryKey: ["active-sessions", selectedOrganization?.id],
+    queryKey: ["active-sessions", currentOrganization?.id],
     queryFn: () =>
-      selectedOrganization
-        ? liveViewApi.getActiveByOrganization(selectedOrganization.id)
+      currentOrganization
+        ? liveViewApi.getActiveByOrganization(currentOrganization.id)
         : Promise.resolve([]),
-    enabled: !!selectedOrganization,
+    enabled: !!currentOrganization,
   });
 
   const { data: metricsData } = useQuery<MetricsData>({
-    queryKey: ["metrics", selectedOrganization?.id],
+    queryKey: ["metrics", currentOrganization?.id],
     queryFn: async () => {
-      if (!selectedOrganization) return {};
-      const result = await executionsApi.getMetrics(selectedOrganization.id);
+      if (!currentOrganization) return {};
+      const result = await executionsApi.getMetrics(currentOrganization.id);
       return result as MetricsData;
     },
-    enabled: !!selectedOrganization,
+    enabled: !!currentOrganization,
   });
 
   const organizations = orgsData?.content || [];
@@ -91,9 +109,9 @@ export default function DashboardPage() {
     },
     {
       title: "AI Squads",
-      value: organizations.reduce((acc, o) => acc + o.squads_count, 0),
+      value: currentOrganization?.squads_count || 0,
       icon: TrendingUp,
-      change: "All active",
+      change: currentOrganization?.name || "No org selected",
       changeType: "positive" as const,
     },
   ];

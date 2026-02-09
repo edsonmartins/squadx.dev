@@ -1,0 +1,45 @@
+package dev.squadx.dto.agent;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.squadx.model.enums.AgentType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.Set;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AgentRequest {
+
+    @NotBlank(message = "Name is required")
+    private String name;
+
+    @NotNull(message = "Agent type is required")
+    @JsonProperty("agent_type")
+    private AgentType agentType;
+
+    private String description;
+
+    @JsonProperty("model_id")
+    private String modelId;
+
+    @JsonProperty("system_prompt")
+    private String systemPrompt;
+
+    @JsonProperty("max_tokens")
+    private Integer maxTokens;
+
+    private Double temperature;
+
+    @NotNull(message = "Squad ID is required")
+    @JsonProperty("squad_id")
+    private Long squadId;
+
+    private Set<String> capabilities;
+}

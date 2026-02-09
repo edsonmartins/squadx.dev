@@ -1,0 +1,61 @@
+# ===== General =====
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.swo
+.env
+.env.local
+.env.*.local
+
+# ===== IDEs =====
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# ===== Backend (Java/Spring Boot) =====
+backend/target/
+backend/*.jar
+backend/*.war
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# ===== Frontend (Next.js) =====
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.pnp/
+frontend/.pnp.js
+frontend/coverage/
+frontend/.vercel
+
+# ===== Client (Python) =====
+client/__pycache__/
+client/*.pyc
+client/*.pyo
+client/*.egg-info/
+client/dist/
+client/build/
+client/.eggs/
+client/*.egg
+client/.pytest_cache/
+client/.mypy_cache/
+client/.ruff_cache/
+client/.coverage
+client/htmlcov/
+client/venv/
+client/.venv/
+
+# ===== Docker =====
+*.log
+
+# ===== Testing =====
+coverage/
+.nyc_output/
+
+# ===== Secrets =====
+*.pem
+*.key
+credentials.json
+secrets.json

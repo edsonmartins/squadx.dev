@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install:*)",
+      "Bash(pnpm type-check:*)",
+      "Bash(pnpm add:*)",
+      "Bash(npx next lint:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm dev)",
+      "Bash(mvn:*)",
+      "Bash(./mvnw spring-boot:run:*)",
+      "Bash(curl:*)",
+      "Bash(PGPASSWORD=\"Rapidex@727204\" psql:*)",
+      "Bash(PGPASSWORD=\"Rapidex@727204\" psql -h 192.168.1.110 -p 5444 -U admin -d squadx -c \"UPDATE users SET password = ''$2a$10$3wj2zcZFzUdih8yFmrEt7uEAGGdWIT7nVTQ3HEUa0339nhZbgXJXu'' WHERE email = ''admin@squadx.dev'';\")",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm run build:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:aider.chat)",
+      "WebFetch(domain:swe-agent.com)",
+      "Bash(python3 -m py_compile:*)"
+    ]
+  }
+}

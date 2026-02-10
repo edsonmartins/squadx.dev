@@ -235,11 +235,27 @@ class SupabaseClient:
             }
         )
 
-        def handle_broadcast(payload: dict):
-            """Handle webrtc-signal broadcast from frontend viewers."""
+        def handle_broadcast(broadcast):
+            """Handle webrtc-signal broadcast from frontend viewers.
+
+            Args:
+                broadcast: BroadcastPayload with {event, payload} structure
+            """
+            # Extract the actual signal data from nested structure
+            # broadcast.payload = {'event': 'webrtc-signal', 'payload': {actual signal data}}
+            raw_payload = broadcast.payload if hasattr(broadcast, 'payload') else broadcast
+
+            # The signal data is nested under 'payload' key
+            if isinstance(raw_payload, dict) and 'payload' in raw_payload:
+                signal_data = raw_payload['payload']
+            else:
+                signal_data = raw_payload
+
+            logger.debug(f"Received signal data: type={signal_data.get('type')}, sender={signal_data.get('sender_id')}")
+
             msg = RealtimeMessage(
                 event="webrtc-signal",
-                payload=payload,  # Frontend sends flat payload
+                payload=signal_data,
                 channel=channel_name,
             )
             for callback in self._message_callbacks.get(channel_name, []):

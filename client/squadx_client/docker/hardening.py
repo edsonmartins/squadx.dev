@@ -106,8 +106,8 @@ class SecurityConfig:
         security_opts = []
         if self.no_new_privileges:
             security_opts.append("no-new-privileges:true")
-        if self.seccomp_profile:
-            security_opts.append(f"seccomp={self.seccomp_profile}")
+        # Note: seccomp via Docker SDK is complex - use CLI for full hardening
+        # The seccomp_profile path is used in get_run_command() for CLI mode
         if self.apparmor_profile:
             security_opts.append(f"apparmor={self.apparmor_profile}")
 

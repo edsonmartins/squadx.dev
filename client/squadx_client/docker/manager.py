@@ -110,17 +110,10 @@ class DockerManager:
                     **config.environment,
                 }
 
-                # Prepare volumes
+                # Prepare volumes (use config.volumes, don't add workspace again)
                 volumes = {
                     **config.volumes,
                 }
-
-                # Add workspace volume if specified
-                if settings.workspace_path:
-                    volumes[settings.workspace_path] = {
-                        "bind": config.workspace_path,
-                        "mode": "rw",
-                    }
 
                 # Prepare ports
                 ports = {**config.ports}

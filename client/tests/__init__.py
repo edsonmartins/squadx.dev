@@ -1,0 +1,1 @@
+# SquadX Client Tests

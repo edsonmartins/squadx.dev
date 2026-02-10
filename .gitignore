@@ -31,9 +31,9 @@ frontend/coverage/
 frontend/.vercel
 
 # ===== Client (Python) =====
-client/__pycache__/
-client/*.pyc
-client/*.pyo
+**/__pycache__/
+*.pyc
+*.pyo
 client/*.egg-info/
 client/dist/
 client/build/

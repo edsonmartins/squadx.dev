@@ -3,7 +3,7 @@
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SubTask(BaseModel):
@@ -141,5 +141,4 @@ class OrchestratorState(BaseModel):
     should_end: bool = False
     error: str | None = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

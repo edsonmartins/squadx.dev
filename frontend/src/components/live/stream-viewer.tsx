@@ -1,0 +1,329 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Maximize2,
+  Minimize2,
+  Volume2,
+  VolumeX,
+  Settings,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import {
+  useWebRTC,
+  ConnectionState,
+  parseWebRTCStats,
+} from "@/hooks/use-webrtc";
+
+interface StreamViewerProps {
+  sessionId: string;
+  className?: string;
+  onConnectionChange?: (state: ConnectionState) => void;
+}
+
+export function StreamViewer({
+  sessionId,
+  className,
+  onConnectionChange,
+}: StreamViewerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [showControls, setShowControls] = useState(true);
+  const [showStats, setShowStats] = useState(false);
+
+  const { connectionState, remoteStream, connect, disconnect, stats } =
+    useWebRTC({
+      sessionId,
+      onTrack: (stream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      },
+      onConnectionStateChange: onConnectionChange,
+    });
+
+  const parsedStats = parseWebRTCStats(stats);
+
+  // Auto-connect on mount
+  useEffect(() => {
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
+
+  // Attach stream to video element
+  useEffect(() => {
+    if (videoRef.current && remoteStream) {
+      videoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  // Handle fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  // Auto-hide controls
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+
+    if (connectionState === "connected" && showControls) {
+      timeout = setTimeout(() => setShowControls(false), 3000);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [connectionState, showControls]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      containerRef.current.requestFullscreen();
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+    }
+  }, []);
+
+  const handleReconnect = useCallback(() => {
+    disconnect();
+    setTimeout(() => connect(), 500);
+  }, [connect, disconnect]);
+
+  const getConnectionStatusColor = () => {
+    switch (connectionState) {
+      case "connected":
+        return "bg-green-500";
+      case "connecting":
+        return "bg-yellow-500";
+      case "failed":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  return (
+    <TooltipProvider>
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative bg-black rounded-lg overflow-hidden group",
+          className
+        )}
+        onMouseMove={() => setShowControls(true)}
+        onMouseLeave={() =>
+          connectionState === "connected" && setShowControls(false)
+        }
+      >
+        {/* Video Element */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isMuted}
+          className="w-full h-full object-contain"
+        />
+
+        {/* Connection Status Overlay */}
+        {connectionState !== "connected" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white">
+            {connectionState === "connecting" && (
+              <>
+                <Loader2 className="h-12 w-12 animate-spin mb-4" />
+                <p className="text-lg font-medium">Connecting to stream...</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Establishing WebRTC connection
+                </p>
+              </>
+            )}
+
+            {connectionState === "failed" && (
+              <>
+                <WifiOff className="h-12 w-12 text-red-500 mb-4" />
+                <p className="text-lg font-medium">Connection failed</p>
+                <p className="text-sm text-gray-400 mt-2 mb-4">
+                  Unable to connect to the live stream
+                </p>
+                <Button variant="outline" onClick={handleReconnect}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+              </>
+            )}
+
+            {connectionState === "disconnected" && (
+              <>
+                <Wifi className="h-12 w-12 text-gray-500 mb-4" />
+                <p className="text-lg font-medium">Stream disconnected</p>
+                <p className="text-sm text-gray-400 mt-2 mb-4">
+                  The live stream has ended or is unavailable
+                </p>
+                <Button variant="outline" onClick={handleReconnect}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reconnect
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Controls Overlay */}
+        <div
+          className={cn(
+            "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300",
+            showControls || connectionState !== "connected"
+              ? "opacity-100"
+              : "opacity-0"
+          )}
+        >
+          {/* Bottom Controls */}
+          <div className="flex items-center justify-between">
+            {/* Left Controls */}
+            <div className="flex items-center gap-2">
+              {/* Connection Status */}
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    getConnectionStatusColor()
+                  )}
+                />
+                <Badge variant="secondary" className="capitalize">
+                  {connectionState === "connected" ? (
+                    <>
+                      <span className="animate-pulse mr-1.5">
+                        <span className="inline-block h-1.5 w-1.5 bg-red-500 rounded-full" />
+                      </span>
+                      LIVE
+                    </>
+                  ) : (
+                    connectionState
+                  )}
+                </Badge>
+              </div>
+
+              {/* Stats Display */}
+              {showStats && connectionState === "connected" && (
+                <div className="flex items-center gap-3 text-xs text-gray-300 ml-2">
+                  {parsedStats.resolution && (
+                    <span>{parsedStats.resolution}</span>
+                  )}
+                  {parsedStats.framerate > 0 && (
+                    <span>{parsedStats.framerate} fps</span>
+                  )}
+                  {parsedStats.bitrate > 0 && (
+                    <span>{parsedStats.bitrate} kbps</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Controls */}
+            <div className="flex items-center gap-1">
+              {/* Stats Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white hover:bg-white/20"
+                    onClick={() => setShowStats(!showStats)}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{showStats ? "Hide" : "Show"} Stats</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Mute Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white hover:bg-white/20"
+                    onClick={toggleMute}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="h-4 w-4" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isMuted ? "Unmute" : "Mute"}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Fullscreen Toggle */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white hover:bg-white/20"
+                    onClick={toggleFullscreen}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="h-4 w-4" />
+                    ) : (
+                      <Maximize2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isFullscreen ? "Exit Fullscreen" : "Fullscreen"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+
+        {/* Session ID Display (top) */}
+        <div
+          className={cn(
+            "absolute top-4 right-4 transition-opacity duration-300",
+            showControls || connectionState !== "connected"
+              ? "opacity-100"
+              : "opacity-0"
+          )}
+        >
+          <Badge variant="secondary" className="font-mono text-xs">
+            {sessionId.slice(0, 8)}...
+          </Badge>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}

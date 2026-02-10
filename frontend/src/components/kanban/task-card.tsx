@@ -1,12 +1,15 @@
 "use client";
 
-import { MessageSquare, Clock, User } from "lucide-react";
+import { MessageSquare, Clock, User, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskResponse, TaskPriority } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 
 interface TaskCardContentProps {
   task: TaskResponse;
   onClick?: () => void;
+  liveSessionCode?: string;
+  onWatchLive?: (code: string) => void;
 }
 
 const priorityColors: Record<TaskPriority, string> = {
@@ -30,25 +33,53 @@ const priorityLabels: Record<TaskPriority, string> = {
   URGENT: "Urgent",
 };
 
-export function TaskCardContent({ task, onClick }: TaskCardContentProps) {
+export function TaskCardContent({
+  task,
+  onClick,
+  liveSessionCode,
+  onWatchLive,
+}: TaskCardContentProps) {
+  const handleWatchLive = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (liveSessionCode && onWatchLive) {
+      onWatchLive(liveSessionCode);
+    }
+  };
+
   return (
     <div
       className={cn(
         "task-card task-card-bordered p-2.5",
-        priorityColors[task.priority]
+        priorityColors[task.priority],
+        liveSessionCode && "ring-1 ring-red-500/50"
       )}
       onClick={onClick}
     >
-      {/* Priority Badge */}
+      {/* Priority Badge + Live Indicator */}
       <div className="flex items-center justify-between mb-2">
-        <span
-          className={cn(
-            "badge-pill text-[10px]",
-            priorityBadgeColors[task.priority]
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "badge-pill text-[10px]",
+              priorityBadgeColors[task.priority]
+            )}
+          >
+            {priorityLabels[task.priority]}
+          </span>
+          {liveSessionCode && (
+            <Badge
+              variant="destructive"
+              className="text-[9px] px-1.5 py-0 h-4 cursor-pointer hover:bg-red-600"
+              onClick={handleWatchLive}
+            >
+              <span className="animate-pulse mr-1">
+                <span className="inline-block h-1 w-1 bg-white rounded-full" />
+              </span>
+              <Video className="h-2.5 w-2.5 mr-0.5" />
+              LIVE
+            </Badge>
           )}
-        >
-          {priorityLabels[task.priority]}
-        </span>
+        </div>
         {task.story_points && (
           <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Clock className="h-3 w-3" />

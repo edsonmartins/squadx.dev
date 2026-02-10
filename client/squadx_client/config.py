@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
 
+    # Supabase Configuration (Live Streaming)
+    supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
+    supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")
+    supabase_service_key: str | None = Field(default=None, alias="SUPABASE_SERVICE_KEY")
+
     @property
     def expanded_data_dir(self) -> str:
         """Return expanded data directory path."""

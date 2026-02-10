@@ -42,15 +42,18 @@ class AgentSandbox:
         agent_type: str,
         workspace_path: str,
         manager: Optional[DockerManager] = None,
+        enable_live_streaming: bool = True,
     ):
         self.task_id = task_id
         self.agent_type = agent_type
         self.workspace_path = workspace_path
         self.manager = manager or docker_manager
+        self.enable_live_streaming = enable_live_streaming
 
         self.container_id: Optional[str] = None
         self.status = SandboxStatus.CREATED
         self.vnc_port: Optional[int] = None
+        self.live_join_code: Optional[str] = None
 
         self._output_callback: Optional[Callable[[str], Any]] = None
         self._status_callback: Optional[Callable[[SandboxStatus], Any]] = None
@@ -126,9 +129,18 @@ class AgentSandbox:
 
             # Get VNC port if enabled
             if enable_vnc:
-                await asyncio.sleep(1)  # Wait for port binding
+                await asyncio.sleep(2)  # Wait for VNC to be ready
                 self.vnc_port = await self.manager.get_vnc_port(self.container_id)
                 logger.info(f"VNC available on port: {self.vnc_port}")
+
+                # Start live streaming if enabled
+                if self.enable_live_streaming and self.vnc_port:
+                    self.live_join_code = await self.manager.start_live_stream(
+                        container_id=self.container_id,
+                        task_id=self.task_id,
+                    )
+                    if self.live_join_code:
+                        logger.info(f"Live streaming available: {self.live_join_code}")
 
             self._set_status(SandboxStatus.RUNNING)
             logger.info(f"Sandbox started for task {self.task_id}")
@@ -150,6 +162,11 @@ class AgentSandbox:
         self._set_status(SandboxStatus.STOPPING)
 
         try:
+            # Stop live streaming first
+            if self.live_join_code:
+                await self.manager.stop_live_stream(self.container_id)
+                self.live_join_code = None
+
             await self.manager.stop_container(self.container_id, timeout=timeout)
             self._set_status(SandboxStatus.STOPPED)
             logger.info(f"Sandbox stopped for task {self.task_id}")
@@ -165,6 +182,11 @@ class AgentSandbox:
             return True
 
         try:
+            # Stop live streaming first
+            if self.live_join_code:
+                await self.manager.stop_live_stream(self.container_id)
+                self.live_join_code = None
+
             await self.manager.remove_container(self.container_id, force=True)
             self.container_id = None
             self.vnc_port = None

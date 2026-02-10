@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 import docker
@@ -10,6 +10,9 @@ from docker.models.containers import Container
 from docker.errors import DockerException, NotFound, APIError
 
 from squadx_client.config import settings
+
+if TYPE_CHECKING:
+    from squadx_client.streaming.webrtc_bridge import WebRTCBridge
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,18 @@ class ContainerConfig:
     security_level: str = "standard"  # development, standard, maximum
 
 
+@dataclass
+class LiveStreamInfo:
+    """Information about an active live stream for a container."""
+
+    container_id: str
+    task_id: int
+    session_id: str
+    join_code: str
+    vnc_port: int
+    bridge: Optional["WebRTCBridge"] = None
+
+
 class DockerManager:
     """Manages Docker containers for SquadX agents."""
 
@@ -42,6 +57,9 @@ class DockerManager:
         self.client: Optional[docker.DockerClient] = None
         self.containers: dict[str, Container] = {}
         self._lock = asyncio.Lock()
+        # Live streaming tracking
+        self._live_streams: dict[str, LiveStreamInfo] = {}  # container_id -> LiveStreamInfo
+        self._live_enabled = bool(settings.supabase_url and settings.supabase_anon_key)
 
     async def connect(self) -> bool:
         """Connect to Docker daemon."""
@@ -324,17 +342,166 @@ class DockerManager:
 
             result = []
             for container in containers:
+                live_info = self._live_streams.get(container.id)
                 result.append({
                     "id": container.id,
                     "name": container.name,
                     "status": container.status,
                     "created": container.attrs.get("Created"),
+                    "live_session": live_info.join_code if live_info else None,
                 })
 
             return result
         except APIError as e:
             logger.error(f"Failed to list containers: {e}")
             return []
+
+    async def start_live_stream(
+        self,
+        container_id: str,
+        task_id: int,
+        fps: int = 30,
+    ) -> Optional[str]:
+        """Start live streaming for a container.
+
+        Args:
+            container_id: The container ID
+            task_id: The task ID for the session
+            fps: Frames per second for the stream
+
+        Returns:
+            The join code for the live session, or None if failed
+        """
+        if not self._live_enabled:
+            logger.warning("Live streaming not enabled (Supabase not configured)")
+            return None
+
+        # Check if already streaming
+        if container_id in self._live_streams:
+            return self._live_streams[container_id].join_code
+
+        # Get VNC port
+        vnc_port = await self.get_vnc_port(container_id)
+        if not vnc_port:
+            logger.error(f"Cannot start live stream: VNC port not available for {container_id}")
+            return None
+
+        try:
+            from squadx_client.streaming.webrtc_bridge import create_live_stream
+
+            # Create live stream (connects to VNC and creates Supabase session)
+            bridge, join_code = await create_live_stream(
+                task_id=task_id,
+                vnc_host="localhost",
+                vnc_port=vnc_port,
+                fps=fps,
+            )
+
+            # Track the live stream
+            self._live_streams[container_id] = LiveStreamInfo(
+                container_id=container_id,
+                task_id=task_id,
+                session_id=bridge.session_id,
+                join_code=join_code,
+                vnc_port=vnc_port,
+                bridge=bridge,
+            )
+
+            logger.info(
+                f"Live streaming started for container {container_id[:12]}, "
+                f"join code: {join_code}"
+            )
+
+            return join_code
+
+        except Exception as e:
+            logger.error(f"Failed to start live stream: {e}")
+            return None
+
+    async def stop_live_stream(self, container_id: str) -> bool:
+        """Stop live streaming for a container.
+
+        Args:
+            container_id: The container ID
+
+        Returns:
+            True if stopped successfully
+        """
+        live_info = self._live_streams.pop(container_id, None)
+        if not live_info:
+            return False
+
+        try:
+            if live_info.bridge:
+                await live_info.bridge.stop()
+
+            logger.info(f"Live streaming stopped for container {container_id[:12]}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error stopping live stream: {e}")
+            return False
+
+    async def get_live_stream_info(self, container_id: str) -> Optional[LiveStreamInfo]:
+        """Get live stream information for a container.
+
+        Args:
+            container_id: The container ID
+
+        Returns:
+            LiveStreamInfo if streaming, None otherwise
+        """
+        return self._live_streams.get(container_id)
+
+    async def start_container_with_live(
+        self,
+        container_id: str,
+        task_id: int,
+        enable_live: bool = True,
+    ) -> tuple[bool, Optional[str]]:
+        """Start a container and optionally enable live streaming.
+
+        Args:
+            container_id: The container ID
+            task_id: The task ID
+            enable_live: Whether to enable live streaming
+
+        Returns:
+            Tuple of (success, join_code or None)
+        """
+        # Start the container
+        if not await self.start_container(container_id):
+            return False, None
+
+        join_code = None
+        if enable_live and self._live_enabled:
+            # Wait for VNC to be ready
+            await asyncio.sleep(2)
+
+            # Start live streaming
+            join_code = await self.start_live_stream(container_id, task_id)
+
+        return True, join_code
+
+    async def stop_container_with_live(
+        self,
+        container_id: str,
+        timeout: int = 10,
+    ) -> bool:
+        """Stop a container and its live stream.
+
+        Args:
+            container_id: The container ID
+            timeout: Stop timeout
+
+        Returns:
+            True if stopped successfully
+        """
+        # Stop live streaming first
+        await self.stop_live_stream(container_id)
+
+        # Stop the container
+        return await self.stop_container(container_id, timeout)
 
 
 # Global instance

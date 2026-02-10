@@ -27,6 +27,114 @@ class RFBMessageType(IntEnum):
     SERVER_CUT_TEXT = 3
 
 
+# JavaScript key code to X11 keysym mapping
+# Based on: https://www.cl.cam.ac.uk/~mgk25/ucs/keysymdef.h
+JS_KEY_TO_KEYSYM: dict[str, int] = {
+    # Modifier keys
+    "Shift": 0xFFE1,
+    "Control": 0xFFE3,
+    "Alt": 0xFFE9,
+    "Meta": 0xFFEB,
+    "CapsLock": 0xFFE5,
+    "NumLock": 0xFF7F,
+
+    # Navigation keys
+    "ArrowUp": 0xFF52,
+    "ArrowDown": 0xFF54,
+    "ArrowLeft": 0xFF51,
+    "ArrowRight": 0xFF53,
+    "Home": 0xFF50,
+    "End": 0xFF57,
+    "PageUp": 0xFF55,
+    "PageDown": 0xFF56,
+
+    # Editing keys
+    "Backspace": 0xFF08,
+    "Tab": 0xFF09,
+    "Enter": 0xFF0D,
+    "Escape": 0xFF1B,
+    "Delete": 0xFFFF,
+    "Insert": 0xFF63,
+
+    # Function keys
+    "F1": 0xFFBE,
+    "F2": 0xFFBF,
+    "F3": 0xFFC0,
+    "F4": 0xFFC1,
+    "F5": 0xFFC2,
+    "F6": 0xFFC3,
+    "F7": 0xFFC4,
+    "F8": 0xFFC5,
+    "F9": 0xFFC6,
+    "F10": 0xFFC7,
+    "F11": 0xFFC8,
+    "F12": 0xFFC9,
+
+    # Whitespace
+    " ": 0x0020,
+
+    # Special characters
+    "`": 0x0060,
+    "~": 0x007E,
+    "!": 0x0021,
+    "@": 0x0040,
+    "#": 0x0023,
+    "$": 0x0024,
+    "%": 0x0025,
+    "^": 0x005E,
+    "&": 0x0026,
+    "*": 0x002A,
+    "(": 0x0028,
+    ")": 0x0029,
+    "-": 0x002D,
+    "_": 0x005F,
+    "=": 0x003D,
+    "+": 0x002B,
+    "[": 0x005B,
+    "{": 0x007B,
+    "]": 0x005D,
+    "}": 0x007D,
+    "\\": 0x005C,
+    "|": 0x007C,
+    ";": 0x003B,
+    ":": 0x003A,
+    "'": 0x0027,
+    '"': 0x0022,
+    ",": 0x002C,
+    "<": 0x003C,
+    ".": 0x002E,
+    ">": 0x003E,
+    "/": 0x002F,
+    "?": 0x003F,
+}
+
+
+def js_key_to_keysym(key: str) -> int:
+    """Convert JavaScript key to X11 keysym.
+
+    Args:
+        key: JavaScript key string (from KeyboardEvent.key)
+
+    Returns:
+        X11 keysym value
+    """
+    # Check special keys first
+    if key in JS_KEY_TO_KEYSYM:
+        return JS_KEY_TO_KEYSYM[key]
+
+    # Single character - use Unicode code point
+    if len(key) == 1:
+        code = ord(key)
+        # ASCII range maps directly
+        if 0x20 <= code <= 0x7E:
+            return code
+        # Unicode range (add 0x01000000 prefix)
+        return 0x01000000 | code
+
+    # Unknown key
+    return 0
+
+
 class RFBClientMessageType(IntEnum):
     """RFB client-to-server message types."""
 
@@ -534,6 +642,106 @@ class VNCClient:
         img = Image.merge("RGB", (b, g, r))
 
         return img
+
+    async def send_pointer_event(
+        self,
+        x: int,
+        y: int,
+        button_mask: int = 0,
+    ):
+        """Send pointer (mouse) event to VNC server.
+
+        Args:
+            x: X coordinate (absolute)
+            y: Y coordinate (absolute)
+            button_mask: Button mask (bit 0=left, bit 1=middle, bit 2=right,
+                        bits 3-4=wheel up/down)
+        """
+        if not self._connected or not self._writer:
+            return
+
+        # Clamp coordinates
+        x = max(0, min(x, self.width - 1))
+        y = max(0, min(y, self.height - 1))
+
+        msg = struct.pack(
+            "!B B HH",
+            RFBClientMessageType.POINTER_EVENT,
+            button_mask,
+            x,
+            y,
+        )
+        self._writer.write(msg)
+        await self._writer.drain()
+
+    async def send_key_event(
+        self,
+        key: int,
+        down: bool,
+    ):
+        """Send key event to VNC server.
+
+        Args:
+            key: X11 keysym
+            down: True if key is pressed, False if released
+        """
+        if not self._connected or not self._writer:
+            return
+
+        msg = struct.pack(
+            "!B B xx I",
+            RFBClientMessageType.KEY_EVENT,
+            1 if down else 0,
+            key,
+        )
+        self._writer.write(msg)
+        await self._writer.drain()
+
+    async def send_mouse_move(self, x: int, y: int):
+        """Send mouse move event (no buttons pressed)."""
+        await self.send_pointer_event(x, y, 0)
+
+    async def send_mouse_click(
+        self,
+        x: int,
+        y: int,
+        button: str = "left",
+        down: bool = True,
+    ):
+        """Send mouse button event.
+
+        Args:
+            x: X coordinate
+            y: Y coordinate
+            button: 'left', 'middle', or 'right'
+            down: True for press, False for release
+        """
+        button_map = {"left": 1, "middle": 2, "right": 4}
+        mask = button_map.get(button, 1) if down else 0
+        await self.send_pointer_event(x, y, mask)
+
+    async def send_mouse_scroll(
+        self,
+        x: int,
+        y: int,
+        delta_y: int,
+    ):
+        """Send mouse scroll event.
+
+        Args:
+            x: X coordinate
+            y: Y coordinate
+            delta_y: Scroll delta (positive = up, negative = down)
+        """
+        # Scroll is represented as button 4 (up) or 5 (down) press/release
+        if delta_y > 0:
+            # Scroll up (button 4)
+            await self.send_pointer_event(x, y, 8)  # Button 4 press
+            await self.send_pointer_event(x, y, 0)  # Release
+        elif delta_y < 0:
+            # Scroll down (button 5)
+            await self.send_pointer_event(x, y, 16)  # Button 5 press
+            await self.send_pointer_event(x, y, 0)  # Release
 
     async def disconnect(self):
         """Disconnect from VNC server."""

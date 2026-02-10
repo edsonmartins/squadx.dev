@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")
     supabase_service_key: str | None = Field(default=None, alias="SUPABASE_SERVICE_KEY")
 
+    # WebRTC / TURN Configuration
+    turn_url: str | None = Field(default=None, alias="TURN_URL")
+    turn_username: str | None = Field(default=None, alias="TURN_USERNAME")
+    turn_credential: str | None = Field(default=None, alias="TURN_CREDENTIAL")
+    # Alternative: Cloudflare TURN (free tier available)
+    cloudflare_turn_token: str | None = Field(default=None, alias="CLOUDFLARE_TURN_TOKEN")
+
     @property
     def expanded_data_dir(self) -> str:
         """Return expanded data directory path."""
@@ -72,6 +79,42 @@ class Settings(BaseSettings):
         """Return expanded database path."""
         import os
         return os.path.expanduser(self.db_path)
+
+    def get_ice_servers(self) -> list[dict]:
+        """Get ICE servers configuration for WebRTC.
+
+        Returns list of ICE server configs including STUN and TURN servers.
+        TURN is essential for NAT traversal in production environments.
+        """
+        servers = [
+            # Google's free STUN servers
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+        ]
+
+        # Add TURN server if configured
+        if self.turn_url:
+            turn_config: dict = {"urls": [self.turn_url]}
+            if self.turn_username:
+                turn_config["username"] = self.turn_username
+            if self.turn_credential:
+                turn_config["credential"] = self.turn_credential
+            servers.append(turn_config)
+
+        # Add Cloudflare TURN if token is available
+        # Cloudflare TURN uses token-based authentication
+        if self.cloudflare_turn_token:
+            servers.append({
+                "urls": [
+                    "turn:turn.cloudflare.com:3478?transport=udp",
+                    "turn:turn.cloudflare.com:3478?transport=tcp",
+                    "turns:turn.cloudflare.com:5349?transport=tcp",
+                ],
+                "username": "cf",
+                "credential": self.cloudflare_turn_token,
+            })
+
+        return servers
 
 
 settings = Settings()

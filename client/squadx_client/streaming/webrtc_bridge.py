@@ -6,6 +6,7 @@ VNC frames as video to web browsers.
 
 import asyncio
 import fractions
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -18,6 +19,7 @@ from av import VideoFrame
 
 from squadx_client.streaming.vnc_client import VNCClient, VNCFrame
 from squadx_client.live.session_manager import LiveSessionManager, get_session_manager
+from squadx_client.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -142,23 +144,22 @@ class WebRTCBridge:
     content to web browsers.
     """
 
-    # ICE servers for NAT traversal
-    ICE_SERVERS = [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-    ]
-
     def __init__(
         self,
         session_id: str,
         vnc_client: VNCClient,
         session_manager: Optional[LiveSessionManager] = None,
         fps: int = 30,
+        ice_servers: Optional[list[dict]] = None,
     ):
         self.session_id = session_id
         self.vnc_client = vnc_client
         self.session_manager = session_manager or get_session_manager()
         self.fps = fps
+
+        # Get ICE servers from settings if not provided
+        self.ice_servers = ice_servers or settings.get_ice_servers()
+        logger.info(f"WebRTC using {len(self.ice_servers)} ICE servers")
 
         self._peers: dict[str, PeerConnectionInfo] = {}
         self._relay = MediaRelay()
@@ -204,7 +205,7 @@ class WebRTCBridge:
             SDP offer string
         """
         pc = RTCPeerConnection(
-            configuration={"iceServers": self.ICE_SERVERS}
+            configuration={"iceServers": self.ice_servers}
         )
 
         # Add video track
@@ -268,7 +269,7 @@ class WebRTCBridge:
             SDP answer string
         """
         pc = RTCPeerConnection(
-            configuration={"iceServers": self.ICE_SERVERS}
+            configuration={"iceServers": self.ice_servers}
         )
 
         # Add video track
@@ -397,7 +398,6 @@ class WebRTCBridge:
             message: Message content (JSON string)
         """
         try:
-            import json
             data = json.loads(message)
             msg_type = data.get("type")
 
@@ -412,11 +412,128 @@ class WebRTCBridge:
 
             elif msg_type == "input":
                 # Handle input event (mouse, keyboard)
-                # This would be forwarded to the VNC server
-                logger.debug(f"Input event from {peer_id}: {data.get('event')}")
+                event = data.get("event", {})
+                # Schedule async input handling
+                asyncio.create_task(self._process_input_event(peer_id, event))
+
+            elif msg_type == "control-request":
+                # Viewer requesting control
+                logger.info(f"Control requested by {peer_id}")
+                self._grant_control(peer_id)
+
+            elif msg_type == "control-release":
+                # Viewer releasing control
+                logger.info(f"Control released by {peer_id}")
+                self._revoke_control(peer_id)
 
         except Exception as e:
             logger.error(f"Error handling data message: {e}")
+
+    async def _process_input_event(self, peer_id: str, event: dict[str, Any]):
+        """Process an input event from a viewer.
+
+        Args:
+            peer_id: ID of the viewer
+            event: Input event data
+        """
+        from squadx_client.streaming.vnc_client import js_key_to_keysym
+
+        event_type = event.get("type")
+        if not event_type:
+            return
+
+        # Check if peer has control
+        peer_info = self._peers.get(peer_id)
+        if not peer_info or not getattr(peer_info, "has_control", False):
+            logger.debug(f"Ignoring input from {peer_id} - no control granted")
+            return
+
+        try:
+            if event_type == "mousemove":
+                # Convert relative position to absolute
+                x = int(event.get("x", 0) * self.vnc_client.width)
+                y = int(event.get("y", 0) * self.vnc_client.height)
+                await self.vnc_client.send_mouse_move(x, y)
+
+            elif event_type == "mousedown":
+                x = int(event.get("x", 0) * self.vnc_client.width)
+                y = int(event.get("y", 0) * self.vnc_client.height)
+                button = event.get("button", "left")
+                await self.vnc_client.send_mouse_click(x, y, button, down=True)
+
+            elif event_type == "mouseup":
+                x = int(event.get("x", 0) * self.vnc_client.width)
+                y = int(event.get("y", 0) * self.vnc_client.height)
+                button = event.get("button", "left")
+                await self.vnc_client.send_mouse_click(x, y, button, down=False)
+
+            elif event_type == "wheel":
+                x = int(event.get("x", 0) * self.vnc_client.width)
+                y = int(event.get("y", 0) * self.vnc_client.height)
+                delta_y = event.get("deltaY", 0)
+                # Normalize scroll direction
+                if delta_y != 0:
+                    scroll_dir = 1 if delta_y < 0 else -1
+                    await self.vnc_client.send_mouse_scroll(x, y, scroll_dir)
+
+            elif event_type == "keydown":
+                key = event.get("key", "")
+                keysym = js_key_to_keysym(key)
+                if keysym:
+                    await self.vnc_client.send_key_event(keysym, down=True)
+
+            elif event_type == "keyup":
+                key = event.get("key", "")
+                keysym = js_key_to_keysym(key)
+                if keysym:
+                    await self.vnc_client.send_key_event(keysym, down=False)
+
+        except Exception as e:
+            logger.error(f"Error processing input event: {e}")
+
+    def _grant_control(self, peer_id: str):
+        """Grant control to a viewer.
+
+        Args:
+            peer_id: ID of the viewer to grant control
+        """
+        # Revoke control from any other peer first
+        for pid, peer_info in self._peers.items():
+            if getattr(peer_info, "has_control", False):
+                peer_info.has_control = False
+                if peer_info.data_channel:
+                    try:
+                        peer_info.data_channel.send(json.dumps({
+                            "type": "control-revoked",
+                            "timestamp": time.time(),
+                        }))
+                    except Exception:
+                        pass
+
+        # Grant control to the requesting peer
+        peer_info = self._peers.get(peer_id)
+        if peer_info:
+            peer_info.has_control = True
+            if peer_info.data_channel:
+                try:
+                    peer_info.data_channel.send(json.dumps({
+                        "type": "control-granted",
+                        "timestamp": time.time(),
+                    }))
+                except Exception:
+                    pass
+            logger.info(f"Control granted to {peer_id}")
+
+    def _revoke_control(self, peer_id: str):
+        """Revoke control from a viewer.
+
+        Args:
+            peer_id: ID of the viewer to revoke control from
+        """
+        peer_info = self._peers.get(peer_id)
+        if peer_info:
+            peer_info.has_control = False
+            logger.info(f"Control revoked from {peer_id}")
 
     async def _handle_signal(
         self,

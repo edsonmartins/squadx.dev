@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -24,32 +24,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StreamViewer } from "@/components/live/stream-viewer";
-import { signaling, LiveSession, LiveParticipant } from "@/lib/supabase";
+import { signaling, LiveSession, LiveParticipant, ChatMessage } from "@/lib/supabase";
 import { liveViewApi } from "@/lib/api";
-import { useLiveChatSocket } from "@/hooks/use-socket";
+import { useRealtimeChat } from "@/hooks/use-realtime-chat";
 import { ConnectionState } from "@/hooks/use-webrtc";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface LiveStreamPageProps {
   params: Promise<{ code: string }>;
 }
 
-interface ChatMessage {
-  id: string;
-  userId: number;
-  userName: string;
-  content: string;
-  timestamp: string;
-}
-
 export default function LiveStreamPage({ params }: LiveStreamPageProps) {
   const { code } = use(params);
   const router = useRouter();
+  const { user } = useAuthStore();
 
   const [copied, setCopied] = useState(false);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch session from backend API (try Spring Boot first, then Supabase)
   const { data: session, isLoading: sessionLoading } = useQuery({
@@ -82,19 +76,18 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
     refetchInterval: 5000,
   });
 
-  // Chat socket integration
-  const { sendMessage } = useLiveChatSocket(code, (message) => {
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `${message.userId}-${message.timestamp}`,
-        userId: message.userId,
-        userName: message.userName,
-        content: message.content,
-        timestamp: new Date(message.timestamp).toISOString(),
-      },
-    ]);
+  // Real-time chat via Supabase
+  const { messages: chatMessages, sendMessage } = useRealtimeChat({
+    sessionCode: code,
+    displayName: user?.full_name || user?.email || "Anonymous",
   });
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   const handleCopyCode = useCallback(() => {
     navigator.clipboard.writeText(code);
@@ -102,9 +95,9 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback(async () => {
     if (newMessage.trim()) {
-      sendMessage(newMessage.trim());
+      await sendMessage(newMessage.trim());
       setNewMessage("");
     }
   }, [newMessage, sendMessage]);
@@ -293,16 +286,24 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
             </CardHeader>
             <CardContent className="flex-1 flex flex-col min-h-0 p-0">
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+              <div
+                ref={chatContainerRef}
+                className="flex-1 overflow-y-auto px-4 py-2 space-y-2"
+              >
                 {chatMessages.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     No messages yet
                   </p>
                 ) : (
                   chatMessages.map((msg) => (
-                    <div key={msg.id} className="text-sm">
-                      <span className="font-medium">{msg.userName}:</span>{" "}
-                      <span className="text-muted-foreground">{msg.content}</span>
+                    <div key={msg.id} className="text-sm group">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-medium">{msg.sender_name}</span>
+                        <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                          {format(new Date(msg.timestamp), "p")}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground">{msg.content}</p>
                     </div>
                   ))
                 )}

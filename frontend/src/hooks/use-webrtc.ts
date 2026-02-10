@@ -8,12 +8,19 @@ export type ConnectionState =
   | "connecting"
   | "connected"
   | "failed"
-  | "closed";
+  | "closed"
+  | "reconnecting";
 
 interface UseWebRTCOptions {
   sessionId: string;
   onTrack?: (stream: MediaStream) => void;
   onConnectionStateChange?: (state: ConnectionState) => void;
+  /** Enable automatic reconnection on disconnect (default: true) */
+  autoReconnect?: boolean;
+  /** Maximum number of reconnection attempts (default: 5) */
+  maxReconnectAttempts?: number;
+  /** Base delay in ms for exponential backoff (default: 1000) */
+  reconnectBaseDelay?: number;
 }
 
 interface UseWebRTCReturn {
@@ -22,31 +29,79 @@ interface UseWebRTCReturn {
   connect: () => Promise<void>;
   disconnect: () => void;
   stats: RTCStatsReport | null;
+  /** Number of reconnection attempts made */
+  reconnectAttempts: number;
 }
 
-// ICE servers for NAT traversal
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: ["stun:stun.l.google.com:19302"] },
-  { urls: ["stun:stun1.l.google.com:19302"] },
-];
+/**
+ * Get ICE servers configuration for WebRTC.
+ * Includes STUN servers and optional TURN server for NAT traversal.
+ */
+function getIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [
+    // Google's free STUN servers
+    { urls: ["stun:stun.l.google.com:19302"] },
+    { urls: ["stun:stun1.l.google.com:19302"] },
+  ];
+
+  // Add TURN server if configured via environment variables
+  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+  if (turnUrl) {
+    const turnConfig: RTCIceServer = { urls: [turnUrl] };
+    const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
+    const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+    if (turnUsername) turnConfig.username = turnUsername;
+    if (turnCredential) turnConfig.credential = turnCredential;
+    servers.push(turnConfig);
+  }
+
+  // Add Cloudflare TURN if token is available
+  const cloudflareTurnToken = process.env.NEXT_PUBLIC_CLOUDFLARE_TURN_TOKEN;
+  if (cloudflareTurnToken) {
+    servers.push({
+      urls: [
+        "turn:turn.cloudflare.com:3478?transport=udp",
+        "turn:turn.cloudflare.com:3478?transport=tcp",
+        "turns:turn.cloudflare.com:5349?transport=tcp",
+      ],
+      username: "cf",
+      credential: cloudflareTurnToken,
+    });
+  }
+
+  return servers;
+}
 
 /**
  * Hook for managing WebRTC peer connections as a viewer.
  * Connects to a Python WebRTC bridge streaming VNC content.
+ * Supports automatic reconnection with exponential backoff.
  */
 export function useWebRTC({
   sessionId,
   onTrack,
   onConnectionStateChange,
+  autoReconnect = true,
+  maxReconnectAttempts = 5,
+  reconnectBaseDelay = 1000,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [stats, setStats] = useState<RTCStatsReport | null>(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const hostIdRef = useRef<string | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isIntentionalDisconnect = useRef(false);
+  const wasEverConnected = useRef(false);
+
+  // Refs for breaking circular dependencies
+  const scheduleReconnectRef = useRef<() => void>(() => {});
+  const performConnectRef = useRef<() => Promise<void>>(async () => {});
+  const cleanupConnectionRef = useRef<() => void>(() => {});
 
   // Update connection state and notify callback
   const updateConnectionState = useCallback(
@@ -56,6 +111,80 @@ export function useWebRTC({
     },
     [onConnectionStateChange]
   );
+
+  // Schedule a reconnection attempt with exponential backoff
+  const scheduleReconnect = useCallback(() => {
+    if (!autoReconnect || isIntentionalDisconnect.current) {
+      return;
+    }
+
+    if (reconnectAttempts >= maxReconnectAttempts) {
+      console.log("[WebRTC] Max reconnection attempts reached");
+      updateConnectionState("failed");
+      return;
+    }
+
+    // Clear any pending reconnection
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    // Calculate delay with exponential backoff + jitter
+    const delay = Math.min(
+      reconnectBaseDelay * Math.pow(2, reconnectAttempts) + Math.random() * 1000,
+      30000 // Max 30 seconds
+    );
+
+    console.log(
+      `[WebRTC] Scheduling reconnection attempt ${reconnectAttempts + 1}/${maxReconnectAttempts} in ${Math.round(delay)}ms`
+    );
+
+    updateConnectionState("reconnecting");
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setReconnectAttempts((prev) => prev + 1);
+      // Clean up current connection before reconnecting
+      cleanupConnectionRef.current();
+      // Attempt to reconnect
+      performConnectRef.current();
+    }, delay);
+  }, [
+    autoReconnect,
+    reconnectAttempts,
+    maxReconnectAttempts,
+    reconnectBaseDelay,
+    updateConnectionState,
+  ]);
+
+  // Update ref when scheduleReconnect changes
+  useEffect(() => {
+    scheduleReconnectRef.current = scheduleReconnect;
+  }, [scheduleReconnect]);
+
+  // Clean up connection resources without leaving signaling channel
+  const cleanupConnection = useCallback(() => {
+    // Stop stats collection
+    if (statsIntervalRef.current) {
+      clearInterval(statsIntervalRef.current);
+      statsIntervalRef.current = null;
+    }
+
+    // Close peer connection
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+
+    // Reset stream (but don't disconnect from signaling yet)
+    setRemoteStream(null);
+    setStats(null);
+    hostIdRef.current = null;
+  }, []);
+
+  // Update ref when cleanupConnection changes
+  useEffect(() => {
+    cleanupConnectionRef.current = cleanupConnection;
+  }, [cleanupConnection]);
 
   // Handle incoming WebRTC signals
   const handleSignal = useCallback(
@@ -113,7 +242,9 @@ export function useWebRTC({
 
   // Create peer connection
   const createPeerConnection = useCallback(() => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const iceServers = getIceServers();
+    console.log(`[WebRTC] Using ${iceServers.length} ICE servers`);
+    const pc = new RTCPeerConnection({ iceServers });
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
@@ -133,15 +264,28 @@ export function useWebRTC({
           break;
         case "connected":
           updateConnectionState("connected");
+          wasEverConnected.current = true;
+          // Reset reconnection counter on successful connection
+          setReconnectAttempts(0);
           // Start collecting stats
           startStatsCollection(pc);
           break;
         case "failed":
-          updateConnectionState("failed");
+          // Try to reconnect if we were previously connected
+          if (wasEverConnected.current && !isIntentionalDisconnect.current) {
+            scheduleReconnectRef.current();
+          } else {
+            updateConnectionState("failed");
+          }
           break;
         case "closed":
         case "disconnected":
-          updateConnectionState("disconnected");
+          // Try to reconnect if we were previously connected
+          if (wasEverConnected.current && !isIntentionalDisconnect.current) {
+            scheduleReconnectRef.current();
+          } else {
+            updateConnectionState("disconnected");
+          }
           break;
       }
     };
@@ -185,10 +329,10 @@ export function useWebRTC({
     }, 2000);
   }, []);
 
-  // Connect to the session
-  const connect = useCallback(async () => {
+  // Internal function to perform connection (used by connect and reconnect)
+  const performConnect = useCallback(async () => {
     if (pcRef.current) {
-      console.log("[WebRTC] Already connected or connecting");
+      console.log("[WebRTC] Peer connection already exists");
       return;
     }
 
@@ -201,7 +345,7 @@ export function useWebRTC({
       // Set up signaling handler
       signaling.onSignal(handleSignal);
 
-      // Join signaling channel
+      // Join signaling channel (if not already joined)
       await signaling.joinSession(sessionId);
 
       // Create offer to initiate connection
@@ -214,38 +358,72 @@ export function useWebRTC({
       console.log("[WebRTC] Sent offer, waiting for answer...");
     } catch (error) {
       console.error("[WebRTC] Connection error:", error);
-      updateConnectionState("failed");
-      disconnect();
+      // On error, try to reconnect if auto-reconnect is enabled
+      if (autoReconnect && !isIntentionalDisconnect.current) {
+        scheduleReconnectRef.current();
+      } else {
+        updateConnectionState("failed");
+      }
     }
-  }, [sessionId, createPeerConnection, handleSignal, updateConnectionState]);
+  }, [
+    sessionId,
+    createPeerConnection,
+    handleSignal,
+    updateConnectionState,
+    autoReconnect,
+  ]);
 
-  // Disconnect from the session
-  const disconnect = useCallback(() => {
-    // Stop stats collection
-    if (statsIntervalRef.current) {
-      clearInterval(statsIntervalRef.current);
-      statsIntervalRef.current = null;
-    }
+  // Update ref when performConnect changes
+  useEffect(() => {
+    performConnectRef.current = performConnect;
+  }, [performConnect]);
 
-    // Close peer connection
+  // Connect to the session (public API)
+  const connect = useCallback(async () => {
     if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
+      console.log("[WebRTC] Already connected or connecting");
+      return;
     }
+
+    // Reset state for new connection
+    isIntentionalDisconnect.current = false;
+    wasEverConnected.current = false;
+    setReconnectAttempts(0);
+
+    await performConnect();
+  }, [performConnect]);
+
+  // Disconnect from the session (public API - intentional disconnect)
+  const disconnect = useCallback(() => {
+    // Mark as intentional disconnect to prevent auto-reconnect
+    isIntentionalDisconnect.current = true;
+
+    // Cancel any pending reconnection
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    // Clean up connection resources
+    cleanupConnection();
 
     // Leave signaling channel
     signaling.leaveSession();
 
-    // Reset state
-    setRemoteStream(null);
-    setStats(null);
-    hostIdRef.current = null;
+    // Reset reconnection state
+    setReconnectAttempts(0);
+    wasEverConnected.current = false;
+
     updateConnectionState("disconnected");
-  }, [updateConnectionState]);
+  }, [cleanupConnection, updateConnectionState]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Cancel any pending reconnection
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       disconnect();
     };
   }, [disconnect]);
@@ -256,6 +434,7 @@ export function useWebRTC({
     connect,
     disconnect,
     stats,
+    reconnectAttempts,
   };
 }
 

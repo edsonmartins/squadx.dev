@@ -52,6 +52,14 @@ export interface WebRTCSignal {
   };
 }
 
+export interface ChatMessage {
+  id: string;
+  sender_id: string;
+  sender_name: string;
+  content: string;
+  timestamp: string;
+}
+
 /**
  * Supabase signaling client for WebRTC.
  * Handles real-time communication for peer connection establishment.
@@ -60,7 +68,9 @@ export class SupabaseSignaling {
   private channel: RealtimeChannel | null = null;
   private sessionId: string | null = null;
   private peerId: string;
+  private displayName: string = "Anonymous";
   private onSignalCallback?: (signal: WebRTCSignal) => void;
+  private onChatCallback?: (message: ChatMessage) => void;
 
   constructor() {
     this.peerId = crypto.randomUUID();
@@ -68,6 +78,13 @@ export class SupabaseSignaling {
 
   get currentPeerId(): string {
     return this.peerId;
+  }
+
+  /**
+   * Set the display name for chat messages.
+   */
+  setDisplayName(name: string): void {
+    this.displayName = name || "Anonymous";
   }
 
   /**
@@ -94,6 +111,12 @@ export class SupabaseSignaling {
       if (!signal.target_id || signal.target_id === this.peerId) {
         this.onSignalCallback?.(signal);
       }
+    });
+
+    // Subscribe to chat messages
+    this.channel.on("broadcast", { event: "chat-message" }, ({ payload }) => {
+      const message = payload as ChatMessage;
+      this.onChatCallback?.(message);
     });
 
     // Track presence
@@ -127,6 +150,37 @@ export class SupabaseSignaling {
    */
   onSignal(callback: (signal: WebRTCSignal) => void): void {
     this.onSignalCallback = callback;
+  }
+
+  /**
+   * Set callback for incoming chat messages.
+   */
+  onChat(callback: (message: ChatMessage) => void): void {
+    this.onChatCallback = callback;
+  }
+
+  /**
+   * Send a chat message to the session.
+   */
+  async sendChatMessage(content: string): Promise<void> {
+    if (!this.channel) {
+      console.error("[Supabase] Not connected to a session");
+      return;
+    }
+
+    const message: ChatMessage = {
+      id: crypto.randomUUID(),
+      sender_id: this.peerId,
+      sender_name: this.displayName,
+      content,
+      timestamp: new Date().toISOString(),
+    };
+
+    await this.channel.send({
+      type: "broadcast",
+      event: "chat-message",
+      payload: message,
+    });
   }
 
   /**

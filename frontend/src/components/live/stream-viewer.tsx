@@ -11,6 +11,8 @@ import {
   WifiOff,
   RefreshCw,
   Loader2,
+  MousePointer2,
+  MouseOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,25 +28,31 @@ import {
   ConnectionState,
   parseWebRTCStats,
 } from "@/hooks/use-webrtc";
+import { useRemoteControl } from "@/hooks/use-remote-control";
 
 interface StreamViewerProps {
   sessionId: string;
   className?: string;
   onConnectionChange?: (state: ConnectionState) => void;
+  /** Enable remote control capability (default: false) */
+  enableRemoteControl?: boolean;
 }
 
 export function StreamViewer({
   sessionId,
   className,
   onConnectionChange,
+  enableRemoteControl = false,
 }: StreamViewerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [showStats, setShowStats] = useState(false);
+  const [hasControl, setHasControl] = useState(false);
 
   const { connectionState, remoteStream, connect, disconnect, stats } =
     useWebRTC({
@@ -56,6 +64,14 @@ export function StreamViewer({
       },
       onConnectionStateChange: onConnectionChange,
     });
+
+  // Remote control hook
+  const { requestControl, releaseControl } = useRemoteControl({
+    videoElement: videoRef.current,
+    dataChannel: dataChannelRef.current,
+    enabled: enableRemoteControl && hasControl,
+    onControlStateChange: setHasControl,
+  });
 
   const parsedStats = parseWebRTCStats(stats);
 
@@ -112,6 +128,14 @@ export function StreamViewer({
     }
   }, []);
 
+  const toggleControl = useCallback(() => {
+    if (hasControl) {
+      releaseControl();
+    } else {
+      requestControl();
+    }
+  }, [hasControl, requestControl, releaseControl]);
+
   const handleReconnect = useCallback(() => {
     disconnect();
     setTimeout(() => connect(), 500);
@@ -149,7 +173,11 @@ export function StreamViewer({
           autoPlay
           playsInline
           muted={isMuted}
-          className="w-full h-full object-contain"
+          tabIndex={enableRemoteControl ? 0 : undefined}
+          className={cn(
+            "w-full h-full object-contain",
+            hasControl && "cursor-crosshair"
+          )}
         />
 
         {/* Connection Status Overlay */}
@@ -248,6 +276,32 @@ export function StreamViewer({
 
             {/* Right Controls */}
             <div className="flex items-center gap-1">
+              {/* Remote Control Toggle */}
+              {enableRemoteControl && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 text-white hover:bg-white/20",
+                        hasControl && "bg-primary/50"
+                      )}
+                      onClick={toggleControl}
+                    >
+                      {hasControl ? (
+                        <MousePointer2 className="h-4 w-4" />
+                      ) : (
+                        <MouseOff className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{hasControl ? "Release" : "Request"} Control</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               {/* Stats Toggle */}
               <Tooltip>
                 <TooltipTrigger asChild>

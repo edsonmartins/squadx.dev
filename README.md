@@ -131,8 +131,11 @@ O SquadX Live permite assistir seus agentes AI trabalhando em tempo real atravé
 
 - **WebRTC P2P**: Streaming direto para até 25 viewers
 - **Baixa Latência**: < 500ms end-to-end
-- **Chat Integrado**: Comunicação em tempo real
-- **Controles**: Fullscreen, mute, estatísticas
+- **TURN Server**: Suporte a NAT traversal em produção (Cloudflare TURN ou custom)
+- **Auto-Reconnect**: Reconexão automática com backoff exponencial
+- **Chat em Tempo Real**: Comunicação via Supabase Realtime
+- **Controle Remoto**: Keyboard/mouse do viewer para o container
+- **Controles**: Fullscreen, mute, estatísticas de conexão
 - **Join Code**: Compartilhe sessões com código de 8 caracteres
 
 ---
@@ -313,6 +316,14 @@ JWT_SECRET=your-secret-key-at-least-32-characters
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# WebRTC TURN Server (opcional, para NAT traversal em produção)
+# Opção 1: Custom TURN
+NEXT_PUBLIC_TURN_URL=turn:your-turn-server.com:3478
+NEXT_PUBLIC_TURN_USERNAME=your-username
+NEXT_PUBLIC_TURN_CREDENTIAL=your-credential
+# Opção 2: Cloudflare TURN
+NEXT_PUBLIC_CLOUDFLARE_TURN_TOKEN=your-cloudflare-token
 ```
 
 #### Client
@@ -322,7 +333,16 @@ SQUADX_API_TOKEN=your-api-token
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_KEY=your-service-key
+
+# WebRTC TURN Server (opcional, para NAT traversal em produção)
+# Opção 1: Custom TURN
+TURN_URL=turn:your-turn-server.com:3478
+TURN_USERNAME=your-username
+TURN_CREDENTIAL=your-credential
+# Opção 2: Cloudflare TURN
+CLOUDFLARE_TURN_TOKEN=your-cloudflare-token
 ```
 
 ---
@@ -395,7 +415,9 @@ squadx.dev/
 │   │   │   ├── live/        # Stream viewer
 │   │   │   └── ui/
 │   │   ├── hooks/
-│   │   │   └── use-webrtc.ts
+│   │   │   ├── use-webrtc.ts        # WebRTC connection management
+│   │   │   ├── use-realtime-chat.ts # Chat via Supabase Realtime
+│   │   │   └── use-remote-control.ts # Keyboard/mouse control
 │   │   ├── lib/
 │   │   │   └── supabase.ts
 │   │   └── stores/
@@ -492,6 +514,10 @@ cd backend
 - [x] Client com orquestração básica
 - [x] Docker sandbox com hardening
 - [x] Live View streaming (VNC→WebRTC)
+- [x] Chat em tempo real via Supabase
+- [x] TURN server para NAT traversal
+- [x] Controle remoto (keyboard/mouse)
+- [x] Auto-reconnect WebRTC
 - [ ] 5-10 beta customers
 
 ### Q2 2025 - Multi-Agent

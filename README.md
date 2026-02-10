@@ -163,7 +163,8 @@ API REST e WebSocket construída com **Spring Boot 3.4** e **Java 21**.
 - Autenticação JWT
 - WebSocket (STOMP/SockJS) para comunicação real-time
 - PostgreSQL para persistência
-- API de Live Sessions
+- API de Live Sessions (local + Supabase)
+- **Supabase Integration**: Sincronização com sessions criadas pelo Python Client
 
 ### Frontend (`/frontend`)
 Dashboard web construído com **Next.js 16** e **React 19**.
@@ -274,6 +275,19 @@ cd client/docker
 docker build -f agent.Dockerfile -t squadx/agent:latest .
 ```
 
+### Configurar Supabase
+
+O Live Streaming usa Supabase para signaling WebRTC. Crie um projeto em [supabase.com](https://supabase.com) e execute a migration:
+
+```bash
+# Aplicar schema via SQL Editor no Supabase Dashboard
+# ou usando supabase CLI:
+cd client
+supabase db push
+```
+
+O arquivo de migration está em `client/supabase/migrations/001_live_sessions.sql`.
+
 ### Variáveis de Ambiente
 
 Copie os arquivos de exemplo e configure:
@@ -319,7 +333,7 @@ SUPABASE_SERVICE_KEY=your-service-key
 
 | Camada | Tecnologia |
 |--------|-----------|
-| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL, Redis |
+| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL, Redis, Supabase |
 | **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS, Supabase |
 | **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
 | **Streaming** | VNC (RFB), WebRTC, Supabase Realtime |
@@ -416,6 +430,7 @@ squadx.dev/
 | `GET/POST /api/v1/projects` | Gerenciamento de projetos |
 | `GET/POST/PATCH /api/v1/tasks` | CRUD de tasks |
 | `GET/POST /api/v1/live-view/sessions` | Gerenciamento de live sessions |
+| `GET /api/v1/live-view/supabase/sessions/*` | Sessions do Supabase (Python Client) |
 | `WS /ws` | WebSocket para real-time |
 
 ---

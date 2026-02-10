@@ -1,0 +1,53 @@
+# Fluxbox style overlay for SquadX Agent
+# Dark theme optimized for code viewing
+
+# Toolbar
+toolbar.color: #1e1e2e
+toolbar.colorTo: #1e1e2e
+toolbar.textColor: #cdd6f4
+
+# Window borders
+window.title.focus.color: #313244
+window.title.focus.colorTo: #313244
+window.title.focus.textColor: #cdd6f4
+
+window.title.unfocus.color: #1e1e2e
+window.title.unfocus.colorTo: #1e1e2e
+window.title.unfocus.textColor: #6c7086
+
+window.handle.focus.color: #313244
+window.handle.unfocus.color: #1e1e2e
+
+window.grip.focus.color: #89b4fa
+window.grip.unfocus.color: #45475a
+
+window.button.focus.color: #313244
+window.button.unfocus.color: #1e1e2e
+
+window.frame.focusColor: #89b4fa
+window.frame.unfocusColor: #45475a
+
+# Menu
+menu.title.color: #1e1e2e
+menu.title.colorTo: #1e1e2e
+menu.title.textColor: #89b4fa
+
+menu.frame.color: #1e1e2e
+menu.frame.colorTo: #1e1e2e
+menu.frame.textColor: #cdd6f4
+
+menu.hilite.color: #313244
+menu.hilite.colorTo: #313244
+menu.hilite.textColor: #89b4fa
+
+# Fonts
+toolbar.font: DejaVu Sans-10:bold
+window.font: DejaVu Sans-10:bold
+menu.title.font: DejaVu Sans-10:bold
+menu.frame.font: DejaVu Sans-10
+
+# Border
+borderWidth: 1
+borderColor: #45475a
+bevelWidth: 0
+handleWidth: 4

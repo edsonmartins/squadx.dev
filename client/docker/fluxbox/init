@@ -1,0 +1,8 @@
+# Fluxbox init file for SquadX Agent
+# This file is executed when fluxbox starts
+
+# Set background color
+fbsetroot -solid "#1e1e2e"
+
+# Start a terminal on startup
+xfce4-terminal --geometry=120x40+50+50 &

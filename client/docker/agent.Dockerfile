@@ -9,7 +9,10 @@
 # - Seccomp profile restricted syscalls
 # - Dropped capabilities
 #
-# Build: docker build -f docker/agent.Dockerfile -t squadx/agent:latest .
+# Build:
+#   docker build -f docker/agent.Dockerfile -t squadx/agent:latest .
+#   docker build -f docker/agent.Dockerfile --target live-view -t squadx/agent:live .
+#
 # Run (hardened):
 #   docker run --rm --read-only \
 #     --cap-drop=ALL \
@@ -21,32 +24,68 @@
 #     --tmpfs /tmp:size=100M,noexec,nosuid \
 #     -v /workspace:/workspace:rw \
 #     squadx/agent:latest
+#
+# Run with Live View:
+#   docker run --rm \
+#     -p 5900:5900 -p 6080:6080 \
+#     -v /workspace:/workspace:rw \
+#     squadx/agent:live
 
 FROM python:3.11-slim-bookworm AS base
 
-# Install system dependencies
+# Install system dependencies and Node.js LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Git for version control operations
     git \
-    # Build essentials for some Python packages
+    # Build essentials for native packages
     gcc \
     g++ \
-    # Node.js for frontend projects
-    nodejs \
-    npm \
+    make \
     # Common utilities
     curl \
     wget \
     jq \
+    unzip \
     # File utilities
     tree \
     ripgrep \
-    # For live view (optional, Phase 2)
-    # xvfb \
-    # x11vnc \
-    # fluxbox \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    fd-find \
+    # Process utilities
+    procps \
+    htop \
+    # Network tools (for package downloads during build)
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 LTS from NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm and yarn globally
+RUN npm install -g pnpm@latest yarn@latest typescript ts-node \
+    && npm cache clean --force
+
+# Install Java 21 (Temurin/Adoptium)
+RUN curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main" > /etc/apt/sources.list.d/adoptium.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends temurin-21-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Maven from Apache archive
+RUN curl -fsSL https://archive.apache.org/dist/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.tar.gz | tar -xz -C /opt \
+    && ln -s /opt/apache-maven-3.9.6/bin/mvn /usr/local/bin/mvn
+
+# Install Gradle
+RUN curl -fsSL https://services.gradle.org/distributions/gradle-8.5-bin.zip -o /tmp/gradle.zip \
+    && unzip -q /tmp/gradle.zip -d /opt \
+    && ln -s /opt/gradle-8.5/bin/gradle /usr/local/bin/gradle \
+    && rm /tmp/gradle.zip
+
+# Clean up
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create non-root user for security
 RUN groupadd -g 1000 agent && \
@@ -60,8 +99,7 @@ RUN mkdir -p /workspace /app /home/agent/.cache && \
 COPY --chown=agent:agent docker/requirements-agent.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements-agent.txt
 
-# Copy agent runtime code
-COPY --chown=agent:agent squadx_client/tools /app/tools/
+# Copy agent startup script
 COPY --chown=agent:agent docker/start-agent.sh /app/
 
 # Make startup script executable
@@ -93,26 +131,62 @@ CMD ["/app/start-agent.sh"]
 
 
 # =============================================================================
-# Live View Image (Phase 2 - with X11/VNC support)
+# Live View Image (with X11/VNC/noVNC support)
 # =============================================================================
 FROM base AS live-view
 
 USER root
 
-# Install X11 and VNC for live view
+# Install X11, VNC, and noVNC for web-based live view
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # X11 virtual framebuffer
     xvfb \
+    # VNC server
     x11vnc \
+    # Window manager (lightweight)
     fluxbox \
+    openbox \
+    # Terminal emulators
     xterm \
+    xfce4-terminal \
+    # Font support
+    fonts-dejavu \
+    fonts-liberation \
+    fonts-noto-mono \
+    # noVNC for web access
+    novnc \
+    websockify \
+    # Additional X utilities
+    x11-utils \
+    x11-xserver-utils \
+    dbus-x11 \
+    # File manager
+    pcmanfm \
+    # Text editors
+    nano \
+    vim \
+    # Clipboard support
+    xclip \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Create noVNC symlink for easier access
+RUN ln -s /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+
+# Set up fluxbox configuration
+RUN mkdir -p /home/agent/.fluxbox
+COPY --chown=agent:agent docker/fluxbox/ /home/agent/.fluxbox/
 
 USER agent
 
 # X11 environment
 ENV DISPLAY=:99 \
-    RESOLUTION=1280x720
+    RESOLUTION=1280x720x24 \
+    VNC_PORT=5900 \
+    NOVNC_PORT=6080
+
+# Expose ports
+EXPOSE 5900 6080
 
 # Override entrypoint for live view mode
 CMD ["/app/start-agent.sh", "--live-view"]

@@ -1,0 +1,20 @@
+# Fluxbox menu for SquadX Agent
+[begin] (SquadX Agent)
+    [submenu] (Development)
+        [exec] (Terminal) {xfce4-terminal}
+        [exec] (XTerm) {xterm -fa 'Monospace' -fs 11}
+        [separator]
+        [exec] (Python) {xfce4-terminal -e python3}
+        [exec] (Node.js) {xfce4-terminal -e node}
+    [end]
+    [submenu] (Tools)
+        [exec] (File Manager) {pcmanfm /workspace}
+        [exec] (Nano Editor) {xfce4-terminal -e "nano"}
+        [exec] (Vim Editor) {xfce4-terminal -e "vim"}
+    [end]
+    [separator]
+    [submenu] (Fluxbox)
+        [config] (Configure)
+        [reconfig] (Reload Config)
+    [end]
+[end]

@@ -428,6 +428,15 @@ export const liveViewApi = {
     api.post<LiveSessionResponse>(`/api/v1/live-view/sessions/${sessionId}/participants/${userId}/grant-control`),
   revokeControl: (sessionId: number, userId: number) =>
     api.post<LiveSessionResponse>(`/api/v1/live-view/sessions/${sessionId}/participants/${userId}/revoke-control`),
+  // Supabase endpoints (for Python client sessions)
+  supabase: {
+    getByCode: (code: string) =>
+      api.get<LiveSessionResponse>(`/api/v1/live-view/supabase/sessions/code/${code}`),
+    getByTask: (taskId: number) =>
+      api.get<LiveSessionResponse>(`/api/v1/live-view/supabase/sessions/task/${taskId}`),
+    getActive: () =>
+      api.get<LiveSessionResponse[]>(`/api/v1/live-view/supabase/sessions/active`),
+  },
 };
 
 // Squad Types

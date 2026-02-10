@@ -17,6 +17,7 @@ class SubTask(BaseModel):
     result: str | None = None
     files_modified: list[str] = Field(default_factory=list)
     error: str | None = None
+    live_session_code: str | None = None  # Live streaming session code
 
 
 class TaskPlan(BaseModel):
@@ -133,6 +134,9 @@ class OrchestratorState(BaseModel):
     final_result: str | None = None
     git_branch: str | None = None
     git_commit: str | None = None
+
+    # Live Streaming
+    live_session_codes: list[str] = Field(default_factory=list)  # Active live sessions
 
     # Metrics
     metrics: ExecutionMetrics = Field(default_factory=ExecutionMetrics)

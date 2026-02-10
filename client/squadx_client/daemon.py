@@ -296,6 +296,7 @@ class SquadXDaemon:
         status: str,
         progress: int = 0,
         current_step: str = "",
+        live_session_codes: list[str] | None = None,
     ) -> None:
         """Send task status update.
 
@@ -304,19 +305,21 @@ class SquadXDaemon:
             status: Current status (running, paused, etc.)
             progress: Progress percentage (0-100)
             current_step: Description of current step
+            live_session_codes: Active live streaming session codes
         """
         destination = self.DEST_TASK_STATUS.format(task_id=task_id)
-        await self.stomp.send(
-            destination,
-            {
-                "type": MessageType.TASK_STATUS.value,
-                "task_id": task_id,
-                "status": status,
-                "progress": progress,
-                "current_step": current_step,
-                "timestamp": datetime.now().isoformat(),
-            },
-        )
+        payload = {
+            "type": MessageType.TASK_STATUS.value,
+            "task_id": task_id,
+            "status": status,
+            "progress": progress,
+            "current_step": current_step,
+            "timestamp": datetime.now().isoformat(),
+        }
+        if live_session_codes:
+            payload["live_session_codes"] = live_session_codes
+
+        await self.stomp.send(destination, payload)
 
     async def _send_task_completed(self, task_id: int, result: dict[str, Any]) -> None:
         """Send task completion message.
@@ -326,6 +329,11 @@ class SquadXDaemon:
             result: Execution result from orchestrator
         """
         destination = self.DEST_TASK_STATUS.format(task_id=task_id)
+
+        # Extract metrics if available
+        metrics = result.get("metrics")
+        metrics_summary = metrics.to_summary() if hasattr(metrics, "to_summary") else {}
+
         await self.stomp.send(
             destination,
             {
@@ -335,6 +343,8 @@ class SquadXDaemon:
                     "final_result": result.get("final_result"),
                     "git_branch": result.get("git_branch"),
                     "git_commit": result.get("git_commit"),
+                    "live_session_codes": result.get("live_session_codes", []),
+                    "metrics": metrics_summary,
                     "total_input_tokens": result.get("total_input_tokens", 0),
                     "total_output_tokens": result.get("total_output_tokens", 0),
                     "total_cost": result.get("total_cost", 0.0),

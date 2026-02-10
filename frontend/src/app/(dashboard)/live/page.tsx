@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Video, Users, Eye, Clock, Play, ExternalLink } from "lucide-react";
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { liveViewApi, organizationsApi } from "@/lib/api";
+import { liveViewApi, organizationsApi, LiveSessionResponse } from "@/lib/api";
 import { format } from "date-fns";
 
 export default function LiveViewPage() {
@@ -27,16 +27,36 @@ export default function LiveViewPage() {
 
   const defaultOrgId = organizations?.content?.[0]?.id;
 
-  // Fetch active sessions
-  const { data: activeSessions, isLoading } = useQuery({
-    queryKey: ["live-sessions", defaultOrgId],
+  // Fetch active sessions from organization (Spring Boot)
+  const { data: orgSessions } = useQuery({
+    queryKey: ["live-sessions-org", defaultOrgId],
     queryFn: () => liveViewApi.getActiveByOrganization(defaultOrgId!),
     enabled: !!defaultOrgId,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 10000,
   });
 
+  // Fetch active sessions from Supabase (Python client)
+  const { data: supabaseSessions, isLoading } = useQuery({
+    queryKey: ["live-sessions-supabase"],
+    queryFn: () => liveViewApi.supabase.getActive(),
+    refetchInterval: 10000,
+  });
+
+  // Combine sessions from both sources, avoiding duplicates by code
+  const activeSessions = useMemo(() => {
+    const sessionsMap = new Map<string, LiveSessionResponse>();
+
+    // Add org sessions first
+    orgSessions?.forEach(s => sessionsMap.set(s.code, s));
+
+    // Add Supabase sessions (may override if same code)
+    supabaseSessions?.forEach(s => sessionsMap.set(s.code, s));
+
+    return Array.from(sessionsMap.values());
+  }, [orgSessions, supabaseSessions]);
+
   const handleJoinSession = () => {
-    if (joinCode.length === 6) {
+    if (joinCode.length >= 6 && joinCode.length <= 8) {
       window.open(`/live/${joinCode}`, "_blank");
     }
   };
@@ -58,19 +78,19 @@ export default function LiveViewPage() {
         <CardHeader>
           <CardTitle>Join a Session</CardTitle>
           <CardDescription>
-            Enter a 6-character session code to join a live view
+            Enter the 8-character session code to join a live view
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
             <Input
-              placeholder="Enter session code (e.g., XYZ789)"
+              placeholder="Enter session code (e.g., abc12xyz)"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              maxLength={6}
-              className="max-w-[200px] font-mono text-lg tracking-wider"
+              onChange={(e) => setJoinCode(e.target.value.toLowerCase())}
+              maxLength={8}
+              className="max-w-[220px] font-mono text-lg tracking-wider"
             />
-            <Button onClick={handleJoinSession} disabled={joinCode.length !== 6}>
+            <Button onClick={handleJoinSession} disabled={joinCode.length < 6 || joinCode.length > 8}>
               <Play className="mr-2 h-4 w-4" />
               Join Session
             </Button>

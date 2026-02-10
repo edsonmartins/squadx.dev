@@ -242,6 +242,13 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
 
         logger.info("subtask_completed", subtask_id=subtask_id, execution_time=execution_time)
 
+        # Capture live session code from sandbox
+        live_session_code = None
+        if sandbox and sandbox.live_join_code:
+            live_session_code = sandbox.live_join_code
+            subtask.live_session_code = live_session_code
+            logger.info("live_session_active", join_code=live_session_code)
+
         # Create agent-specific metrics
         agent_metrics = AgentMetrics(
             agent_type=subtask.agent_type,
@@ -261,10 +268,16 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
         updated_metrics.add_agent_metrics(agent_metrics)
         updated_metrics.execution_time_seconds = time.time() - start_time
 
+        # Update live session codes
+        live_codes = state.live_session_codes.copy()
+        if live_session_code and live_session_code not in live_codes:
+            live_codes.append(live_session_code)
+
         return {
             "completed_subtasks": state.completed_subtasks + [subtask_id],
             "current_subtask_id": None,
             "metrics": updated_metrics,
+            "live_session_codes": live_codes,
         }
 
     except Exception as e:

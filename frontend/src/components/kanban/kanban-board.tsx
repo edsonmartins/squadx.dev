@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Kanban, type BoardData, type BoardItem, type BoardProps } from "react-kanban-kit";
 
 // Extract ConfigMap type from BoardProps
 type ConfigMap = BoardProps["configMap"];
 import { useTaskStore } from "@/stores/task-store";
 import { TaskCardContent } from "./task-card";
-import type { TaskStatus, TaskResponse } from "@/lib/api";
+import type { TaskStatus, TaskResponse, LiveSessionResponse } from "@/lib/api";
+import { liveViewApi } from "@/lib/api";
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   { id: "TODO", title: "To Do", color: "bg-slate-500" },
@@ -29,7 +31,46 @@ interface TaskBoardItem extends BoardItem {
 }
 
 export function KanbanBoard({ projectId }: KanbanBoardProps) {
+  const router = useRouter();
   const { tasks, updateTaskStatus, setSelectedTask } = useTaskStore();
+  const [liveSessions, setLiveSessions] = useState<LiveSessionResponse[]>([]);
+
+  // Fetch active live sessions
+  useEffect(() => {
+    const fetchLiveSessions = async () => {
+      try {
+        const sessions = await liveViewApi.supabase.getActive();
+        setLiveSessions(sessions || []);
+      } catch (error) {
+        // Silently fail - live sessions are optional
+        console.debug("Could not fetch live sessions:", error);
+      }
+    };
+
+    fetchLiveSessions();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchLiveSessions, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Map taskId -> sessionCode for quick lookup
+  const liveSessionMap = useMemo(() => {
+    const map = new Map<number, string>();
+    liveSessions.forEach((session) => {
+      if (session.status === "ACTIVE" || session.status === "PENDING") {
+        map.set(session.task_id, session.code);
+      }
+    });
+    return map;
+  }, [liveSessions]);
+
+  // Handle watch live click
+  const handleWatchLive = useCallback(
+    (code: string) => {
+      router.push(`/live/${code}`);
+    },
+    [router]
+  );
 
   // Transform tasks into BoardData structure
   const dataSource = useMemo<BoardData>(() => {
@@ -128,12 +169,19 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
         render: ({ data }) => {
           const cardData = data as TaskBoardItem;
           if (!cardData.task) return null;
-          return <TaskCardContent task={cardData.task} />;
+          const sessionCode = liveSessionMap.get(cardData.task.id);
+          return (
+            <TaskCardContent
+              task={cardData.task}
+              liveSessionCode={sessionCode}
+              onWatchLive={handleWatchLive}
+            />
+          );
         },
         isDraggable: true,
       },
     }),
-    []
+    [liveSessionMap, handleWatchLive]
   );
 
   // Render column header

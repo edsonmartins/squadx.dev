@@ -51,10 +51,17 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
 
-  // Fetch session from backend API
+  // Fetch session from backend API (try Spring Boot first, then Supabase)
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ["live-session", code],
-    queryFn: () => liveViewApi.getByCode(code),
+    queryFn: async () => {
+      try {
+        return await liveViewApi.getByCode(code);
+      } catch {
+        // Fallback to Supabase endpoint for Python client sessions
+        return await liveViewApi.supabase.getByCode(code);
+      }
+    },
     retry: false,
   });
 
@@ -80,11 +87,11 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
     setChatMessages((prev) => [
       ...prev,
       {
-        id: message.messageId.toString(),
+        id: `${message.userId}-${message.timestamp}`,
         userId: message.userId,
         userName: message.userName,
         content: message.content,
-        timestamp: message.timestamp,
+        timestamp: new Date(message.timestamp).toISOString(),
       },
     ]);
   });

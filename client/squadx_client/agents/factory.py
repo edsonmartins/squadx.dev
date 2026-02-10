@@ -1,12 +1,20 @@
 """Agent factory for creating specialist agents."""
 
+from typing import Optional, TYPE_CHECKING
+
 from squadx_client.agents.base import BaseAgent
+
+if TYPE_CHECKING:
+    from squadx_client.docker.sandbox import AgentSandbox
 
 
 class FrontendAgent(BaseAgent):
     """Specialist agent for frontend development."""
 
     agent_type = "frontend"
+
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
 
     def get_system_prompt(self) -> str:
         return """You are an expert frontend developer specializing in:
@@ -32,6 +40,9 @@ class BackendAgent(BaseAgent):
     """Specialist agent for backend development."""
 
     agent_type = "backend"
+
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
 
     def get_system_prompt(self) -> str:
         return """You are an expert backend developer specializing in:
@@ -60,6 +71,9 @@ class FullstackAgent(BaseAgent):
 
     agent_type = "fullstack"
 
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
+
     def get_system_prompt(self) -> str:
         return """You are an expert full-stack developer with broad knowledge across:
 - Frontend: React, Next.js, Vue.js, TypeScript
@@ -82,6 +96,9 @@ class DevOpsAgent(BaseAgent):
     """Specialist agent for DevOps and infrastructure."""
 
     agent_type = "devops"
+
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
 
     def get_system_prompt(self) -> str:
         return """You are an expert DevOps engineer specializing in:
@@ -108,6 +125,9 @@ class QAAgent(BaseAgent):
 
     agent_type = "qa"
 
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
+
     def get_system_prompt(self) -> str:
         return """You are an expert QA engineer specializing in:
 - Unit testing (Jest, pytest, JUnit)
@@ -128,11 +148,15 @@ When implementing tasks:
 Always provide complete, working test code."""
 
 
-def create_agent(agent_type: str) -> BaseAgent:
+def create_agent(
+    agent_type: str,
+    sandbox: Optional["AgentSandbox"] = None,
+) -> BaseAgent:
     """Create an agent of the specified type.
 
     Args:
         agent_type: Type of agent (frontend, backend, fullstack, devops, qa)
+        sandbox: Optional AgentSandbox for tool-based execution
 
     Returns:
         An instance of the appropriate agent class
@@ -149,4 +173,4 @@ def create_agent(agent_type: str) -> BaseAgent:
     if not agent_class:
         raise ValueError(f"Unknown agent type: {agent_type}")
 
-    return agent_class()
+    return agent_class(sandbox=sandbox)

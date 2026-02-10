@@ -118,8 +118,7 @@ class WebSocketHandler:
 
         logger.info("live_view_stop_requested", session_id=session_id)
 
-        # TODO: Implement live view stop
-        # await self.daemon._handle_stop_live_view(data)
+        await self.daemon._handle_stop_live_view(data)
 
     async def handle_ping(self, data: dict[str, Any]) -> None:
         """Handle ping message."""

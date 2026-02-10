@@ -1,6 +1,9 @@
 """Node implementations for the LangGraph orchestrator."""
 
 import json
+import os
+import tempfile
+import time
 import uuid
 from typing import Any
 
@@ -9,8 +12,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from squadx_client.config import settings
 from squadx_client.llm.router import get_llm
-from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics
+from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
 from squadx_client.agents.factory import create_agent
+from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 
 logger = structlog.get_logger()
@@ -181,9 +185,41 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
         agent_type=subtask.agent_type,
     )
 
+    sandbox = None
+    start_time = time.time()
+
     try:
-        # Create the appropriate agent
-        agent = create_agent(subtask.agent_type)
+        # Get workspace path from settings or use temp directory
+        workspace_path = getattr(settings, "workspace_path", None)
+        if not workspace_path:
+            workspace_path = os.path.join(tempfile.gettempdir(), f"squadx-task-{state.task_id}")
+            os.makedirs(workspace_path, exist_ok=True)
+
+        # Check if sandbox execution is enabled
+        use_sandbox = getattr(settings, "enable_sandbox", True)
+
+        if use_sandbox:
+            # Create sandbox for this subtask
+            sandbox = AgentSandbox(
+                task_id=state.task_id,
+                agent_type=subtask.agent_type,
+                workspace_path=workspace_path,
+            )
+
+            # Start the sandbox
+            sandbox_started = await sandbox.start(
+                image=getattr(settings, "agent_image", "squadx/agent:latest"),
+                memory_limit=getattr(settings, "agent_memory_limit", "2g"),
+                cpu_limit=getattr(settings, "agent_cpu_limit", 2.0),
+                enable_vnc=getattr(settings, "enable_vnc", True),
+            )
+
+            if not sandbox_started:
+                logger.warning("sandbox_start_failed", subtask_id=subtask_id)
+                sandbox = None  # Fall back to simple execution
+
+        # Create the appropriate agent with sandbox (if available)
+        agent = create_agent(subtask.agent_type, sandbox=sandbox)
 
         # Execute the subtask
         result = await agent.execute(
@@ -197,33 +233,72 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             },
         )
 
+        execution_time = time.time() - start_time
+
         # Update subtask status
         subtask.status = "completed"
         subtask.result = result.get("output", "")
         subtask.files_modified = result.get("files_modified", [])
 
-        logger.info("subtask_completed", subtask_id=subtask_id)
+        logger.info("subtask_completed", subtask_id=subtask_id, execution_time=execution_time)
+
+        # Create agent-specific metrics
+        agent_metrics = AgentMetrics(
+            agent_type=subtask.agent_type,
+            subtask_id=subtask_id,
+            subtask_title=subtask.title,
+            input_tokens=result.get("input_tokens", 0),
+            output_tokens=result.get("output_tokens", 0),
+            cost=result.get("cost", 0.0),
+            execution_time_seconds=execution_time,
+            tool_calls=result.get("tool_calls", 0),
+            files_modified=result.get("files_modified", []),
+            success=True,
+        )
+
+        # Update overall metrics
+        updated_metrics = state.metrics.model_copy()
+        updated_metrics.add_agent_metrics(agent_metrics)
+        updated_metrics.execution_time_seconds = time.time() - start_time
 
         return {
             "completed_subtasks": state.completed_subtasks + [subtask_id],
             "current_subtask_id": None,
-            "metrics": ExecutionMetrics(
-                input_tokens=state.metrics.input_tokens + result.get("input_tokens", 0),
-                output_tokens=state.metrics.output_tokens + result.get("output_tokens", 0),
-                total_cost=state.metrics.total_cost + result.get("cost", 0),
-                files_modified=state.metrics.files_modified + len(result.get("files_modified", [])),
-            ),
+            "metrics": updated_metrics,
         }
 
     except Exception as e:
+        execution_time = time.time() - start_time
         logger.error("subtask_execution_failed", subtask_id=subtask_id, error=str(e))
         subtask.status = "failed"
         subtask.error = str(e)
 
+        # Track failed agent metrics
+        agent_metrics = AgentMetrics(
+            agent_type=subtask.agent_type,
+            subtask_id=subtask_id,
+            subtask_title=subtask.title,
+            execution_time_seconds=execution_time,
+            success=False,
+            error=str(e),
+        )
+
+        updated_metrics = state.metrics.model_copy()
+        updated_metrics.add_agent_metrics(agent_metrics)
+
         return {
             "failed_subtasks": state.failed_subtasks + [subtask_id],
             "current_subtask_id": None,
+            "metrics": updated_metrics,
         }
+
+    finally:
+        # Always cleanup sandbox
+        if sandbox:
+            try:
+                await sandbox.cleanup()
+            except Exception as e:
+                logger.error("sandbox_cleanup_failed", error=str(e))
 
 
 async def review_results(state: OrchestratorState) -> dict[str, Any]:

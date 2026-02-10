@@ -3,7 +3,7 @@
 import asyncio
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import structlog
 
@@ -11,6 +11,8 @@ from squadx_client.config import settings
 from squadx_client.orchestrator.graph import create_orchestrator
 from squadx_client.websocket import StompClientManager, MessageType
 from squadx_client.websocket.handlers import TaskMessageHandler
+from squadx_client.streaming import StreamManager, VNCStreamer, StreamConfig
+from squadx_client.streaming.vnc_streamer import stream_manager
 
 logger = structlog.get_logger()
 
@@ -176,13 +178,110 @@ class SquadXDaemon:
         """Handle request to start live view for a task.
 
         Args:
-            data: Live view request payload
+            data: Live view request payload containing:
+                - task_id: Task ID
+                - session_id: Live session ID
+                - vnc_port: VNC port on the sandbox container
         """
         task_id = data.get("task_id")
-        container_id = data.get("container_id")
+        session_id = data.get("session_id")
+        vnc_port = data.get("vnc_port")
 
-        logger.info("starting_live_view", task_id=task_id, container_id=container_id)
-        # TODO: Implement live view integration with SquadX Live
+        logger.info("starting_live_view", task_id=task_id, session_id=session_id, vnc_port=vnc_port)
+
+        if not session_id or not vnc_port:
+            logger.error("missing_live_view_params", data=data)
+            return
+
+        try:
+            # Create streaming session
+            streamer = await stream_manager.create_session(
+                session_id=session_id,
+                task_id=task_id,
+                vnc_port=vnc_port,
+            )
+
+            # Set up frame callback to send to backend
+            async def on_frame(frame_data: bytes):
+                await self._send_live_view_frame(session_id, frame_data)
+
+            streamer.on_frame(on_frame)
+
+            # Start streaming
+            started = await stream_manager.start_session(session_id)
+            if started:
+                logger.info("live_view_started", session_id=session_id)
+                await self._send_live_view_status(session_id, "streaming")
+            else:
+                logger.error("live_view_start_failed", session_id=session_id)
+                await self._send_live_view_status(session_id, "error")
+
+        except Exception as e:
+            logger.error("live_view_error", session_id=session_id, error=str(e))
+            await self._send_live_view_status(session_id, "error", error=str(e))
+
+    async def _handle_stop_live_view(self, data: dict[str, Any]) -> None:
+        """Handle request to stop live view.
+
+        Args:
+            data: Stop request payload containing session_id
+        """
+        session_id = data.get("session_id")
+
+        if not session_id:
+            return
+
+        logger.info("stopping_live_view", session_id=session_id)
+
+        try:
+            await stream_manager.stop_session(session_id)
+            await self._send_live_view_status(session_id, "stopped")
+        except Exception as e:
+            logger.error("live_view_stop_error", session_id=session_id, error=str(e))
+
+    async def _send_live_view_frame(self, session_id: str, frame_data: bytes) -> None:
+        """Send a live view frame to viewers via backend.
+
+        Args:
+            session_id: Session ID
+            frame_data: JPEG frame bytes (base64 encoded for transport)
+        """
+        import base64
+        destination = f"/app/live/{session_id}/frame"
+        await self.stomp.send(
+            destination,
+            {
+                "type": "live_frame",
+                "session_id": session_id,
+                "frame": base64.b64encode(frame_data).decode("utf-8"),
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+    async def _send_live_view_status(
+        self,
+        session_id: str,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        """Send live view status update.
+
+        Args:
+            session_id: Session ID
+            status: Current status (streaming, stopped, error)
+            error: Optional error message
+        """
+        destination = f"/app/live/{session_id}/status"
+        payload = {
+            "type": "live_status",
+            "session_id": session_id,
+            "status": status,
+            "timestamp": datetime.now().isoformat(),
+        }
+        if error:
+            payload["error"] = error
+
+        await self.stomp.send(destination, payload)
 
     async def _send_pong(self) -> None:
         """Send pong response to ping."""
@@ -318,6 +417,9 @@ class SquadXDaemon:
             logger.info("task_cancelled_on_shutdown", task_id=task_id)
 
         self.current_tasks.clear()
+
+        # Stop all streaming sessions
+        await stream_manager.stop_all()
 
         # Disconnect STOMP
         await self.stomp.disconnect()

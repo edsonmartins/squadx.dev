@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     agent_memory_limit: str = Field(default="2g", alias="SQUADX_AGENT_MEMORY_LIMIT")
     agent_cpu_limit: float = Field(default=2.0, alias="SQUADX_AGENT_CPU_LIMIT")
 
+    # Sandbox Execution Configuration
+    enable_sandbox: bool = Field(default=True, alias="SQUADX_ENABLE_SANDBOX")
+    enable_vnc: bool = Field(default=True, alias="SQUADX_ENABLE_VNC")
+
     # Security Configuration (Docker Hardening)
     enable_network: bool = Field(default=False, alias="SQUADX_ENABLE_NETWORK")
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")

@@ -139,10 +139,10 @@ class LiveSessionManager:
         self._sessions[session.id] = session
         self._peers[session.id] = {}
 
-        # Subscribe to session signaling
+        # Subscribe to session signaling using join_code (matches frontend)
         await self._client.subscribe_to_session(
-            session.id,
-            lambda msg: self._handle_signal_message(session.id, msg),
+            session.join_code,
+            lambda msg: self._handle_signal_message(session.id, session.join_code, msg),
         )
 
         logger.info(
@@ -199,8 +199,8 @@ class LiveSessionManager:
             return False
 
         try:
-            # Unsubscribe from signaling
-            await self._client.unsubscribe_from_session(session_id)
+            # Unsubscribe from signaling (using join_code)
+            await self._client.unsubscribe_from_session(session.join_code)
 
             # End session in database
             await self._client.end_session(session_id)
@@ -252,11 +252,15 @@ class LiveSessionManager:
         sdp: str,
     ) -> bool:
         """Send WebRTC offer to a specific peer."""
-        return await self._client.send_signal(
-            session_id,
-            "offer",
-            {"sdp": sdp, "target_peer": peer_id},
-            sender_id="host",
+        session = self._sessions.get(session_id)
+        if not session:
+            logger.error(f"Session {session_id} not found")
+            return False
+
+        return await self._client.send_offer(
+            session.join_code,
+            sdp,
+            target_id=peer_id,
         )
 
     async def send_answer(
@@ -266,11 +270,15 @@ class LiveSessionManager:
         sdp: str,
     ) -> bool:
         """Send WebRTC answer to a specific peer."""
-        return await self._client.send_signal(
-            session_id,
-            "answer",
-            {"sdp": sdp, "target_peer": peer_id},
-            sender_id="host",
+        session = self._sessions.get(session_id)
+        if not session:
+            logger.error(f"Session {session_id} not found")
+            return False
+
+        return await self._client.send_answer(
+            session.join_code,
+            sdp,
+            target_id=peer_id,
         )
 
     async def send_ice_candidate(
@@ -280,26 +288,46 @@ class LiveSessionManager:
         candidate: dict[str, Any],
     ) -> bool:
         """Send ICE candidate to a specific peer."""
-        return await self._client.send_signal(
-            session_id,
-            "ice-candidate",
-            {"candidate": candidate, "target_peer": peer_id},
-            sender_id="host",
+        session = self._sessions.get(session_id)
+        if not session:
+            logger.error(f"Session {session_id} not found")
+            return False
+
+        return await self._client.send_ice_candidate(
+            session.join_code,
+            candidate,
+            target_id=peer_id,
         )
 
     def _handle_signal_message(
         self,
         session_id: str,
+        join_code: str,
         message: RealtimeMessage,
     ):
-        """Handle incoming signaling message."""
+        """Handle incoming signaling message from frontend.
+
+        Frontend WebRTCSignal format:
+        {
+            type: 'offer' | 'answer' | 'ice-candidate',
+            sender_id: string,
+            target_id?: string,
+            sdp?: string,
+            candidate?: { candidate, sdpMid, sdpMLineIndex }
+        }
+        """
         try:
-            signal_type = message.payload.get("type")
-            sender_id = message.payload.get("sender_id")
-            data = message.payload.get("data", {})
+            payload = message.payload
+            signal_type = payload.get("type")
+            sender_id = payload.get("sender_id")
 
             # Ignore our own messages
             if sender_id == "host":
+                return
+
+            # Check if message is targeted to us (or broadcast)
+            target_id = payload.get("target_id")
+            if target_id and target_id != "host":
                 return
 
             logger.debug(
@@ -310,7 +338,7 @@ class LiveSessionManager:
                 # New viewer joining
                 peer = PeerConnection(
                     peer_id=sender_id,
-                    display_name=data.get("display_name", "Viewer"),
+                    display_name="Viewer",
                     role="viewer",
                     state="connecting",
                 )
@@ -336,12 +364,18 @@ class LiveSessionManager:
                     self._on_peer_leave(session_id, sender_id)
 
             elif signal_type in ("offer", "answer", "ice-candidate"):
-                # WebRTC signaling
+                # WebRTC signaling - pass flat payload to handler
                 if self._on_signal:
-                    self._on_signal(session_id, signal_type, {
+                    # Build data dict from flat payload (matching webrtc_bridge expectations)
+                    signal_data = {
                         "sender_id": sender_id,
-                        **data,
-                    })
+                    }
+                    if "sdp" in payload:
+                        signal_data["sdp"] = payload["sdp"]
+                    if "candidate" in payload:
+                        signal_data["candidate"] = payload["candidate"]
+
+                    self._on_signal(session_id, signal_type, signal_data)
 
         except Exception as e:
             logger.error(f"Error handling signal message: {e}")

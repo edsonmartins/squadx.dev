@@ -202,16 +202,17 @@ class SupabaseClient:
 
     async def subscribe_to_session(
         self,
-        session_id: str,
+        join_code: str,
         on_message: Callable[[RealtimeMessage], None],
     ) -> None:
         """Subscribe to session realtime channel for WebRTC signaling.
 
         Args:
-            session_id: Session to subscribe to
+            join_code: Session join code (matches frontend channel name)
             on_message: Callback for received messages
         """
-        channel_name = f"session:{session_id}"
+        # Use same channel name as frontend: live:${joinCode}
+        channel_name = f"live:{join_code}"
 
         if channel_name in self._channels:
             logger.warning(f"Already subscribed to {channel_name}")
@@ -222,14 +223,23 @@ class SupabaseClient:
             self._message_callbacks[channel_name] = []
         self._message_callbacks[channel_name].append(on_message)
 
-        # Create channel
+        # Create channel with broadcast config matching frontend
         client = await self.get_client()
-        channel = client.channel(channel_name)
+        channel = client.channel(
+            channel_name,
+            {
+                "config": {
+                    "broadcast": {"self": False},
+                    "presence": {"key": "host"},
+                }
+            }
+        )
 
         def handle_broadcast(payload: dict):
+            """Handle webrtc-signal broadcast from frontend viewers."""
             msg = RealtimeMessage(
-                event=payload.get("event", "unknown"),
-                payload=payload.get("payload", {}),
+                event="webrtc-signal",
+                payload=payload,  # Frontend sends flat payload
                 channel=channel_name,
             )
             for callback in self._message_callbacks.get(channel_name, []):
@@ -238,54 +248,101 @@ class SupabaseClient:
                 except Exception as e:
                     logger.error(f"Error in message callback: {e}")
 
-        channel.on_broadcast("signal", handle_broadcast)
+        # Listen for webrtc-signal events (same as frontend)
+        channel.on_broadcast("webrtc-signal", handle_broadcast)
+
+        # Handle presence events
+        def handle_presence_sync():
+            state = channel.presence_state()
+            peer_count = len(state) if state else 0
+            logger.debug(f"Presence sync: {peer_count} peers in {channel_name}")
+
+        def handle_presence_join(key, current_presences, new_presences):
+            logger.debug(f"Peer joined: {key}")
+
+        def handle_presence_leave(key, current_presences, left_presences):
+            logger.debug(f"Peer left: {key}")
+
+        channel.on_presence_sync(handle_presence_sync)
+        channel.on_presence_join(handle_presence_join)
+        channel.on_presence_leave(handle_presence_leave)
+
+        # Subscribe and track our presence as "host"
         await channel.subscribe()
+        await channel.track({"role": "host", "online": True})
 
         self._channels[channel_name] = channel
-        logger.info(f"Subscribed to {channel_name}")
+        logger.info(f"Subscribed to {channel_name} as host")
 
-    async def unsubscribe_from_session(self, session_id: str) -> None:
+    async def unsubscribe_from_session(self, join_code: str) -> None:
         """Unsubscribe from session channel."""
-        channel_name = f"session:{session_id}"
+        channel_name = f"live:{join_code}"
 
         if channel_name in self._channels:
-            await self._channels[channel_name].unsubscribe()
+            channel = self._channels[channel_name]
+            try:
+                await channel.untrack()
+            except Exception as e:
+                logger.warning(f"Error untracking presence: {e}")
+            await channel.unsubscribe()
             del self._channels[channel_name]
             self._message_callbacks.pop(channel_name, None)
             logger.info(f"Unsubscribed from {channel_name}")
 
     async def send_signal(
         self,
-        session_id: str,
+        join_code: str,
         signal_type: str,
         data: dict[str, Any],
-        sender_id: Optional[str] = None,
+        sender_id: str = "host",
+        target_id: Optional[str] = None,
     ) -> bool:
         """Send a WebRTC signaling message.
 
+        Payload format matches frontend SupabaseSignaling:
+        {
+            type: 'offer' | 'answer' | 'ice-candidate',
+            sender_id: string,
+            target_id?: string,
+            sdp?: string,
+            candidate?: { candidate, sdpMid, sdpMLineIndex }
+        }
+
         Args:
-            session_id: Target session
-            signal_type: 'offer', 'answer', 'ice-candidate', etc.
-            data: Signal data (SDP, ICE candidate, etc.)
-            sender_id: ID of the sender
+            join_code: Session join code
+            signal_type: 'offer', 'answer', 'ice-candidate'
+            data: Signal data (sdp or candidate)
+            sender_id: ID of the sender (default: 'host')
+            target_id: Optional target peer ID
 
         Returns:
             True if sent successfully
         """
-        channel_name = f"session:{session_id}"
+        channel_name = f"live:{join_code}"
 
         if channel_name not in self._channels:
             logger.error(f"Not subscribed to {channel_name}")
             return False
 
         try:
+            # Build payload matching frontend WebRTCSignal interface
+            payload: dict[str, Any] = {
+                "type": signal_type,
+                "sender_id": sender_id,
+            }
+
+            if target_id:
+                payload["target_id"] = target_id
+
+            # Flatten data into payload (frontend expects flat structure)
+            if "sdp" in data:
+                payload["sdp"] = data["sdp"]
+            if "candidate" in data:
+                payload["candidate"] = data["candidate"]
+
             await self._channels[channel_name].send_broadcast(
-                "signal",
-                {
-                    "type": signal_type,
-                    "sender_id": sender_id,
-                    "data": data,
-                },
+                "webrtc-signal",
+                payload,
             )
             logger.debug(f"Sent {signal_type} signal to {channel_name}")
             return True
@@ -295,44 +352,47 @@ class SupabaseClient:
 
     async def send_offer(
         self,
-        session_id: str,
+        join_code: str,
         sdp: str,
-        sender_id: Optional[str] = None,
+        target_id: Optional[str] = None,
     ) -> bool:
         """Send WebRTC offer."""
         return await self.send_signal(
-            session_id,
+            join_code,
             "offer",
             {"sdp": sdp},
-            sender_id,
+            sender_id="host",
+            target_id=target_id,
         )
 
     async def send_answer(
         self,
-        session_id: str,
+        join_code: str,
         sdp: str,
-        sender_id: Optional[str] = None,
+        target_id: str,
     ) -> bool:
-        """Send WebRTC answer."""
+        """Send WebRTC answer to specific peer."""
         return await self.send_signal(
-            session_id,
+            join_code,
             "answer",
             {"sdp": sdp},
-            sender_id,
+            sender_id="host",
+            target_id=target_id,
         )
 
     async def send_ice_candidate(
         self,
-        session_id: str,
+        join_code: str,
         candidate: dict[str, Any],
-        sender_id: Optional[str] = None,
+        target_id: Optional[str] = None,
     ) -> bool:
         """Send ICE candidate."""
         return await self.send_signal(
-            session_id,
+            join_code,
             "ice-candidate",
             {"candidate": candidate},
-            sender_id,
+            sender_id="host",
+            target_id=target_id,
         )
 
     async def close(self) -> None:

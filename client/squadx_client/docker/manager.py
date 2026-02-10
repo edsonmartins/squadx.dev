@@ -32,7 +32,7 @@ class ContainerConfig:
     network: Optional[str] = None
     enable_vnc: bool = True
     vnc_port: int = 5900
-    resolution: str = "1280x720"
+    resolution: str = "1280x720x24"
     # Security hardening
     enable_hardening: bool = True
     security_level: str = "standard"  # development, standard, maximum

@@ -6,8 +6,7 @@ import logging
 from typing import Any, Callable, Optional
 from dataclasses import dataclass
 
-from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
+from supabase import create_async_client, AsyncClient, AsyncClientOptions
 
 from squadx_client.config import settings
 
@@ -40,18 +39,17 @@ class SupabaseClient:
                 "Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables."
             )
 
-        self._client: Optional[Client] = None
+        self._client: Optional[AsyncClient] = None
         self._channels: dict[str, Any] = {}
         self._message_callbacks: dict[str, list[Callable[[RealtimeMessage], None]]] = {}
 
-    @property
-    def client(self) -> Client:
-        """Get or create the Supabase client."""
+    async def get_client(self) -> AsyncClient:
+        """Get or create the Supabase async client."""
         if self._client is None:
-            self._client = create_client(
+            self._client = await create_async_client(
                 self.url,
                 self.anon_key,
-                options=ClientOptions(
+                options=AsyncClientOptions(
                     auto_refresh_token=True,
                     persist_session=False,
                 ),
@@ -76,7 +74,8 @@ class SupabaseClient:
         Returns:
             Session data including id and join_code
         """
-        result = self.client.rpc(
+        client = await self.get_client()
+        result = await client.rpc(
             "create_live_session",
             {
                 "p_task_id": task_id,
@@ -93,37 +92,40 @@ class SupabaseClient:
 
     async def get_session(self, session_id: str) -> Optional[dict[str, Any]]:
         """Get session by ID."""
-        result = (
-            self.client.table("live_sessions")
+        client = await self.get_client()
+        result = await (
+            client.table("live_sessions")
             .select("*")
             .eq("id", session_id)
-            .single()
+            .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def get_session_by_code(self, join_code: str) -> Optional[dict[str, Any]]:
         """Get session by join code."""
-        result = (
-            self.client.table("live_sessions")
+        client = await self.get_client()
+        result = await (
+            client.table("live_sessions")
             .select("*")
             .eq("join_code", join_code)
-            .single()
+            .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def get_session_by_task(self, task_id: int) -> Optional[dict[str, Any]]:
         """Get active session for a task."""
-        result = (
-            self.client.table("live_sessions")
+        client = await self.get_client()
+        result = await (
+            client.table("live_sessions")
             .select("*")
             .eq("task_id", task_id)
             .eq("status", "active")
-            .single()
+            .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     async def update_session_status(
         self,
@@ -131,8 +133,9 @@ class SupabaseClient:
         status: str,
     ) -> dict[str, Any]:
         """Update session status."""
-        result = (
-            self.client.table("live_sessions")
+        client = await self.get_client()
+        result = await (
+            client.table("live_sessions")
             .update({"status": status})
             .eq("id", session_id)
             .execute()
@@ -157,8 +160,9 @@ class SupabaseClient:
         role: str = "viewer",
     ) -> dict[str, Any]:
         """Add a participant to the session."""
-        result = (
-            self.client.table("live_participants")
+        client = await self.get_client()
+        result = await (
+            client.table("live_participants")
             .insert({
                 "session_id": session_id,
                 "user_id": user_id,
@@ -173,7 +177,8 @@ class SupabaseClient:
     async def remove_participant(self, participant_id: str) -> bool:
         """Remove a participant from the session."""
         try:
-            self.client.table("live_participants").delete().eq(
+            client = await self.get_client()
+            await client.table("live_participants").delete().eq(
                 "id", participant_id
             ).execute()
             return True
@@ -183,8 +188,9 @@ class SupabaseClient:
 
     async def get_participants(self, session_id: str) -> list[dict[str, Any]]:
         """Get all participants in a session."""
-        result = (
-            self.client.table("live_participants")
+        client = await self.get_client()
+        result = await (
+            client.table("live_participants")
             .select("*")
             .eq("session_id", session_id)
             .is_("left_at", "null")
@@ -194,7 +200,7 @@ class SupabaseClient:
 
     # Realtime signaling methods
 
-    def subscribe_to_session(
+    async def subscribe_to_session(
         self,
         session_id: str,
         on_message: Callable[[RealtimeMessage], None],
@@ -217,7 +223,8 @@ class SupabaseClient:
         self._message_callbacks[channel_name].append(on_message)
 
         # Create channel
-        channel = self.client.channel(channel_name)
+        client = await self.get_client()
+        channel = client.channel(channel_name)
 
         def handle_broadcast(payload: dict):
             msg = RealtimeMessage(
@@ -232,17 +239,17 @@ class SupabaseClient:
                     logger.error(f"Error in message callback: {e}")
 
         channel.on_broadcast("signal", handle_broadcast)
-        channel.subscribe()
+        await channel.subscribe()
 
         self._channels[channel_name] = channel
         logger.info(f"Subscribed to {channel_name}")
 
-    def unsubscribe_from_session(self, session_id: str) -> None:
+    async def unsubscribe_from_session(self, session_id: str) -> None:
         """Unsubscribe from session channel."""
         channel_name = f"session:{session_id}"
 
         if channel_name in self._channels:
-            self._channels[channel_name].unsubscribe()
+            await self._channels[channel_name].unsubscribe()
             del self._channels[channel_name]
             self._message_callbacks.pop(channel_name, None)
             logger.info(f"Unsubscribed from {channel_name}")
@@ -272,7 +279,7 @@ class SupabaseClient:
             return False
 
         try:
-            self._channels[channel_name].send_broadcast(
+            await self._channels[channel_name].send_broadcast(
                 "signal",
                 {
                     "type": signal_type,
@@ -328,11 +335,11 @@ class SupabaseClient:
             sender_id,
         )
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close all channels and cleanup."""
         for channel_name, channel in list(self._channels.items()):
             try:
-                channel.unsubscribe()
+                await channel.unsubscribe()
             except Exception as e:
                 logger.error(f"Error unsubscribing from {channel_name}: {e}")
 

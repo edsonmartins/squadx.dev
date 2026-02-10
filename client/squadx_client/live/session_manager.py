@@ -140,7 +140,7 @@ class LiveSessionManager:
         self._peers[session.id] = {}
 
         # Subscribe to session signaling
-        self._client.subscribe_to_session(
+        await self._client.subscribe_to_session(
             session.id,
             lambda msg: self._handle_signal_message(session.id, msg),
         )
@@ -200,7 +200,7 @@ class LiveSessionManager:
 
         try:
             # Unsubscribe from signaling
-            self._client.unsubscribe_from_session(session_id)
+            await self._client.unsubscribe_from_session(session_id)
 
             # End session in database
             await self._client.end_session(session_id)
@@ -351,7 +351,7 @@ class LiveSessionManager:
         for session_id in list(self._sessions.keys()):
             await self.end_session(session_id)
 
-        self._client.close()
+        await self._client.close()
         logger.info("Cleaned up LiveSessionManager")
 
 

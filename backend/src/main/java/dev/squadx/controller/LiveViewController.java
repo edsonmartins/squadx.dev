@@ -4,8 +4,10 @@ import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.liveview.JoinSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
+import dev.squadx.dto.supabase.SupabaseLiveSession;
 import dev.squadx.model.User;
 import dev.squadx.service.LiveViewService;
+import dev.squadx.service.SupabaseLiveSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/live-view")
@@ -24,6 +27,7 @@ import java.util.List;
 public class LiveViewController {
 
     private final LiveViewService liveViewService;
+    private final SupabaseLiveSessionService supabaseLiveSessionService;
 
     @PostMapping("/sessions")
     @Operation(summary = "Create a new live session for a task")
@@ -127,5 +131,75 @@ public class LiveViewController {
     ) {
         LiveSessionResponse response = liveViewService.revokeControl(sessionId, userId, user);
         return ResponseEntity.ok(ApiResponse.success(response, "Control revoked"));
+    }
+
+    // ==================== Supabase Endpoints ====================
+    // These endpoints query Supabase for sessions created by the Python client
+
+    @GetMapping("/supabase/sessions/code/{code}")
+    @Operation(summary = "Get live session by join code from Supabase (for Python client sessions)")
+    public ResponseEntity<ApiResponse<LiveSessionResponse>> getSupabaseSessionByCode(
+            @PathVariable String code
+    ) {
+        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.getSessionByCode(code);
+        if (session.isPresent()) {
+            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
+            return ResponseEntity.ok(ApiResponse.success(response));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/supabase/sessions/task/{taskId}")
+    @Operation(summary = "Get active live session for a task from Supabase")
+    public ResponseEntity<ApiResponse<LiveSessionResponse>> getSupabaseSessionByTaskId(
+            @PathVariable Long taskId
+    ) {
+        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.getActiveSessionByTaskId(taskId);
+        if (session.isPresent()) {
+            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
+            return ResponseEntity.ok(ApiResponse.success(response));
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/supabase/sessions/active")
+    @Operation(summary = "Get all active live sessions from Supabase")
+    public ResponseEntity<ApiResponse<List<LiveSessionResponse>>> getSupabaseActiveSessions() {
+        List<SupabaseLiveSession> sessions = supabaseLiveSessionService.getActiveSessions();
+        List<LiveSessionResponse> responses = sessions.stream()
+                .map(supabaseLiveSessionService::toResponse)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(responses));
+    }
+
+    @PostMapping("/supabase/sessions")
+    @Operation(summary = "Create a new live session in Supabase")
+    public ResponseEntity<ApiResponse<LiveSessionResponse>> createSupabaseSession(
+            @RequestParam Long taskId,
+            @RequestParam(required = false) String hostUserId,
+            @RequestParam(defaultValue = "p2p") String mode,
+            @RequestParam(defaultValue = "25") Integer maxViewers
+    ) {
+        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.createSession(
+                taskId, hostUserId, mode, maxViewers);
+        if (session.isPresent()) {
+            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(ApiResponse.success(response, "Live session created in Supabase"));
+        }
+        return ResponseEntity.badRequest().build();
+    }
+
+    @PostMapping("/supabase/sessions/{sessionId}/end")
+    @Operation(summary = "End a live session in Supabase")
+    public ResponseEntity<ApiResponse<Void>> endSupabaseSession(
+            @PathVariable String sessionId
+    ) {
+        boolean success = supabaseLiveSessionService.endSession(sessionId);
+        if (success) {
+            return ResponseEntity.ok(ApiResponse.success(null, "Live session ended"));
+        }
+        return ResponseEntity.badRequest().build();
     }
 }

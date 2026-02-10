@@ -60,6 +60,12 @@ cors:
   allow-credentials: true
   max-age: 3600
 
+# Supabase Configuration (for Live Streaming)
+supabase:
+  url: ${SUPABASE_URL:https://nxlibngoekxgyyhvcjxr.supabase.co}
+  anon-key: ${SUPABASE_ANON_KEY:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bGlibmdvZWt4Z3l5aHZjanhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3Mzc0NzQsImV4cCI6MjA4NjMxMzQ3NH0.i1jIDWqlqAZ3m-cbjn09xPUqOIXUR8whIXs0nqj0IF4}
+  service-key: ${SUPABASE_SERVICE_KEY:}
+
 # API Documentation
 springdoc:
   api-docs:

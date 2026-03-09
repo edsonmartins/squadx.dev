@@ -3,9 +3,9 @@ spring:
     name: squadx-backend
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://192.168.1.110:5444/squadx?ssl=false&serverTimezone=America/Sao_Paulo}
-    username: ${SPRING_DATASOURCE_USERNAME:admin}
-    password: ${SPRING_DATASOURCE_PASSWORD:Rapidex@727204}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -48,7 +48,7 @@ server:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:c3F1YWR4LWRldi1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW5zLW1pbmltdW0tMjU2LWJpdHMtcmVxdWlyZWQ=}
+  secret: ${JWT_SECRET}
   expiration: 86400000  # 24 hours in milliseconds
   refresh-expiration: 604800000  # 7 days in milliseconds
 
@@ -62,8 +62,8 @@ cors:
 
 # Supabase Configuration (for Live Streaming)
 supabase:
-  url: ${SUPABASE_URL:https://nxlibngoekxgyyhvcjxr.supabase.co}
-  anon-key: ${SUPABASE_ANON_KEY:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54bGlibmdvZWt4Z3l5aHZjanhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3Mzc0NzQsImV4cCI6MjA4NjMxMzQ3NH0.i1jIDWqlqAZ3m-cbjn09xPUqOIXUR8whIXs0nqj0IF4}
+  url: ${SUPABASE_URL}
+  anon-key: ${SUPABASE_ANON_KEY}
   service-key: ${SUPABASE_SERVICE_KEY:}
 
 # API Documentation

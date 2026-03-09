@@ -48,7 +48,10 @@
       "Bash(pip show:*)",
       "Bash(npx tsc:*)",
       "Bash(grep:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(ssh:*)",
+      "Bash(git rm:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

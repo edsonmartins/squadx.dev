@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate SquadX PWA Icons</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #111; color: #eee; }
+    h1 { color: #6366f1; }
+    .icon-row { display: flex; gap: 2rem; align-items: flex-end; margin: 2rem 0; flex-wrap: wrap; }
+    .icon-col { text-align: center; }
+    canvas { border: 1px solid #333; border-radius: 8px; }
+    button { background: #6366f1; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem; margin-top: 0.5rem; }
+    button:hover { background: #4f46e5; }
+    p { color: #999; }
+  </style>
+</head>
+<body>
+  <h1>SquadX.dev - PWA Icon Generator</h1>
+  <p>This page renders the SVG icons to canvas and lets you download them as PNG files.<br>
+     Open this file in a browser, then click the download buttons.</p>
+
+  <div class="icon-row">
+    <div class="icon-col">
+      <h3>192x192</h3>
+      <canvas id="c192" width="192" height="192"></canvas><br>
+      <button onclick="download('c192', 'icon-192.png')">Download PNG</button>
+    </div>
+    <div class="icon-col">
+      <h3>512x512</h3>
+      <canvas id="c512" width="512" height="512"></canvas><br>
+      <button onclick="download('c512', 'icon-512.png')">Download PNG</button>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+      const r = size * (40 / 192); // proportional radius
+
+      // Background rounded rect
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(size - r, 0);
+      ctx.quadraticCurveTo(size, 0, size, r);
+      ctx.lineTo(size, size - r);
+      ctx.quadraticCurveTo(size, size, size - r, size);
+      ctx.lineTo(r, size);
+      ctx.quadraticCurveTo(0, size, 0, size - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fillStyle = '#6366f1';
+      ctx.fill();
+
+      // Text
+      const fontSize = Math.round(size * 0.42);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `700 ${fontSize}px system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.letterSpacing = `${Math.round(-size * 0.02)}px`;
+      ctx.fillText('SX', size / 2, size / 2 + size * 0.02);
+    }
+
+    function download(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    drawIcon('c192', 192);
+    drawIcon('c512', 512);
+  </script>
+</body>
+</html>

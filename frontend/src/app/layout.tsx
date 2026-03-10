@@ -37,6 +37,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.svg" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.svg" />
+      </head>
       <body className={`${dmSans.variable} ${fragmentMono.variable} font-sans`}>
         <Providers>{children}</Providers>
         <Toaster />

@@ -1,0 +1,14 @@
+{
+  "name": "squadx-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:debug": "tauri build --debug"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

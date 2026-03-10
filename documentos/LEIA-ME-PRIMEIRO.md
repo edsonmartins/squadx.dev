@@ -128,7 +128,7 @@ git push -u origin main
 Siga o roadmap semana-a-semana:
 - **Semana 1-2:** Infraestrutura base (backend + frontend + DB)
 - **Semana 3-4:** Client Python + WebSocket
-- **Semana 5-6:** Agent real (OpenHands)
+- **Semana 5-6:** Agent real (LiteLLM)
 - **Semana 7-8:** Observability + Polish
 
 ---
@@ -197,17 +197,17 @@ Siga o roadmap semana-a-semana:
 
 ### Aprender Tecnologias
 
-**FastAPI:**
-- https://fastapi.tiangolo.com/
-- https://testdriven.io/blog/fastapi-crud/
+**Spring Boot 3.4:**
+- https://spring.io/projects/spring-boot
+- https://docs.spring.io/spring-boot/reference/
 
 **Next.js:**
 - https://nextjs.org/learn
 - https://ui.shadcn.com/
 
-**OpenHands:**
-- https://docs.all-hands.dev/
-- https://github.com/all-hands-ai/openhands
+**LiteLLM:**
+- https://docs.litellm.ai/
+- https://github.com/BerriAI/litellm
 
 **LangGraph:**
 - https://langchain-ai.github.io/langgraph/

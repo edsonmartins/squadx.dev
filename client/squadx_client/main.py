@@ -1,6 +1,7 @@
 """Main entry point for SquadX Client CLI."""
 
 import asyncio
+import os
 import signal
 import sys
 from pathlib import Path
@@ -12,6 +13,30 @@ from rich.panel import Panel
 from squadx_client import __version__
 from squadx_client.config import settings
 from squadx_client.daemon import SquadXDaemon
+
+
+def _read_pid() -> int | None:
+    """Read PID from the daemon PID file.
+
+    Returns the PID as an int, or None if the file doesn't exist or is invalid.
+    """
+    pid_path = SquadXDaemon.pid_file_path()
+    try:
+        return int(pid_path.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _is_process_running(pid: int) -> bool:
+    """Check if a process with the given PID is running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Process exists but we don't have permission to signal it
+        return True
 
 app = typer.Typer(
     name="squadx-client",
@@ -66,16 +91,54 @@ def start(
 def status():
     """Check the status of the SquadX daemon."""
     console.print("[bold]SquadX Daemon Status[/bold]")
-    # TODO: Implement status check via PID file or socket
-    console.print("[yellow]Status check not yet implemented[/yellow]")
+
+    pid = _read_pid()
+    if pid is None:
+        console.print("[yellow]Daemon is not running (no PID file found)[/yellow]")
+        raise typer.Exit(1)
+
+    if _is_process_running(pid):
+        console.print(f"[green]Daemon is running (PID {pid})[/green]")
+    else:
+        console.print(f"[yellow]Daemon is not running (stale PID file, PID {pid})[/yellow]")
+        # Clean up stale PID file
+        try:
+            SquadXDaemon.pid_file_path().unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise typer.Exit(1)
 
 
 @app.command()
 def stop():
     """Stop the running SquadX daemon."""
     console.print("[bold]Stopping SquadX Daemon[/bold]")
-    # TODO: Implement graceful shutdown via PID file or socket
-    console.print("[yellow]Stop command not yet implemented[/yellow]")
+
+    pid = _read_pid()
+    if pid is None:
+        console.print("[yellow]Daemon is not running (no PID file found)[/yellow]")
+        raise typer.Exit(1)
+
+    if not _is_process_running(pid):
+        console.print(f"[yellow]Daemon is not running (stale PID file, PID {pid})[/yellow]")
+        try:
+            SquadXDaemon.pid_file_path().unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise typer.Exit(1)
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        console.print(f"[green]Sent SIGTERM to daemon (PID {pid})[/green]")
+    except PermissionError:
+        console.print(f"[red]Permission denied: cannot stop daemon (PID {pid})[/red]")
+        raise typer.Exit(1)
+    except ProcessLookupError:
+        console.print(f"[yellow]Daemon already stopped (PID {pid})[/yellow]")
+        try:
+            SquadXDaemon.pid_file_path().unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 @app.command()

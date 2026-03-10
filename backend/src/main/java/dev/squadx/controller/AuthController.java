@@ -50,4 +50,22 @@ public class AuthController {
         UserResponse response = authService.getCurrentUser(user.getEmail());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @PutMapping("/me")
+    @Operation(summary = "Update current user profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        UserResponse response = authService.updateProfile(user.getEmail(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Profile updated"));
+    }
+
+    @PostMapping("/me/change-password")
+    @Operation(summary = "Change current user password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(user.getEmail(), request);
+        return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
+    }
 }

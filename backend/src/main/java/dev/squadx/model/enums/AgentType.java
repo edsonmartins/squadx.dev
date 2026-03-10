@@ -6,5 +6,6 @@ public enum AgentType {
     BACKEND,
     FULLSTACK,
     DEVOPS,
-    QA
+    QA,
+    DATABASE
 }

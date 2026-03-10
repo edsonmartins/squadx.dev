@@ -125,7 +125,7 @@ git commit -m "Initial commit: Complete documentation"
 # Começar Phase 1 (MVP)
 # Semana 1-2: Backend + Frontend + DB
 # Semana 3-4: Client + WebSocket
-# Semana 5-6: OpenHands integration
+# Semana 5-6: LiteLLM integration
 # Semana 7-8: Observability + Polish
 ```
 

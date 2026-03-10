@@ -42,31 +42,32 @@ pnpm --filter @squadx-live/desktop dev
 ## Backend Integration
 
 ### 1. Add Live View Endpoints
-```python
-# backend/app/api/v1/live_view.py
-# (See ARCHITECTURE.md for full code)
+```java
+// backend/src/main/java/dev/squadx/api/v1/LiveViewController.java
+// (See ARCHITECTURE.md for full code)
 
-@router.post("/sessions")
-async def create_live_session(task_id: int):
-    # Create session
-    # Send WebSocket to client
-    pass
+@PostMapping("/sessions")
+public ResponseEntity<LiveSession> createLiveSession(@RequestParam Long taskId) {
+    // Create session
+    // Send WebSocket to client
+    return ResponseEntity.ok(session);
+}
 ```
 
 ### 2. WebSocket Events
-```python
-# backend/app/websocket.py
+```java
+// backend/src/main/java/dev/squadx/websocket/LiveViewHandler.java
 
-@sio.on("start_live_view")
-async def handle_start(sid, data):
-    # Client starts live session
-    pass
+@MessageMapping("/start_live_view")
+public void handleStart(StartLiveViewMessage data) {
+    // Client starts live session
+}
 
-@sio.on("live_view_ready")
-async def handle_ready(sid, data):
-    # Session URL ready
-    # Notify frontend
-    pass
+@MessageMapping("/live_view_ready")
+public void handleReady(LiveViewReadyMessage data) {
+    // Session URL ready
+    // Notify frontend
+}
 ```
 
 ## Client Integration

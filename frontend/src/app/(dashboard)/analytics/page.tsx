@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -11,6 +11,7 @@ import {
   Clock,
   CheckCircle,
   Users,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -43,30 +44,7 @@ import {
   Cell,
 } from "recharts";
 
-// Sample data for charts (replace with real API data)
-const executionTrendData = [
-  { name: "Jan 1", executions: 12, cost: 2.5 },
-  { name: "Jan 8", executions: 18, cost: 3.8 },
-  { name: "Jan 15", executions: 25, cost: 5.2 },
-  { name: "Jan 22", executions: 32, cost: 6.8 },
-  { name: "Jan 29", executions: 28, cost: 5.9 },
-  { name: "Feb 5", executions: 38, cost: 8.1 },
-];
-
-const agentPerformanceData = [
-  { name: "Frontend", tasks: 45, success: 42 },
-  { name: "Backend", tasks: 38, success: 35 },
-  { name: "Fullstack", tasks: 52, success: 48 },
-  { name: "DevOps", tasks: 28, success: 26 },
-  { name: "QA", tasks: 35, success: 33 },
-];
-
-const costBreakdownData = [
-  { name: "GPT-4o", value: 45, color: "#6366f1" },
-  { name: "Claude 3.5", value: 35, color: "#8b5cf6" },
-  { name: "GPT-4o Mini", value: 15, color: "#a855f7" },
-  { name: "Others", value: 5, color: "#d946ef" },
-];
+const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e"];
 
 type Period = "7d" | "30d" | "90d" | "year";
 
@@ -82,26 +60,98 @@ export default function AnalyticsPage() {
   const defaultOrgId = organizations?.content?.[0]?.id;
 
   // Fetch metrics
-  const { data: metrics } = useQuery({
+  const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["execution-metrics", defaultOrgId],
     queryFn: () => executionsApi.getMetrics(defaultOrgId!),
     enabled: !!defaultOrgId,
   });
 
-  // Calculate stats (using sample data for now)
-  const stats = {
-    totalExecutions: 127,
-    executionsTrend: 23,
-    totalCost: 23.45,
-    costTrend: -12,
-    totalTokens: 1250000,
-    tokensTrend: 18,
-    avgDuration: 15.3,
-    durationTrend: -8,
-    successRate: 94,
-    successTrend: 2,
-    activeAgents: 8,
-  };
+  // Fetch executions for charts
+  const { data: executions, isLoading: executionsLoading } = useQuery({
+    queryKey: ["executions", defaultOrgId],
+    queryFn: () => executionsApi.listByOrganization(defaultOrgId!),
+    enabled: !!defaultOrgId,
+  });
+
+  const isLoading = metricsLoading || executionsLoading;
+  const executionList = executions?.content ?? [];
+
+  // Compute stats from metrics API response
+  const stats = useMemo(() => {
+    const totalExecutions = (metrics?.total_executions as number) ?? executionList.length;
+    const totalCost = (metrics?.total_cost as number) ?? executionList.reduce((s, e) => s + (e.cost ?? 0), 0);
+    const totalTokens = (metrics?.total_tokens as number) ?? executionList.reduce((s, e) => s + (e.tokens_used ?? 0), 0);
+    const completed = executionList.filter((e) => e.status === "COMPLETED").length;
+    const failed = executionList.filter((e) => e.status === "FAILED").length;
+    const successRate = totalExecutions > 0 ? Math.round((completed / (completed + failed || 1)) * 100) : 0;
+    const durations = executionList.filter((e) => e.duration_seconds != null).map((e) => e.duration_seconds!);
+    const avgDuration = durations.length > 0 ? durations.reduce((s, d) => s + d, 0) / durations.length / 60 : 0;
+    const uniqueAgents = new Set(executionList.map((e) => e.agent_name).filter(Boolean));
+
+    return {
+      totalExecutions,
+      executionsTrend: 0,
+      totalCost,
+      costTrend: 0,
+      totalTokens,
+      tokensTrend: 0,
+      avgDuration,
+      durationTrend: 0,
+      successRate,
+      successTrend: 0,
+      activeAgents: uniqueAgents.size,
+    };
+  }, [metrics, executionList]);
+
+  // Group executions by week for trend chart
+  const executionTrendData = useMemo(() => {
+    if (executionList.length === 0) return [];
+    const weeks: Record<string, { executions: number; cost: number }> = {};
+    executionList.forEach((e) => {
+      const date = new Date(e.started_at ?? e.created_at);
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      const key = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
+      if (!weeks[key]) weeks[key] = { executions: 0, cost: 0 };
+      weeks[key].executions += 1;
+      weeks[key].cost += e.cost ?? 0;
+    });
+    return Object.entries(weeks)
+      .map(([name, data]) => ({ name, executions: data.executions, cost: Math.round(data.cost * 100) / 100 }))
+      .slice(-8);
+  }, [executionList]);
+
+  // Group executions by agent for performance chart
+  const agentPerformanceData = useMemo(() => {
+    if (executionList.length === 0) return [];
+    const agents: Record<string, { tasks: number; success: number }> = {};
+    executionList.forEach((e) => {
+      const name = e.agent_name ?? "Unknown";
+      if (!agents[name]) agents[name] = { tasks: 0, success: 0 };
+      agents[name].tasks += 1;
+      if (e.status === "COMPLETED") agents[name].success += 1;
+    });
+    return Object.entries(agents).map(([name, data]) => ({ name, ...data }));
+  }, [executionList]);
+
+  // Cost breakdown by agent
+  const costBreakdownData = useMemo(() => {
+    if (executionList.length === 0) return [];
+    const costs: Record<string, number> = {};
+    executionList.forEach((e) => {
+      const name = e.agent_name ?? "Unknown";
+      costs[name] = (costs[name] ?? 0) + (e.cost ?? 0);
+    });
+    const total = Object.values(costs).reduce((s, v) => s + v, 0);
+    if (total === 0) return [];
+    return Object.entries(costs)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({
+        name,
+        value: Math.round((value / total) * 100),
+        color: PIE_COLORS[i % PIE_COLORS.length],
+      }));
+  }, [executionList]);
 
   return (
     <div className="space-y-6">
@@ -126,7 +176,29 @@ export default function AnalyticsPage() {
         </Select>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Loading analytics...</span>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && executionList.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No data yet</h3>
+            <p className="text-sm text-muted-foreground">
+              Run some executions to see analytics here.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Grid */}
+      {!isLoading && executionList.length > 0 && (<>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Executions"
@@ -318,7 +390,7 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-500" />
               <span className="text-3xl font-bold">
-                ${(stats.totalCost / stats.totalExecutions).toFixed(2)}
+                ${stats.totalExecutions > 0 ? (stats.totalCost / stats.totalExecutions).toFixed(2) : "0.00"}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -327,6 +399,7 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+      </>)}
     </div>
   );
 }

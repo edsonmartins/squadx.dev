@@ -89,7 +89,7 @@ Contém 11 documentos adicionais:
 - **50+ endpoints** de API
 - **215+ features** mapeadas
 - **32 semanas** de roadmap
-- **6 tipos** de agentes especializados
+- **5 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
 - **7 camadas** de segurança
 
 ---
@@ -146,9 +146,9 @@ Contém 11 documentos adicionais:
 ✅ **Compliance:** LGPD, GDPR, HIPAA compatível
 
 ### Stack Tecnológico
-✅ **Backend:** FastAPI + PostgreSQL + Redis  
-✅ **Frontend:** Next.js 15 + TypeScript + shadcn/ui  
-✅ **Client:** Python 3.11 + OpenHands SDK + LangGraph  
+✅ **Backend:** Spring Boot 3.4 (Java 21) + PostgreSQL + Redis
+✅ **Frontend:** Next.js 16 + TypeScript + shadcn/ui
+✅ **Client:** Python 3.11 + LiteLLM + LangGraph  
 ✅ **Observability:** OpenTelemetry + Grafana
 
 ### Sandbox & Segurança
@@ -159,8 +159,8 @@ Contém 11 documentos adicionais:
 
 ### Multi-Agent
 ✅ **LangGraph** orchestration  
-✅ **6 tipos** de agentes especializados  
-✅ **Coordinator** + 5 specialists  
+✅ **5 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
+✅ **Parallel execution** quando possível  
 ✅ **Parallel execution** quando possível
 
 ### Comunicação
@@ -187,7 +187,7 @@ Contém 11 documentos adicionais:
 - [ ] Setup ambiente desenvolvimento
 
 ### Semana 2: Infraestrutura Base
-- [ ] Backend estrutura (FastAPI)
+- [ ] Backend estrutura (Spring Boot 3.4)
 - [ ] Frontend estrutura (Next.js)
 - [ ] Client estrutura (Python)
 - [ ] docker-compose funcionando
@@ -272,9 +272,9 @@ Antes de começar implementação:
 
 ### Documentação de Tecnologias
 
-**OpenHands (Agent Core):**
-- https://docs.all-hands.dev/
-- https://github.com/All-Hands-AI/OpenHands
+**LiteLLM (LLM Router):**
+- https://docs.litellm.ai/
+- https://github.com/BerriAI/litellm
 
 **LangGraph (Multi-Agent):**
 - https://langchain-ai.github.io/langgraph/
@@ -284,9 +284,9 @@ Antes de começar implementação:
 - https://docs.litellm.ai/
 - https://github.com/BerriAI/litellm
 
-**FastAPI:**
-- https://fastapi.tiangolo.com/
-- https://github.com/tiangolo/fastapi
+**Spring Boot 3.4:**
+- https://spring.io/projects/spring-boot
+- https://docs.spring.io/spring-boot/reference/
 
 **Next.js:**
 - https://nextjs.org/docs

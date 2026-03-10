@@ -440,7 +440,7 @@ export const liveViewApi = {
 };
 
 // Squad Types
-export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" | "COORDINATOR";
+export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" | "COORDINATOR" | "DATABASE";
 
 export interface SquadResponse {
   id: number;
@@ -567,3 +567,99 @@ export interface CreateLiveSessionRequest {
   max_viewers?: number;
   resolution?: string;
 }
+
+// Approval Types
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "CANCELLED";
+export type ApprovalType = "COMMIT" | "DEPLOY" | "DELETE" | "MERGE" | "CONFIGURATION";
+
+export interface ApprovalResponse {
+  id: number;
+  task_id: number;
+  task_title: string;
+  execution_id?: number;
+  requested_by_id: number;
+  requested_by_name: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  status: ApprovalStatus;
+  approval_type: ApprovalType;
+  title: string;
+  description?: string;
+  changes_summary?: string;
+  review_comment?: string;
+  reviewed_at?: string;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface CreateApprovalRequest {
+  task_id: number;
+  execution_id?: number;
+  approval_type?: ApprovalType;
+  title: string;
+  description?: string;
+  changes_summary?: string;
+}
+
+export interface ReviewApprovalRequest {
+  approved: boolean;
+  review_comment?: string;
+}
+
+// Approvals API
+export const approvalsApi = {
+  create: (data: CreateApprovalRequest) =>
+    api.post<ApprovalResponse>("/api/v1/approvals", data),
+  review: (id: number, data: ReviewApprovalRequest) =>
+    api.post<ApprovalResponse>(`/api/v1/approvals/${id}/review`, data),
+  cancel: (id: number) =>
+    api.post<ApprovalResponse>(`/api/v1/approvals/${id}/cancel`),
+  get: (id: number) => api.get<ApprovalResponse>(`/api/v1/approvals/${id}`),
+  getByTask: (taskId: number) =>
+    api.get<PageResponse<ApprovalResponse>>(`/api/v1/approvals/task/${taskId}`),
+  getPending: () =>
+    api.get<PageResponse<ApprovalResponse>>("/api/v1/approvals/pending"),
+  list: (status?: ApprovalStatus) =>
+    api.get<PageResponse<ApprovalResponse>>(
+      `/api/v1/approvals${status ? `?status=${status}` : ""}`
+    ),
+};
+
+// Recording Types
+export type RecordingStatus = "RECORDING" | "COMPLETED" | "FAILED";
+
+export interface RecordingResponse {
+  id: number;
+  session_id: number;
+  s3_key: string;
+  s3_bucket: string;
+  upload_url?: string;
+  playback_url?: string;
+  duration_seconds?: number;
+  file_size_bytes?: number;
+  status: RecordingStatus;
+  started_at: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface StartRecordingRequest {
+  session_id: number;
+}
+
+export interface CompleteRecordingRequest {
+  file_size_bytes?: number;
+  duration_seconds?: number;
+}
+
+// Recordings API
+export const recordingsApi = {
+  start: (data: StartRecordingRequest) =>
+    api.post<RecordingResponse>("/api/v1/recordings/start", data),
+  complete: (id: number, data: CompleteRecordingRequest) =>
+    api.post<RecordingResponse>(`/api/v1/recordings/${id}/complete`, data),
+  getUrl: (id: number) =>
+    api.get<RecordingResponse>(`/api/v1/recordings/${id}/url`),
+  listBySession: (sessionId: number) =>
+    api.get<RecordingResponse[]>(`/api/v1/recordings/session/${sessionId}`),
+};

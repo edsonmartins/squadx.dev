@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -20,7 +21,9 @@ def temp_workspace() -> Generator[Path, None, None]:
     workspace_path = Path(workspace)
 
     # Initialize as a git repository
-    os.system(f"cd {workspace} && git init -q && git config user.email 'test@test.com' && git config user.name 'Test'")
+    subprocess.run(["git", "init", "-q"], cwd=workspace, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=workspace, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=workspace, capture_output=True)
 
     yield workspace_path
 

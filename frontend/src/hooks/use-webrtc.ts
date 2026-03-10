@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signaling, WebRTCSignal } from "@/lib/supabase";
 
+const isDev = process.env.NODE_ENV === "development";
+const log = (...args: unknown[]) => isDev && console.log(...args);
+const logWarn = (...args: unknown[]) => isDev && console.warn(...args);
+const logError = (...args: unknown[]) => console.error(...args);
+
 export type ConnectionState =
   | "disconnected"
   | "connecting"
@@ -119,7 +124,7 @@ export function useWebRTC({
     }
 
     if (reconnectAttempts >= maxReconnectAttempts) {
-      console.log("[WebRTC] Max reconnection attempts reached");
+      log("[WebRTC] Max reconnection attempts reached");
       updateConnectionState("failed");
       return;
     }
@@ -135,7 +140,7 @@ export function useWebRTC({
       30000 // Max 30 seconds
     );
 
-    console.log(
+    log(
       `[WebRTC] Scheduling reconnection attempt ${reconnectAttempts + 1}/${maxReconnectAttempts} in ${Math.round(delay)}ms`
     );
 
@@ -228,13 +233,13 @@ export function useWebRTC({
                   })
                 );
               } catch (e) {
-                console.warn("[WebRTC] Error adding ICE candidate:", e);
+                logWarn("[WebRTC] Error adding ICE candidate:", e);
               }
             }
             break;
         }
       } catch (error) {
-        console.error("[WebRTC] Error handling signal:", error);
+        logError("[WebRTC] Error handling signal:", error);
       }
     },
     []
@@ -243,7 +248,7 @@ export function useWebRTC({
   // Create peer connection
   const createPeerConnection = useCallback(() => {
     const iceServers = getIceServers();
-    console.log(`[WebRTC] Using ${iceServers.length} ICE servers`);
+    log(`[WebRTC] Using ${iceServers.length} ICE servers`);
     const pc = new RTCPeerConnection({ iceServers });
 
     // Handle ICE candidates
@@ -256,7 +261,7 @@ export function useWebRTC({
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      console.log("[WebRTC] Connection state:", state);
+      log("[WebRTC] Connection state:", state);
 
       switch (state) {
         case "connecting":
@@ -292,7 +297,7 @@ export function useWebRTC({
 
     // Handle ICE connection state
     pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC] ICE state:", pc.iceConnectionState);
+      log("[WebRTC] ICE state:", pc.iceConnectionState);
       if (pc.iceConnectionState === "failed") {
         // Try ICE restart
         pc.restartIce();
@@ -301,7 +306,7 @@ export function useWebRTC({
 
     // Handle incoming tracks (video stream)
     pc.ontrack = (event) => {
-      console.log("[WebRTC] Received track:", event.track.kind);
+      log("[WebRTC] Received track:", event.track.kind);
       if (event.streams && event.streams[0]) {
         const stream = event.streams[0];
         setRemoteStream(stream);
@@ -332,7 +337,7 @@ export function useWebRTC({
   // Internal function to perform connection (used by connect and reconnect)
   const performConnect = useCallback(async () => {
     if (pcRef.current) {
-      console.log("[WebRTC] Peer connection already exists");
+      log("[WebRTC] Peer connection already exists");
       return;
     }
 
@@ -355,9 +360,9 @@ export function useWebRTC({
       // Send offer to host (broadcast)
       await signaling.sendOffer(offer.sdp!);
 
-      console.log("[WebRTC] Sent offer, waiting for answer...");
+      log("[WebRTC] Sent offer, waiting for answer...");
     } catch (error) {
-      console.error("[WebRTC] Connection error:", error);
+      logError("[WebRTC] Connection error:", error);
       // On error, try to reconnect if auto-reconnect is enabled
       if (autoReconnect && !isIntentionalDisconnect.current) {
         scheduleReconnectRef.current();
@@ -381,7 +386,7 @@ export function useWebRTC({
   // Connect to the session (public API)
   const connect = useCallback(async () => {
     if (pcRef.current) {
-      console.log("[WebRTC] Already connected or connecting");
+      log("[WebRTC] Already connected or connecting");
       return;
     }
 

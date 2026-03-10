@@ -1,4 +1,4 @@
-# 📐 SquadX Live - Arquitetura Detalhada
+# SquadX Live - Arquitetura Detalhada
 
 **Diagramas e especificações técnicas completas**
 
@@ -15,7 +15,7 @@
 ├────────────────────────────────────────────────────────────────────────┤
 │                                                                        │
 │  ┌──────────────────────────────────────────────────────────────┐    │
-│  │                   Next.js 15 Application                     │    │
+│  │                   Next.js 16 Application                     │    │
 │  ├──────────────────────────────────────────────────────────────┤    │
 │  │                                                              │    │
 │  │  ┌────────────────────┐        ┌────────────────────┐      │    │
@@ -24,24 +24,27 @@
 │  │  │  • Kanban board    │        │                    │      │    │
 │  │  │  • Task mgmt       │        │  • WebRTC viewer   │      │    │
 │  │  │  • Analytics       │        │  • Multi-viewer    │      │    │
-│  │  │  • Settings        │        │  • Team chat       │      │    │
+│  │  │  • Settings        │        │  • Real-time chat  │      │    │
 │  │  │  • Projects        │        │  • Annotations     │      │    │
+│  │  │                    │        │  • Remote control  │      │    │
 │  │  │                    │        │  • Calendar        │      │    │
 │  │  └────────────────────┘        └────────────────────┘      │    │
 │  │                                                              │    │
 │  │  Tecnologias:                                                │    │
 │  │  • React 19 + TypeScript 5                                   │    │
 │  │  • Tailwind CSS 4                                            │    │
-│  │  • shadcn/ui components                                      │    │
+│  │  • Radix UI components                                       │    │
 │  │  • TanStack Query (data fetching)                            │    │
 │  │  • Zustand (state management)                                │    │
+│  │  • STOMP/SockJS (backend communication)                      │    │
+│  │  • Supabase Realtime (WebRTC signaling)                      │    │
 │  └──────────────────────────────────────────────────────────────┘    │
 │                                                                        │
 │  Deploy: Vercel / AWS CloudFront                                      │
 │  CDN: CloudFlare                                                      │
 └────────────────────────────────────────────────────────────────────────┘
                               ↓
-                    REST API + WebSocket
+                    REST API + STOMP/SockJS
                               ↓
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CAMADA 2: BACKEND                               │
@@ -53,21 +56,26 @@
 │  ├──────────────────────────────────────────────────────────────┤    │
 │  │                                                              │    │
 │  │  ┌─────────────────────┐      ┌─────────────────────┐      │    │
-│  │  │   FastAPI Backend   │      │   Supabase BaaS     │      │    │
-│  │  │   (SquadX Core)     │      │   (Live Features)   │      │    │
+│  │  │  Spring Boot 3.4    │      │   Supabase BaaS     │      │    │
+│  │  │  (SquadX Core)      │      │   (Live Features)   │      │    │
+│  │  │  Java 21            │      │                     │      │    │
 │  │  │                     │      │                     │      │    │
-│  │  │  • REST API         │      │  • Auth (JWT)       │      │    │
-│  │  │  • WebSocket        │      │  • Realtime         │      │    │
-│  │  │  • Task queue       │      │  • Database         │      │    │
-│  │  │  • Orchestration    │      │  • Storage (S3)     │      │    │
+│  │  │  • REST API (9 ctrl)│      │  • Auth (JWT)       │      │    │
+│  │  │  • STOMP WebSocket  │      │  • Realtime         │      │    │
+│  │  │  • Spring Cache     │      │  • Database         │      │    │
+│  │  │  • JPA/Hibernate    │      │  • Storage (S3)     │      │    │
 │  │  │  • RBAC             │      │  • Email (Resend)   │      │    │
 │  │  │                     │      │                     │      │    │
-│  │  │  Endpoints:         │      │  Tables:            │      │    │
+│  │  │  Controllers:       │      │  Tables:            │      │    │
 │  │  │  • /tasks           │      │  • conversations    │      │    │
 │  │  │  • /projects        │      │  • messages         │      │    │
 │  │  │  • /agents          │      │  • meetings         │      │    │
 │  │  │  • /executions      │      │  • sessions         │      │    │
 │  │  │  • /live-view       │      │  • participants     │      │    │
+│  │  │  • /squads          │      │                     │      │    │
+│  │  │  • /organizations   │      │                     │      │    │
+│  │  │  • /auth            │      │                     │      │    │
+│  │  │  • /health          │      │                     │      │    │
 │  │  └──────────┬──────────┘      └──────────┬──────────┘      │    │
 │  │             │                            │                 │    │
 │  │             ↓                            ↓                 │    │
@@ -75,19 +83,27 @@
 │  │  │  PostgreSQL 16       │    │  Supabase PostgreSQL │    │    │
 │  │  │  (SquadX Data)       │    │  (Live Data)         │    │    │
 │  │  │                      │    │                      │    │    │
-│  │  │  • tasks             │    │  • conversations     │    │    │
-│  │  │  • projects          │    │  • messages          │    │    │
-│  │  │  • squads            │    │  • meetings          │    │    │
-│  │  │  • agents            │    │  • sessions          │    │    │
-│  │  │  • executions        │    │  • participants      │    │    │
-│  │  │  • organizations     │    │  • user_presence     │    │    │
+│  │  │  14 JPA Entities:    │    │  • conversations     │    │    │
+│  │  │  • tasks             │    │  • messages          │    │    │
+│  │  │  • projects          │    │  • meetings          │    │    │
+│  │  │  • squads            │    │  • sessions          │    │    │
+│  │  │  • agents            │    │  • participants      │    │    │
+│  │  │  • executions        │    │  • user_presence     │    │    │
+│  │  │  • execution_logs    │    │                      │    │    │
+│  │  │  • organizations     │    │                      │    │    │
+│  │  │  • org_members       │    │                      │    │    │
+│  │  │  • users             │    │                      │    │    │
+│  │  │  • live_sessions     │    │                      │    │    │
+│  │  │  • live_participants │    │                      │    │    │
+│  │  │                      │    │                      │    │    │
+│  │  │  Flyway migrations   │    │                      │    │    │
 │  │  └──────────────────────┘    └──────────────────────┘    │    │
 │  │                                                              │    │
 │  │  ┌──────────────────────┐                                   │    │
 │  │  │  Redis 7 (Cache)     │                                   │    │
+│  │  │  (via Spring Cache)  │                                   │    │
 │  │  │                      │                                   │    │
 │  │  │  • Session cache     │                                   │    │
-│  │  │  • Task queue        │                                   │    │
 │  │  │  • Rate limiting     │                                   │    │
 │  │  │  • Pub/Sub           │                                   │    │
 │  │  └──────────────────────┘                                   │    │
@@ -95,9 +111,10 @@
 │                                                                        │
 │  Deploy: AWS ECS Fargate / Railway                                    │
 │  Database: AWS RDS PostgreSQL + Supabase                              │
+│  Build: Maven                                                         │
 └────────────────────────────────────────────────────────────────────────┘
                               ↓
-                        WebSocket Events
+                      STOMP/SockJS Events
                               ↓
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CAMADA 3: CLIENT                                │
@@ -117,6 +134,8 @@
 │  │  │  • Agent spawner    │      │  • VNC capture      │      │    │
 │  │  │  • Git operations   │      │  • Screen stream    │      │    │
 │  │  │  • Metrics          │      │  • Audio (optional) │      │    │
+│  │  │  • LiteLLM router   │      │  • Remote control   │      │    │
+│  │  │  • aiortc bridge    │      │  • TURN support     │      │    │
 │  │  │                     │      │                     │      │    │
 │  │  │  Port: 8765         │      │  Port: 3456         │      │    │
 │  │  └──────────┬──────────┘      └──────────┬──────────┘      │    │
@@ -127,7 +146,7 @@
 │  │  │           Docker Engine (Agent Containers)           │  │    │
 │  │  │                                                      │  │    │
 │  │  │  ┌───────────┐  ┌───────────┐  ┌───────────┐       │  │    │
-│  │  │  │ Frontend  │  │ Backend   │  │ DevOps    │       │  │    │
+│  │  │  │ Frontend  │  │ Backend   │  │ Fullstack │       │  │    │
 │  │  │  │ Agent     │  │ Agent     │  │ Agent     │       │  │    │
 │  │  │  │           │  │           │  │           │       │  │    │
 │  │  │  │ Xvfb :99  │  │ Xvfb :100 │  │ Xvfb :101 │       │  │    │
@@ -137,7 +156,29 @@
 │  │  │  │ network:  │  │ network:  │  │ network:  │       │  │    │
 │  │  │  │   none    │  │   none    │  │   none    │       │  │    │
 │  │  │  └───────────┘  └───────────┘  └───────────┘       │  │    │
+│  │  │                                                      │  │    │
+│  │  │  ┌───────────┐  ┌───────────┐                       │  │    │
+│  │  │  │ DevOps    │  │ QA        │                       │  │    │
+│  │  │  │ Agent     │  │ Agent     │                       │  │    │
+│  │  │  │           │  │           │                       │  │    │
+│  │  │  │ Xvfb :102 │  │ Xvfb :103 │                       │  │    │
+│  │  │  │ x11vnc    │  │ x11vnc    │                       │  │    │
+│  │  │  │ :5903     │  │ :5904     │                       │  │    │
+│  │  │  │           │  │           │                       │  │    │
+│  │  │  │ network:  │  │ network:  │                       │  │    │
+│  │  │  │   none    │  │   none    │                       │  │    │
+│  │  │  └───────────┘  └───────────┘                       │  │    │
 │  │  └──────────────────────────────────────────────────────┘  │    │
+│  │                                                              │    │
+│  │  Agents (5 implemented):                                     │    │
+│  │  • Frontend, Backend, Fullstack, DevOps, QA                  │    │
+│  │  Note: Coordinator exists as enum in backend but has         │    │
+│  │  no Python implementation                                    │    │
+│  │                                                              │    │
+│  │  Orchestration: LangGraph (analyze→plan→execute→review→commit)│    │
+│  │  LLM Routing: LiteLLM (OpenAI, Anthropic, Gemini)            │    │
+│  │  Signaling: Supabase Realtime                                 │    │
+│  │  WebRTC: aiortc bridge                                        │    │
 │  │                                                              │    │
 │  │  OS Support: macOS, Windows (WSL2), Linux                    │    │
 │  │  Install: Homebrew, WinGet, APT/DNF                          │    │
@@ -156,7 +197,8 @@
 │                                                                        │
 │  [Dashboard]     [Dashboard]     [Dashboard]          [Dashboard]     │
 │  [Live View]     [Live View]     [Live View]          [Live View]     │
-│  [Team Chat]     [Team Chat]     [Team Chat]          [Team Chat]     │
+│  [Real-time Chat][Real-time Chat][Real-time Chat]     [Real-time Chat]│
+│  [Remote Control][Remote Control][Remote Control]     [Remote Control]│
 │                                                                        │
 │  WebRTC Mesh Network - Todos veem mesma sessão simultaneamente        │
 └────────────────────────────────────────────────────────────────────────┘
@@ -192,26 +234,26 @@ STEP 2: Backend Orchestration
 ══════════════════════════════
 
 ┌─────────────────────────────────┐
-│  FastAPI Backend                │
+│  Spring Boot 3.4 Backend        │
+│  (Java 21)                      │
 │                                 │
-│  1. Validate task exists        │
+│  1. Validate task exists (JPA)  │
 │  2. Check task is running       │
-│  3. Check permissions           │
+│  3. Check permissions (RBAC)    │
 │  4. Create live_session record  │
 │  5. Get client_id from task     │
 └────────────┬────────────────────┘
              │
-             ↓ WebSocket event
+             ↓ STOMP message
 ┌──────────────────────────────────────┐
-│  WebSocket Server                    │
+│  WebSocket Server (STOMP/SockJS)     │
 │                                      │
-│  emit("start_live_view", {           │
+│  send("/topic/client.{client_id}", { │
+│    type: "start_live_view",          │
 │    session_id: 456,                  │
 │    task_id: 123,                     │
 │    container_id: "abc123"            │
 │  })                                  │
-│                                      │
-│  room: "client-{client_id}"          │
 └────────────┬─────────────────────────┘
              │
              ↓
@@ -223,7 +265,8 @@ STEP 3: Client Receives Request
 │  SquadX Client (Python)         │
 │  Running on Dev Machine         │
 │                                 │
-│  @socket.on('start_live_view')  │
+│  STOMP subscription:            │
+│  /topic/client.{client_id}      │
 │  def handle(data):              │
 │    container_id = data['..']    │
 │    session_id = data['..']      │
@@ -247,9 +290,11 @@ STEP 4: SquadX Live Host Starts
 │                                     │
 │  1. Connect to VNC (agent screen)   │
 │  2. Create WebRTC peer connection   │
+│     (via aiortc bridge)             │
 │  3. Generate 6-char code: "XYZ789"  │
 │  4. Save session to Supabase        │
-│  5. Start streaming                 │
+│  5. Configure TURN server (if NAT)  │
+│  6. Start streaming                 │
 └────────────┬────────────────────────┘
              │
              ↓ Session created
@@ -268,9 +313,9 @@ STEP 4: SquadX Live Host Starts
              │
              ↓ Send URL to backend
 ┌─────────────────────────────────────┐
-│  Client sends WebSocket             │
+│  Client sends STOMP message         │
 │                                     │
-│  emit("live_view_ready", {          │
+│  send("/app/live_view_ready", {     │
 │    session_id: 456,                 │
 │    url: "live.squadx.dev/XYZ789",   │
 │    status: "active"                 │
@@ -283,15 +328,14 @@ STEP 5: Backend Updates Frontend
 ═════════════════════════════════
 
 ┌─────────────────────────────────────┐
-│  Backend WebSocket                  │
+│  Backend STOMP Broadcast            │
 │                                     │
-│  emit("live_view_ready", {          │
+│  send("/topic/user.{pm_user_id}", { │
+│    type: "live_view_ready",         │
 │    session_id: 456,                 │
 │    task_id: 123,                    │
 │    url: "live.squadx.dev/XYZ789"    │
 │  })                                 │
-│                                     │
-│  room: "user-{pm_user_id}"          │
 └────────────┬────────────────────────┘
              │
              ↓
@@ -303,7 +347,7 @@ STEP 6: PM Joins Session
 │  Frontend shows notification        │
 │                                     │
 │  ┌───────────────────────────┐     │
-│  │ 🎥 Live View Ready!       │     │
+│  │ Live View Ready!          │     │
 │  │                           │     │
 │  │ Agent is streaming        │     │
 │  │                           │     │
@@ -332,18 +376,21 @@ STEP 7: WebRTC Connection
 │  3. WebRTC handshake:               │
 │     - Get session from Supabase     │
 │     - Create RTCPeerConnection      │
-│     - Exchange SDP (offer/answer)   │
+│     - Exchange SDP via Supabase     │
+│       Realtime (signaling)          │
 │     - Exchange ICE candidates       │
+│     - TURN relay if P2P fails       │
 │  4. P2P connection established      │
 │  5. Video stream starts             │
 └────────────┬────────────────────────┘
              │
              ↓
 ┌─────────────────────────────────────┐
-│  🎥 PM vê Agent trabalhando!        │
+│  PM vê Agent trabalhando!           │
 │                                     │
 │  [Agent screen streaming]           │
-│  [Chat with team]                   │
+│  [Real-time chat via Supabase]      │
+│  [Remote control available]         │
 │  [Annotations available]            │
 └─────────────────────────────────────┘
 ```
@@ -361,12 +408,17 @@ STEP 7: WebRTC Connection
                   │                     │
                   │  Captures:          │
                   │  VNC → Agent screen │
+                  │  aiortc bridge      │
                   │                     │
                   │  Streams via:       │
                   │  WebRTC P2P         │
+                  │                     │
+                  │  TURN fallback:     │
+                  │  coturn server      │
                   └──────────┬──────────┘
                              │
               WebRTC Mesh Network (P2P)
+              Signaling: Supabase Realtime
                              │
          ┌───────────────────┼────────────────────┐
          │                   │                    │
@@ -382,24 +434,28 @@ STEP 7: WebRTC Connection
                             │
                     Supabase Realtime
                     (for chat, presence,
-                     annotations sync)
+                     annotations sync,
+                     WebRTC signaling)
 
 Cada viewer:
 • Recebe stream direto do Host (P2P)
-• Envia mensagens via Supabase (não P2P)
+• Envia mensagens via Supabase Realtime (não P2P)
 • Sincroniza annotations via data channel
+• Pode solicitar remote control (se permitido)
+• TURN server usado quando P2P não é possível
+• Auto-reconnect em caso de falha de conexão
 
 Latency típica: 80-150ms
 ```
 
-### 3.2 Data Flow: Chat Message
+### 3.2 Data Flow: Chat Message (Real-time via Supabase)
 
 ```
 Viewer 1 (João) digita no chat
          │
          ↓
     Frontend
-         │ WebSocket
+         │ Supabase Realtime
          ↓
   Supabase Realtime
          │
@@ -432,11 +488,201 @@ Viewer 2 (Maria) desenha na tela
 Latency: 20-50ms (muito rápida, P2P direto)
 ```
 
+### 3.4 Data Flow: Remote Control
+
+```
+Viewer 3 (Pedro) solicita controle remoto
+         │
+         ↓
+    Frontend (request via Supabase Realtime)
+         │
+         ↓
+  SquadX Live Host verifica permissão
+         │ allow_remote_control = true?
+         ↓
+  Host concede controle
+         │
+         ↓
+    Viewer 3 envia input events
+         │ WebRTC Data Channel
+         ↓
+  SquadX Live Host
+         │ Traduz para input no container
+         ↓
+    Agent Container (VNC input injection)
+
+Latency: 30-80ms (P2P direto)
+```
+
 ---
 
 ## 4. Componentes Técnicos Detalhados
 
-### 4.1 SquadX Live Host (Tauri Desktop App)
+### 4.1 Spring Boot Backend (Java 21)
+
+```
+┌─────────────────────────────────────────────┐
+│         Spring Boot 3.4 Backend             │
+│         (Java 21 / Maven)                   │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Controllers (9):                           │
+│  ┌─────────────────────────────────────┐   │
+│  │  • AgentController                  │   │
+│  │  • AuthController                   │   │
+│  │  • ExecutionController              │   │
+│  │  • HealthController                 │   │
+│  │  • LiveViewController               │   │
+│  │  • OrganizationController           │   │
+│  │  • ProjectController                │   │
+│  │  • SquadController                  │   │
+│  │  • TaskController                   │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Services (10):                             │
+│  ┌─────────────────────────────────────┐   │
+│  │  • AgentService                     │   │
+│  │  • AuthService                      │   │
+│  │  • ExecutionService                 │   │
+│  │  • LiveViewService                  │   │
+│  │  • OrganizationService              │   │
+│  │  • ProjectService                   │   │
+│  │  • SquadService                     │   │
+│  │  • SupabaseLiveSessionService       │   │
+│  │  • TaskService                      │   │
+│  │  • WebSocketEventService            │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  JPA Entities (14):                         │
+│  ┌─────────────────────────────────────┐   │
+│  │  • Agent, BaseEntity, Execution,    │   │
+│  │    ExecutionLog, LiveSession,       │   │
+│  │    LiveSessionParticipant,          │   │
+│  │    Organization, OrganizationMember,│   │
+│  │    Project, Squad, Task, User       │   │
+│  │  • Enums: AgentType (COORDINATOR,   │   │
+│  │    FRONTEND, BACKEND, FULLSTACK,    │   │
+│  │    DEVOPS, QA)                      │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Security:                                  │
+│  ┌─────────────────────────────────────┐   │
+│  │  • Spring Security + JWT            │   │
+│  │  • HMAC-SHA signing (symmetric)     │   │
+│  │  • JwtService (io.jsonwebtoken)     │   │
+│  │  • JwtAuthenticationFilter          │   │
+│  │  • WebSocketAuthInterceptor         │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  WebSocket:                                 │
+│  ┌─────────────────────────────────────┐   │
+│  │  • STOMP over SockJS                │   │
+│  │  • WebSocketConfig                  │   │
+│  │  • WebSocketController              │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Config:                                    │
+│  ┌─────────────────────────────────────┐   │
+│  │  • JwtConfig                        │   │
+│  │  • RedisConfig (Spring Cache)       │   │
+│  │  • SecurityConfig                   │   │
+│  │  • SupabaseConfig                   │   │
+│  │  • WebSocketConfig                  │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Database:                                  │
+│  ┌─────────────────────────────────────┐   │
+│  │  • PostgreSQL 16                    │   │
+│  │  • Spring Data JPA / Hibernate      │   │
+│  │  • Flyway migrations (V1-V4)       │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Build: Maven (pom.xml)                     │
+└─────────────────────────────────────────────┘
+```
+
+### 4.2 SquadX Client (Python Daemon)
+
+```
+┌─────────────────────────────────────────────┐
+│         SquadX Client                       │
+│         (Python Daemon)                     │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Core Modules:                              │
+│  ┌─────────────────────────────────────┐   │
+│  │  • daemon.py        (main loop)     │   │
+│  │  • config.py        (configuration) │   │
+│  │  • main.py          (entry point)   │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  LLM Routing (LiteLLM):                    │
+│  ┌─────────────────────────────────────┐   │
+│  │  • llm/router.py                    │   │
+│  │  • Multi-provider: OpenAI,          │   │
+│  │    Anthropic, Gemini                │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Orchestration (LangGraph):                 │
+│  ┌─────────────────────────────────────┐   │
+│  │  • orchestrator/graph.py            │   │
+│  │  • orchestrator/nodes.py            │   │
+│  │  • orchestrator/state.py            │   │
+│  │  • Flow: analyze→plan→execute→      │   │
+│  │          review→commit              │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Agents (5 implemented):                    │
+│  ┌─────────────────────────────────────┐   │
+│  │  • agents/factory.py                │   │
+│  │    - FrontendAgent                  │   │
+│  │    - BackendAgent                   │   │
+│  │    - FullstackAgent                 │   │
+│  │    - DevOpsAgent                    │   │
+│  │    - QAAgent                        │   │
+│  │  • agents/base.py (BaseAgent ABC)   │   │
+│  │  • agents/tools.py (agent tools)    │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Docker (Hardened Containers):              │
+│  ┌─────────────────────────────────────┐   │
+│  │  • docker/manager.py                │   │
+│  │  • docker/sandbox.py                │   │
+│  │  • docker/hardening.py              │   │
+│  │  • Docker SDK for Python            │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Streaming:                                 │
+│  ┌─────────────────────────────────────┐   │
+│  │  • streaming/webrtc_bridge.py       │   │
+│  │    (aiortc for WebRTC)              │   │
+│  │  • streaming/vnc_client.py          │   │
+│  │  • streaming/vnc_streamer.py        │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Live:                                      │
+│  ┌─────────────────────────────────────┐   │
+│  │  • live/session_manager.py          │   │
+│  │  • live/supabase_client.py          │   │
+│  │  • Supabase Realtime signaling      │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  WebSocket:                                 │
+│  ┌─────────────────────────────────────┐   │
+│  │  • websocket/stomp_client.py        │   │
+│  │  • STOMP/SockJS to backend          │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Other:                                     │
+│  ┌─────────────────────────────────────┐   │
+│  │  • git/manager.py                   │   │
+│  │  • metrics/collector.py             │   │
+│  │  • storage/local_db.py              │   │
+│  └─────────────────────────────────────┘   │
+└─────────────────────────────────────────────┘
+```
+
+### 4.3 SquadX Live Host (Tauri Desktop App)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -450,6 +696,7 @@ Latency: 20-50ms (muito rápida, P2P direto)
 │  │  • SessionManager                   │   │
 │  │  • ScreenCapture                    │   │
 │  │  • WebRTCController                 │   │
+│  │  • RemoteControlHandler             │   │
 │  │  • Settings                         │   │
 │  └─────────────────────────────────────┘   │
 │                                             │
@@ -459,6 +706,7 @@ Latency: 20-50ms (muito rápida, P2P direto)
 │  │  • vnc_client (connect to x11vnc)   │   │
 │  │  • webrtc_peer (native WebRTC)      │   │
 │  │  • session_api (Supabase client)    │   │
+│  │  • turn_config (TURN server setup)  │   │
 │  │  • commands (Tauri commands)        │   │
 │  └─────────────────────────────────────┘   │
 │                                             │
@@ -476,6 +724,7 @@ squadx-live-host/
 │   │   ├── main.rs
 │   │   ├── vnc.rs      # VNC client
 │   │   ├── webrtc.rs   # WebRTC peer
+│   │   ├── turn.rs     # TURN server config
 │   │   └── session.rs  # Session mgmt
 │   ├── Cargo.toml
 │   └── tauri.conf.json
@@ -487,7 +736,7 @@ squadx-live-host/
     └── App.tsx
 ```
 
-### 4.2 Agent Container Setup
+### 4.4 Agent Container Setup
 
 ```
 Dockerfile (squadx-agent-runtime):
@@ -561,7 +810,7 @@ python3 main.py
 wait
 ```
 
-### 4.3 Database Schema (Live Features)
+### 4.5 Database Schema (Live Features)
 
 ```sql
 -- Supabase Schema for SquadX Live
@@ -712,16 +961,17 @@ USING (
 │  • CloudFlare WAF (DDoS protection)                  │
 │  • Rate limiting (100 req/min per IP)                │
 │  • TLS 1.3 only (no older protocols)                 │
-│  • WSS (WebSocket Secure)                            │
+│  • WSS (WebSocket Secure via STOMP/SockJS)           │
 │  • Certificate pinning (mobile apps)                 │
 └──────────────────────────────────────────────────────┘
                         ↓
 ┌──────────────────────────────────────────────────────┐
 │  LAYER 2: Authentication                             │
 ├──────────────────────────────────────────────────────┤
-│  • JWT tokens (RS256 asymmetric)                     │
+│  • JWT tokens (HMAC-SHA symmetric signing)           │
 │  • Access token: 30 min expiry                       │
 │  • Refresh token: 7 days expiry                      │
+│  • Spring Security + JwtAuthenticationFilter         │
 │  • Supabase Auth (OAuth2 compatible)                 │
 │  • SSO support (SAML, OIDC) - Enterprise             │
 └──────────────────────────────────────────────────────┘
@@ -754,11 +1004,12 @@ USING (
 ┌──────────────────────────────────────────────────────┐
 │  LAYER 5: Container Isolation                        │
 ├──────────────────────────────────────────────────────┤
-│  • Docker containers (isolated)                      │
+│  • Docker containers (hardened via Docker SDK)       │
 │  • network_mode: none (no internet)                  │
 │  • Read-only filesystem (except /workspace)          │
 │  • Non-root user (uid 1000)                          │
 │  • Resource limits (CPU, memory, PIDs)               │
+│  • seccomp profiles (agent.json)                     │
 └──────────────────────────────────────────────────────┘
                         ↓
 ┌──────────────────────────────────────────────────────┐
@@ -793,8 +1044,14 @@ USING (
 │     • STUN: Find public IP              │
 │     • TURN: Relay when P2P fails        │
 │     • coturn server (self-hosted)       │
+│     • Auto-reconnect on failure         │
 │                                         │
-│  4. Data Channel Encryption             │
+│  4. Signaling (Supabase Realtime)       │
+│     • SDP offer/answer exchange         │
+│     • ICE candidate trickle             │
+│     • Broadcast channels                │
+│                                         │
+│  5. Data Channel Encryption             │
 │     • SCTP over DTLS                    │
 │     • For chat, annotations, control    │
 │                                         │
@@ -848,7 +1105,7 @@ USING (
 │                     │    │                                │
 │  • Frontend build   │    │  ┌──────────────────────────┐  │
 │  • Static assets    │    │  │  Backend Service         │  │
-└─────────────────────┘    │  │  (FastAPI)               │  │
+└─────────────────────┘    │  │  (Spring Boot 3.4)       │  │
                            │  │                          │  │
                            │  │  • Replicas: 3           │  │
                            │  │  • Auto-scaling          │  │
@@ -858,7 +1115,7 @@ USING (
                            │           ↓                    │
                            │  ┌──────────────────────────┐  │
                            │  │  WebSocket Service       │  │
-                           │  │  (Socket.IO)             │  │
+                           │  │  (STOMP/SockJS)          │  │
                            │  │                          │  │
                            │  │  • Replicas: 2           │  │
                            │  │  • Redis adapter         │  │
@@ -872,11 +1129,12 @@ USING (
 │                                                              │
 │  ┌────────────────────┐      ┌────────────────────┐        │
 │  │  RDS PostgreSQL    │      │  ElastiCache Redis │        │
-│  │  Multi-AZ          │      │  Cluster Mode      │        │
+│  │  Multi-AZ          │      │  (Spring Cache)    │        │
 │  │                    │      │                    │        │
 │  │  • Primary: us-e-1a│      │  • 3 shards        │        │
 │  │  • Standby: us-e-1b│      │  • 2 replicas each │        │
 │  │  • Auto-failover   │      │  • Pub/Sub         │        │
+│  │  • Flyway managed  │      │                    │        │
 │  └────────────────────┘      └────────────────────┘        │
 │                                                              │
 │  ┌────────────────────┐      ┌────────────────────┐        │
@@ -884,7 +1142,7 @@ USING (
 │  │                    │      │                    │        │
 │  │  • Versioning      │      │  • API keys        │        │
 │  │  • Lifecycle: 90d  │      │  • DB credentials  │        │
-│  │  • Server-side enc │      │  • JWT keys        │        │
+│  │  • Server-side enc │      │  • JWT secret      │        │
 │  └────────────────────┘      └────────────────────┘        │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -929,10 +1187,11 @@ Dashboards:
 Component                          Target      Typical
 ─────────────────────────────────────────────────────────
 API Response (p95)                 < 200ms     120ms
-WebSocket message delivery         < 100ms     60ms
+STOMP message delivery             < 100ms     60ms
 WebRTC video latency               < 300ms     150ms
-Chat message delivery              < 100ms     50ms
+Chat message delivery (Supabase)   < 100ms     50ms
 Annotation sync (P2P)              < 50ms      25ms
+Remote control input (P2P)         < 100ms     50ms
 Screen capture FPS                 30 FPS      30 FPS
 Database query (p95)               < 50ms      20ms
 ```
@@ -983,7 +1242,7 @@ Gross profit:          $1.349
 Gross margin:          90%
 
 CAC:                   $600
-Payback period:        0.4 months ✅
+Payback period:        0.4 months
 ```
 
 ---

@@ -2,7 +2,9 @@
 
 import asyncio
 import json
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 import structlog
@@ -62,9 +64,31 @@ class SquadXDaemon:
         self.current_tasks: dict[int, asyncio.Task] = {}
         self._task_handler = TaskMessageHandler(self)
 
+    @staticmethod
+    def pid_file_path() -> Path:
+        """Return the path to the PID file."""
+        return Path(settings.expanded_data_dir) / "daemon.pid"
+
+    def _write_pid_file(self) -> None:
+        """Write the current process PID to the PID file."""
+        pid_path = self.pid_file_path()
+        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        pid_path.write_text(str(os.getpid()))
+        logger.info("pid_file_written", path=str(pid_path), pid=os.getpid())
+
+    def _remove_pid_file(self) -> None:
+        """Remove the PID file if it exists."""
+        pid_path = self.pid_file_path()
+        try:
+            pid_path.unlink(missing_ok=True)
+            logger.info("pid_file_removed", path=str(pid_path))
+        except OSError as e:
+            logger.warning("pid_file_remove_failed", path=str(pid_path), error=str(e))
+
     async def run(self) -> None:
         """Main daemon loop."""
         self.running = True
+        self._write_pid_file()
         logger.info("daemon_starting", api_url=self.api_url, ws_url=self.ws_url)
 
         try:
@@ -433,6 +457,9 @@ class SquadXDaemon:
 
         # Disconnect STOMP
         await self.stomp.disconnect()
+
+        # Clean up PID file
+        self._remove_pid_file()
 
         logger.info("daemon_stopped")
 

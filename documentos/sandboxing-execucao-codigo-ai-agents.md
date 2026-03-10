@@ -1,6 +1,6 @@
 # Sandboxing de Execução de Código para AI Agents Enterprise
 
-**Firecracker microVMs oferecem a melhor relação isolamento-overhead para execução de código por AI agents autônomos**, emergindo como consenso da indústria. AWS Lambda, E2B, Fly.io e CodeSandbox dependem do Firecracker para execução de código não-confiável — entregando isolamento KVM em nível de hardware com **overhead de memória <5 MiB** e **boot em ≤125ms**. Para a abordagem enterprise-first do SquadX, a arquitetura recomendada é uma estratégia faseada: começar com containers Docker hardened para desenvolvimento rápido, integrar gVisor como upgrade drop-in de runtime, e migrar para Firecracker/Kata Containers para multi-tenancy em produção. O OpenHands Runtime SDK fornece ganhos substanciais de velocidade de desenvolvimento mas requer camada customizada de hardening de segurança para deployment enterprise.
+**Firecracker microVMs oferecem a melhor relação isolamento-overhead para execução de código por AI agents autônomos**, emergindo como consenso da indústria. AWS Lambda, E2B, Fly.io e CodeSandbox dependem do Firecracker para execução de código não-confiável — entregando isolamento KVM em nível de hardware com **overhead de memória <5 MiB** e **boot em ≤125ms**. Para a abordagem enterprise-first do SquadX, a arquitetura recomendada é uma estratégia faseada: começar com containers Docker hardened para desenvolvimento rápido, integrar gVisor como upgrade drop-in de runtime, e migrar para Firecracker/Kata Containers para multi-tenancy em produção. O SquadX adota LiteLLM para LLM routing com um framework customizado de agentes, priorizando controle total sobre sandboxing e segurança para deployment enterprise.
 
 Este relatório cobre o espectro completo de tecnologias de sandboxing, estudos de caso de produção, requisitos de compliance enterprise, e guidance específico de implementação para o SquadX.
 
@@ -1080,11 +1080,11 @@ CMD ["python", "app.py"]
 
 ## 8. Arquitetura Recomendada: Abordagem Faseada de Docker para MicroVMs
 
-A decisão entre Docker, OpenHands, gVisor, Firecracker e serviços gerenciados depende do estágio atual do SquadX e timeline:
+A decisão entre Docker, gVisor, Firecracker e serviços gerenciados depende do estágio atual do SquadX e timeline:
 
-### 8.1 Fase 1 — MVP (meses 0–3): Docker Hardened + OpenHands SDK
+### 8.1 Fase 1 — MVP (meses 0–3): Docker Hardened + LiteLLM
 
-**Começar com OpenHands SDK V1** (`openhands-workspace` package) para desenvolvimento rápido.
+**Começar com LiteLLM** para LLM routing e slim wrapper sobre Docker para sandboxing.
 
 **Aplicar hardening completo de Docker:**
 - `--cap-drop=ALL`
@@ -1104,8 +1104,8 @@ A decisão entre Docker, OpenHands, gVisor, Firecracker e serviços gerenciados 
 **Checklist de Implementação:**
 
 ```bash
-# 1. Setup OpenHands SDK
-pip install openhands-sdk openhands-workspace
+# 1. Setup LiteLLM para LLM routing
+pip install litellm
 
 # 2. Criar imagem base hardened
 docker build -t squadx-sandbox:v1 -f Dockerfile.hardened .
@@ -1243,7 +1243,7 @@ EOF
 ```
 FASE 1 (MVP - Meses 0-3)
 ┌─────────────────────────────────────────┐
-│ OpenHands SDK                           │
+│ LiteLLM + Custom Agent Framework        │
 │   ↓                                     │
 │ Docker Hardened (runc)                  │
 │   • --cap-drop=ALL                      │
@@ -1256,7 +1256,7 @@ FASE 1 (MVP - Meses 0-3)
 
 FASE 2 (Production - Meses 3-6)
 ┌─────────────────────────────────────────┐
-│ OpenHands SDK                           │
+│ LiteLLM + Custom Agent Framework        │
 │   ↓                                     │
 │ gVisor (runsc)                          │
 │   • User-space kernel                   │
@@ -1268,7 +1268,7 @@ FASE 2 (Production - Meses 3-6)
 
 FASE 3 (Enterprise - Meses 6-12)
 ┌─────────────────────────────────────────┐
-│ Custom SDK (ou OpenHands wrapper)       │
+│ Custom SDK + LiteLLM                    │
 │   ↓                                     │
 │ Kata Containers / Firecracker           │
 │   • KVM hardware isolation              │
@@ -1303,13 +1303,16 @@ O **pattern template-snapshot-restore** (pioneirizado pela E2B e agora disponív
 
 Isso deve ser consideração de design first-class, não afterthought.
 
-### 9.3 OpenHands SDK Economiza Meses mas Não é Produto de Segurança
+### 9.3 LiteLLM + Custom Framework: Abordagem Adotada pelo SquadX
 
-**OpenHands SDK economiza meses de engenharia mas não é produto de segurança.** Sua arquitetura modular (especialmente a abstração `BaseWorkspace`) o torna uma fundação forte para desenvolvimento rápido, com escape hatch claro para trocar runtimes customizados depois.
+**O SquadX adotou LiteLLM para LLM routing com um framework customizado de agentes.** Isso oferece controle total sobre o sandboxing e a execução, sem depender de abstrações de terceiros para isolamento de segurança.
 
-A licença MIT permite uso comercial completo.
-
-**Mas:** Seu isolamento apenas Docker, ausência de network policies, e reconhecida inabilidade de prevenir exfiltração de secrets significam que deve ser encapsulado em camada de segurança customizada — **nunca deployed as-is para clientes enterprise** lidando com código sensível.
+**Vantagens:**
+- Routing unificado para 100+ provedores de LLM
+- Cost tracking integrado por provider/modelo
+- Fallback automático entre provedores
+- Sem vendor lock-in em abstrações de execução
+- Controle total sobre o sandboxing Docker/gVisor/Firecracker
 
 ---
 

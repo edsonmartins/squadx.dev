@@ -30,21 +30,21 @@ Para a versão completa, consulte a documentação principal em squadx-documenta
 ✅ Docker sandbox com network: none
 
 ### Stack
-✅ Backend: FastAPI + PostgreSQL + Redis
-✅ Frontend: Next.js 15 + TypeScript + shadcn/ui
-✅ Client: Python 3.11 + OpenHands + LangGraph
+✅ Backend: Spring Boot 3.4 (Java 21) + PostgreSQL + Redis
+✅ Frontend: Next.js 16 + TypeScript + shadcn/ui
+✅ Client: Python 3.12 + LiteLLM + LangGraph
 
 ### Segurança
 ✅ 7 Camadas de proteção
 ✅ TLS 1.3 + WSS
-✅ JWT RS256
+✅ JWT HMAC-SHA256
 ✅ RBAC completo
 ✅ Container isolation
 ✅ Approval workflow
 
 ### Multi-Agent
 ✅ LangGraph orchestration
-✅ 6 tipos de agentes (Coordinator + 5 specialists)
+✅ 5 tipos de agentes (Frontend, Backend, Fullstack, DevOps, QA)
 ✅ Task breakdown automático
 ✅ Parallelização inteligente
 

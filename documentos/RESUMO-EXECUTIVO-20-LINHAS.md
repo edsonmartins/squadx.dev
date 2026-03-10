@@ -7,12 +7,12 @@ Uma plataforma SaaS B2B onde empresas de software "contratam" squads virtuais de
 Desenvolvedores júnior, mesmo com ferramentas AI, não são produtivos. Coordenar múltiplos agentes AI manualmente é caótico, estressante e não escala. Não há visibilidade de custos nem gestão centralizada.
 
 **A solução:**
-Dashboard web onde PMs/Tech Leads criam tasks no Kanban → Agentes AI especializados (Frontend, Backend, DevOps, QA) executam automaticamente no computador do desenvolvedor → Código commitado, PRs criados → Tudo visível em tempo real.
+Dashboard web onde PMs/Tech Leads criam tasks no Kanban → 5 Agentes AI especializados (Frontend, Backend, Fullstack, DevOps, QA) executam automaticamente no computador do desenvolvedor → Código commitado, PRs criados → Tudo visível em tempo real.
 
 **Como funciona:**
 1. Plataforma na nuvem gerencia projetos, squads e tasks (tipo Jira)
 2. Cliente Python roda na máquina do dev (código NUNCA sai dali)
-3. LangGraph coordena 6 tipos de agentes especializados
+3. LangGraph coordena 5 tipos de agentes especializados
 4. Agentes executam em containers Docker isolados (sem internet = zero exfiltração)
 5. Humano aprova mudanças críticas (opcional mas recomendado)
 6. Dashboard mostra progresso, métricas e custos em tempo real
@@ -26,9 +26,9 @@ Dashboard web onde PMs/Tech Leads criam tasks no Kanban → Agentes AI especiali
 Software houses 10-50 devs com backlog crônico e devs JR improdutivos. Mercado: $15B (2025) → $99B (2030). Pricing: $499-1.499/mês por squad.
 
 **Tecnologia:**
-- Backend: FastAPI + PostgreSQL + Redis
-- Frontend: Next.js 15 + TypeScript + shadcn/ui
-- Client: Python 3.11 + OpenHands SDK + LangGraph
+- Backend: Spring Boot 3.4 (Java 21) + PostgreSQL + Redis
+- Frontend: Next.js 16 + TypeScript + shadcn/ui
+- Client: Python 3.11 + LiteLLM + LangGraph
 - Segurança: Docker sandbox, network isolation, TLS 1.3
 
 **Timeline:**

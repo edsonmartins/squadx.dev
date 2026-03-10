@@ -5,10 +5,16 @@
 
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    "[Supabase] Missing environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set"
+  );
+}
+
+export const supabase = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
 
 // Type definitions for live sessions
 export interface LiveSession {
@@ -122,13 +128,13 @@ export class SupabaseSignaling {
     // Track presence
     this.channel.on("presence", { event: "sync" }, () => {
       const state = this.channel?.presenceState() || {};
-      console.log("[Supabase] Presence sync:", Object.keys(state).length, "peers");
+      // Presence state updated
     });
 
     await this.channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         await this.channel?.track({ joined_at: new Date().toISOString() });
-        console.log("[Supabase] Joined session:", sessionId);
+        // Successfully joined session
       }
     });
   }
@@ -176,11 +182,15 @@ export class SupabaseSignaling {
       timestamp: new Date().toISOString(),
     };
 
-    await this.channel.send({
-      type: "broadcast",
-      event: "chat-message",
-      payload: message,
-    });
+    try {
+      await this.channel.send({
+        type: "broadcast",
+        event: "chat-message",
+        payload: message,
+      });
+    } catch (error) {
+      console.error("[Supabase] Failed to send chat message:", error);
+    }
   }
 
   /**
@@ -232,11 +242,15 @@ export class SupabaseSignaling {
       return;
     }
 
-    await this.channel.send({
-      type: "broadcast",
-      event: "webrtc-signal",
-      payload: signal,
-    });
+    try {
+      await this.channel.send({
+        type: "broadcast",
+        event: "webrtc-signal",
+        payload: signal,
+      });
+    } catch (error) {
+      console.error("[Supabase] Failed to send WebRTC signal:", error);
+    }
   }
 
   /**

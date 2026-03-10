@@ -21,6 +21,13 @@ export const metadata: Metadata = {
   description:
     "Orchestrate AI development squads to build software faster. Multi-agent coordination, code stays 100% local.",
   keywords: ["AI", "development", "squad", "orchestration", "agents"],
+  manifest: "/manifest.json",
+  themeColor: "#6366f1",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "SquadX",
+  },
 };
 
 export default function RootLayout({

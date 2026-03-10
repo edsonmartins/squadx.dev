@@ -41,7 +41,7 @@ class StompClient {
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
       onConnect: () => {
-        console.log("STOMP connected");
+        if (process.env.NODE_ENV === "development") console.log("STOMP connected");
         this.isConnecting = false;
         this.reconnectAttempts = 0;
 
@@ -49,7 +49,7 @@ class StompClient {
         this.resubscribeAll();
       },
       onDisconnect: () => {
-        console.log("STOMP disconnected");
+        if (process.env.NODE_ENV === "development") console.log("STOMP disconnected");
         this.isConnecting = false;
       },
       onStompError: (frame) => {

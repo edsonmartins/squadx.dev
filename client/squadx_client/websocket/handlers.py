@@ -128,11 +128,35 @@ class WebSocketHandler:
         """Handle configuration update message.
 
         This allows the backend to dynamically update client configuration.
+        Supported fields: max_concurrent_agents, agent_timeout, default_model,
+        enable_sandbox, enable_vnc, enable_network, log_level.
         """
-        logger.info("config_update_received", config=data)
+        from squadx_client.config import settings
 
-        # TODO: Apply configuration updates dynamically
-        # e.g., update max concurrent agents, agent timeouts, etc.
+        config_payload = data.get("config", data)
+        updated_fields = []
+
+        updatable_fields = {
+            "max_concurrent_agents": int,
+            "agent_timeout": int,
+            "default_model": str,
+            "enable_sandbox": bool,
+            "enable_vnc": bool,
+            "enable_network": bool,
+            "log_level": str,
+        }
+
+        for field, expected_type in updatable_fields.items():
+            if field in config_payload:
+                value = config_payload[field]
+                try:
+                    casted = expected_type(value)
+                    setattr(settings, field, casted)
+                    updated_fields.append(field)
+                except (ValueError, TypeError) as e:
+                    logger.warning("config_update_invalid_value", field=field, value=value, error=str(e))
+
+        logger.info("config_update_applied", updated_fields=updated_fields)
 
 
 class TaskMessageHandler:
@@ -169,4 +193,29 @@ class ExecutionLogHandler:
             message=message[:100],
         )
 
-        # TODO: Store log locally or forward to UI
+        # Store log locally
+        await self._store_log(log_level, message, agent, timestamp)
+
+    async def _store_log(self, level: str, message: str, agent: str, timestamp: str) -> None:
+        """Append execution log to local file."""
+        import os
+        from squadx_client.config import settings
+
+        log_dir = os.path.join(settings.expanded_data_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+
+        log_file = os.path.join(log_dir, f"execution_{self.execution_id}.jsonl")
+        import json
+        entry = json.dumps({
+            "execution_id": self.execution_id,
+            "level": level,
+            "message": message,
+            "agent": agent,
+            "timestamp": timestamp,
+        })
+
+        try:
+            with open(log_file, "a") as f:
+                f.write(entry + "\n")
+        except OSError as e:
+            logger.warning("execution_log_write_failed", error=str(e))

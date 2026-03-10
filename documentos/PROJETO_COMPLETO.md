@@ -15,23 +15,22 @@ Este documento consolida toda a especificação e código do projeto **SquadX.de
 - Clone minimalista em TypeScript (~200 linhas core)
 - Usa Apple Container + Claude Agent SDK
 - **Reaproveitado**: Conceito de "groups" isolados, SQLite, filesystem IPC
-- **Descartado**: TypeScript (Python é melhor), Apple Container (Docker é universal)
+- **Descartado**: Apple Container (Docker é universal)
 
 ## 🏗️ Arquitetura Final SquadX
 
 ### Stack Tecnológico
 
 **Backend**:
-- FastAPI (async Python web framework)
+- Spring Boot 3.4 (Java 21 web framework)
 - PostgreSQL 16 (database)
 - Redis 7 (cache + queues)
-- Celery (background workers)
-- SQLAlchemy 2.0 (ORM)
-- Pydantic v2 (validation)
+- Spring Data JPA (ORM)
+- Bean Validation (validation)
 - OpenTelemetry (observability)
 
 **Frontend**:
-- Next.js 15 (React framework)
+- Next.js 16 (React framework)
 - TypeScript 5
 - Tailwind CSS + shadcn/ui
 - Zustand (state management)
@@ -43,7 +42,6 @@ Este documento consolida toda a especificação e código do projeto **SquadX.de
 **Client**:
 - Python 3.11+
 - LangGraph (multi-agent orchestration)
-- OpenHands SDK (coding agents)
 - LiteLLM (LLM routing)
 - Docker SDK (sandboxing)
 - GitPython (git operations)
@@ -75,13 +73,13 @@ Este documento consolida toda a especificação e código do projeto **SquadX.de
 ### Backend
 ```
 backend/
-├── pyproject.toml              # Dependências Poetry
-├── app/
-│   ├── config.py               # Settings com Pydantic
-│   ├── main.py                 # FastAPI app principal
-│   ├── models/__init__.py      # SQLAlchemy models
-│   ├── schemas/__init__.py     # Pydantic schemas
-│   └── api/v1/websocket.py     # WebSocket server
+├── pom.xml                     # Dependências Maven
+├── src/main/java/dev/squadx/
+│   ├── config/                 # Settings com Spring Configuration
+│   ├── SquadxApplication.java  # Spring Boot app principal
+│   ├── model/                  # JPA entity models
+│   ├── dto/                    # Data Transfer Objects
+│   └── websocket/              # WebSocket server
 ```
 
 ### Frontend
@@ -115,7 +113,7 @@ client/
 
 **Semanas 1-2: Setup Inicial**
 - ✅ Estrutura de pastas
-- ✅ Backend core (FastAPI + DB + Auth)
+- ✅ Backend core (Spring Boot 3.4 + DB + Auth)
 - ✅ Frontend base (Next.js + UI components)
 - ✅ Client skeleton (CLI + WebSocket)
 
@@ -126,7 +124,7 @@ client/
 - [ ] WebSocket bidirectional working
 
 **Semanas 5-6: Agent Execution**
-- [ ] OpenHands SDK integration
+- [ ] LiteLLM integration
 - [ ] LangGraph orchestrator funcional
 - [ ] Docker sandboxing
 - [ ] Task execution end-to-end
@@ -179,12 +177,12 @@ client/
 
 ## 💡 Decisões Arquiteturais Chave
 
-### 1. Por que FastAPI?
-- Performance excelente (async nativo)
-- Type hints + Pydantic = validação automática
-- OpenAPI docs auto-geradas
+### 1. Por que Spring Boot 3.4?
+- Performance excelente (virtual threads com Java 21)
+- Type safety + Bean Validation = validação robusta
+- OpenAPI docs com SpringDoc
 - WebSocket support nativo
-- Ecossistema Python = mesma linguagem do client
+- Ecossistema Java maduro e enterprise-ready
 
 ### 2. Por que LangGraph?
 - Controle fino sobre fluxo multi-agent
@@ -193,11 +191,11 @@ client/
 - Integração com LangSmith
 - Produção-ready
 
-### 3. Por que OpenHands SDK?
-- Especificamente para coding agents
-- Event-sourced (durável)
-- Sandbox integration
-- MCP support
+### 3. Por que LiteLLM?
+- Routing para 100+ provedores de LLM
+- Interface unificada para múltiplos modelos
+- Cost tracking integrado
+- Fallback automático entre provedores
 - MIT license
 
 ### 4. Por que Docker (não Apple Container)?
@@ -224,8 +222,8 @@ client/
 2. **Application Layer**
    - JWT authentication
    - RBAC (Role-Based Access Control)
-   - Input validation (Pydantic)
-   - SQL injection protection (SQLAlchemy)
+   - Input validation (Bean Validation)
+   - SQL injection protection (Spring Data JPA)
    - CSRF protection
 
 3. **Data Layer**
@@ -342,7 +340,7 @@ make dev
 ```bash
 # Backend
 cd backend
-poetry run uvicorn app.main:app --reload
+./mvnw spring-boot:run
 
 # Frontend
 cd frontend
@@ -384,7 +382,7 @@ docker-compose -f docker-compose.prod.yml up -d
 8. Setup Grafana dashboards
 
 ### Semana 3
-9. Integrar OpenHands SDK
+9. Integrar LiteLLM routing
 10. Testar LangGraph orchestrator
 11. Implementar Docker sandboxing
 12. Executar primeira task end-to-end

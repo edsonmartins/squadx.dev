@@ -27,15 +27,14 @@ services:
 
   backend:
     build: ./backend
-    command: uvicorn app.main:app --reload --host 0.0.0.0
     ports:
-      - "8000:8000"
+      - "8080:8080"
     depends_on:
       - postgres
       - redis
     environment:
-      DATABASE_URL: postgresql://...
-      REDIS_URL: redis://...
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/squadx
+      SPRING_REDIS_HOST: redis
 
   frontend:
     build: ./frontend
@@ -98,14 +97,14 @@ spec:
               key: url
         livenessProbe:
           httpGet:
-            path: /health
-            port: 8000
+            path: /actuator/health
+            port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health/ready
-            port: 8000
+            path: /actuator/health/readiness
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
 ```
@@ -247,25 +246,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+
+      - name: Lint & Test
         run: |
-          pip install poetry
-          poetry install
-      
-      - name: Lint
-        run: |
-          poetry run black --check .
-          poetry run flake8 .
-          poetry run mypy .
-      
-      - name: Test
-        run: poetry run pytest --cov
-      
+          cd backend
+          mvn verify
+
       - name: Upload coverage
         uses: codecov/codecov-action@v3
 
@@ -311,6 +308,7 @@ jobs:
       
       - name: Build and push
         run: |
+          cd backend && mvn package -DskipTests
           docker build -t squadx/backend:${{ github.sha }} ./backend
           docker tag squadx/backend:${{ github.sha }} <ecr-url>/backend:latest
           docker push <ecr-url>/backend:latest
@@ -709,7 +707,7 @@ async def pre_commit_checks(files: List[str]) -> bool:
             return False
     
     # 3. File types allowed
-    allowed_extensions = ['.py', '.js', '.ts', '.tsx', '.css', '.md', '.json']
+    allowed_extensions = ['.java', '.py', '.js', '.ts', '.tsx', '.css', '.md', '.json', '.xml']
     for file in files:
         ext = os.path.splitext(file)[1]
         if ext not in allowed_extensions:
@@ -883,11 +881,11 @@ Cliente sabe: $1.499 fixo + LLM variável
 **Scope MVP (mínimo viável):**
 
 ```yaml
-Backend:
-  - Auth JWT: ✅
-  - CRUD: Users, Orgs, Projects, Tasks
+Backend (Spring Boot 3.4 / Java 21):
+  - Auth JWT (HMAC-SHA256 via Spring Security): ✅
+  - CRUD: Users, Orgs, Projects, Tasks (JPA/Hibernate)
   - WebSocket: Basic (task assignment, progress)
-  - Database: PostgreSQL (schema básico)
+  - Database: PostgreSQL (Flyway migrations)
   - Cache: Redis (session apenas)
 
 Frontend:
@@ -901,7 +899,7 @@ Client:
   - CLI: setup, start, status, logs
   - WebSocket: Connect, heartbeat, receive tasks
   - Agent: 1 tipo (Fullstack agent)
-  - Executor: OpenHands SDK basic
+  - LLM: LiteLLM for multi-provider routing
   - Docker: Container isolado (network: none)
   - Git: Commit básico (sem PR)
 
@@ -1008,7 +1006,7 @@ Beta Program (3-5 clientes):
 5. **OpenTelemetry** observability desde início
 6. **JWT + RBAC** segurança enterprise
 7. **PostgreSQL + Redis** stack sólida
-8. **FastAPI + Next.js** stack moderna
+8. **Spring Boot 3.4 + Next.js** stack moderna
 9. **LiteLLM** multi-provider flexibility
 10. **MVP 8 semanas** validar antes de escalar
 
@@ -1048,7 +1046,7 @@ Essas decisões podem ser postergadas até validar product-market fit (Phase 2).
 Este documento captura **TODAS as decisões técnicas** feitas durante planejamento:
 
 ✅ **Arquitetura:** Híbrida (cloud + local)
-✅ **Stack:** FastAPI, Next.js, Python client
+✅ **Stack:** Spring Boot 3.4 (Java 21), Next.js, Python client
 ✅ **Segurança:** 7 camadas, código local
 ✅ **Sandbox:** Docker isolado, network: none
 ✅ **Multi-agent:** LangGraph orchestration
@@ -1066,4 +1064,4 @@ Este documento captura **TODAS as decisões técnicas** feitas durante planejame
 
 **Documento vivo:** Atualizar conforme projeto evolui e decisões são revisitadas.
 
-**Última atualização:** Fevereiro 2026
+**Última atualização:** Março 2026

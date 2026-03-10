@@ -37,7 +37,7 @@ SquadX.dev é uma **plataforma B2B** onde empresas configuram e "contratam" squa
 3. **[TECHNICAL-DECISIONS.md](docs/technical/TECHNICAL-DECISIONS.md)**  
    Todas as decisões técnicas e recomendações
    - Análise de projetos inspiradores (nanobot, nanoclaw)
-   - Componentes open-source a reusar (OpenHands, LangGraph, LiteLLM)
+   - Componentes open-source a reusar (LangGraph, LiteLLM)
    - Stack tecnológico completo
    - Práticas de segurança
    - Padrões arquiteturais
@@ -92,7 +92,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
      ├────────────────────────────▶                       │
      │                             │                       │
      │                        2. Squad recebe             │
-     │                           6 agentes                │
+     │                           5 agentes                │
      │                        executam em paralelo        │
      │                             │                       │
      │                        3. Agentes trabalham        │
@@ -122,7 +122,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
 
 ### 1. Multi-Agent Coordination ⭐
 **Ninguém faz hoje:**
-- 6 agentes especializados (Frontend, Backend, DevOps, QA, Coordinator)
+- 5 agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
 - Trabalham em paralelo quando possível
 - LangGraph coordena dependências
 
@@ -205,7 +205,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
 ### Phase 2: Multi-Agent (8 semanas)
 **Objetivo:** 3-5 clientes beta pagos, MRR $2K
 - LangGraph orchestration
-- 6 agentes especializados
+- 5 agentes especializados
 - Task dependencies
 - Approval workflows
 
@@ -258,20 +258,19 @@ Web Platform (Cloud)          Client (Local)           Resultado
 ## 🛠️ Stack Tecnológico (Resumo)
 
 ### Backend (Control Plane - Cloud)
-- FastAPI (Python) + PostgreSQL + Redis
+- Spring Boot 3.4 (Java 21) + PostgreSQL + Redis
 - WebSocket para real-time
-- Celery para background jobs
+- Spring Async + virtual threads para background jobs
 
 ### Frontend (Dashboard - Cloud)
-- Next.js 15 + TypeScript
+- Next.js 16 + TypeScript
 - TailwindCSS + shadcn/ui
 - Socket.IO para real-time
 
 ### Client (Execution Plane - Local)
 - Python 3.11+
-- **OpenHands SDK** (agent core) ⭐
-- **LangGraph** (multi-agent orchestration) ⭐
 - **LiteLLM** (LLM routing, 100+ providers) ⭐
+- **LangGraph** (multi-agent orchestration) ⭐
 - Docker (sandboxing)
 - GitPython (git operations)
 

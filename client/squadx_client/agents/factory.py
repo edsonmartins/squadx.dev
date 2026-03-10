@@ -148,6 +148,87 @@ When implementing tasks:
 Always provide complete, working test code."""
 
 
+class CoordinatorAgent(BaseAgent):
+    """Coordinator agent for task planning and decomposition.
+
+    The Coordinator does not write code directly. It analyzes tasks,
+    breaks them into subtasks, assigns them to specialist agents,
+    and validates the integration of results.
+    """
+
+    agent_type = "coordinator"
+
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
+
+    def get_system_prompt(self) -> str:
+        return """You are a senior software architect and project coordinator. Your role is to:
+- Analyze complex development tasks
+- Break them into well-defined subtasks
+- Assign subtasks to the appropriate specialist agent type
+- Define dependencies between subtasks
+- Validate that all subtasks integrate correctly
+
+Available specialist agents:
+- frontend: React, Next.js, TypeScript, CSS, UI components
+- backend: Python, Java, Node.js, APIs, databases
+- fullstack: Cross-cutting concerns spanning frontend and backend
+- devops: Docker, Kubernetes, CI/CD, infrastructure
+- qa: Testing, test automation, quality assurance
+- database: Schema design, migrations, queries, optimization
+
+When planning tasks:
+1. Identify the scope and complexity
+2. Break into the smallest independent subtasks possible
+3. Specify clear inputs/outputs for each subtask
+4. Define the execution order and dependencies
+5. Consider integration points between subtasks
+
+Format your plan as:
+## Analysis
+[Brief analysis of the task]
+
+## Subtasks
+1. [Title] (agent: [type], depends_on: [])
+   - Description: [what to do]
+   - Acceptance criteria: [how to verify]
+
+2. [Title] (agent: [type], depends_on: [1])
+   ...
+
+## Integration Notes
+[How the subtasks connect]"""
+
+
+class DatabaseAgent(BaseAgent):
+    """Specialist agent for database design and optimization."""
+
+    agent_type = "database"
+
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+        super().__init__(sandbox)
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert database engineer specializing in:
+- PostgreSQL (advanced features, performance tuning)
+- Database schema design and normalization
+- Migration scripts (Flyway, Alembic, Prisma)
+- Query optimization and indexing strategies
+- Redis caching patterns
+- Data modeling for scalable applications
+- Database security (RLS, encryption at rest)
+
+When implementing tasks:
+1. Design normalized schemas following best practices
+2. Write efficient, indexed queries
+3. Create reversible migration scripts
+4. Consider data integrity constraints
+5. Optimize for read/write patterns of the application
+6. Document schema decisions
+
+Always provide complete SQL or migration scripts."""
+
+
 def create_agent(
     agent_type: str,
     sandbox: Optional["AgentSandbox"] = None,
@@ -155,7 +236,7 @@ def create_agent(
     """Create an agent of the specified type.
 
     Args:
-        agent_type: Type of agent (frontend, backend, fullstack, devops, qa)
+        agent_type: Type of agent (frontend, backend, fullstack, devops, qa, coordinator, database)
         sandbox: Optional AgentSandbox for tool-based execution
 
     Returns:
@@ -167,6 +248,8 @@ def create_agent(
         "fullstack": FullstackAgent,
         "devops": DevOpsAgent,
         "qa": QAAgent,
+        "coordinator": CoordinatorAgent,
+        "database": DatabaseAgent,
     }
 
     agent_class = agents.get(agent_type)

@@ -5,10 +5,20 @@ and stream it via WebSocket to viewers in the dashboard.
 """
 
 import asyncio
+import io
 import logging
+import struct
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Callable, Any
+
+from PIL import Image
+
+from squadx_client.streaming.vnc_client import (
+    RFBMessageType,
+    VNCClient,
+    VNCFrame,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +82,7 @@ class VNCStreamer:
             config=self.config,
         )
 
-        self._vnc_client: Optional[Any] = None
+        self._vnc_client: Optional[VNCClient] = None
         self._stream_task: Optional[asyncio.Task] = None
         self._running = False
 
@@ -162,46 +172,45 @@ class VNCStreamer:
         )
 
     async def _connect_vnc(self) -> bool:
-        """Connect to the VNC server.
+        """Connect to the VNC server using VNCClient.
 
         Returns:
             True if connection successful, False otherwise.
         """
         try:
-            # Try to import vncdotool for VNC connection
-            # This is a placeholder - in production, use a proper VNC client library
-            # Options: vncdotool, asyncvnc, or raw RFB protocol implementation
-
-            # For now, we'll use a simple socket check to verify VNC availability
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(
-                    self.config.vnc_host,
-                    self.config.vnc_port,
-                ),
-                timeout=5.0,
+            self._vnc_client = VNCClient(
+                host=self.config.vnc_host,
+                port=self.config.vnc_port,
+                password=self.config.vnc_password or None,
             )
 
-            # Read VNC protocol version
-            version = await asyncio.wait_for(reader.read(12), timeout=5.0)
-            if not version.startswith(b"RFB"):
-                logger.error(f"Invalid VNC protocol version: {version}")
-                writer.close()
-                await writer.wait_closed()
+            connected = await self._vnc_client.connect()
+            if not connected:
+                logger.error(
+                    f"VNC client failed to connect to "
+                    f"{self.config.vnc_host}:{self.config.vnc_port}"
+                )
+                self._vnc_client = None
                 return False
 
-            logger.debug(f"VNC server version: {version.decode().strip()}")
+            # Request an initial full framebuffer update so the
+            # internal buffer is populated before the first capture.
+            await self._vnc_client.request_update(incremental=False)
 
-            # Store connection for later use
-            self._vnc_reader = reader
-            self._vnc_writer = writer
-
+            logger.info(
+                f"VNC client connected: {self._vnc_client.width}x{self._vnc_client.height} "
+                f"desktop '{self._vnc_client.name}'"
+            )
             return True
 
         except asyncio.TimeoutError:
             logger.error("VNC connection timeout")
             return False
         except ConnectionRefusedError:
-            logger.error(f"VNC connection refused at {self.config.vnc_host}:{self.config.vnc_port}")
+            logger.error(
+                f"VNC connection refused at "
+                f"{self.config.vnc_host}:{self.config.vnc_port}"
+            )
             return False
         except Exception as e:
             logger.error(f"VNC connection error: {e}")
@@ -209,12 +218,13 @@ class VNCStreamer:
 
     async def _disconnect_vnc(self):
         """Disconnect from the VNC server."""
-        if hasattr(self, "_vnc_writer") and self._vnc_writer:
+        if self._vnc_client:
             try:
-                self._vnc_writer.close()
-                await self._vnc_writer.wait_closed()
+                await self._vnc_client.disconnect()
             except Exception as e:
                 logger.debug(f"Error closing VNC connection: {e}")
+            finally:
+                self._vnc_client = None
 
     async def _stream_loop(self):
         """Main streaming loop that captures and sends frames."""
@@ -249,21 +259,112 @@ class VNCStreamer:
     async def _capture_frame(self) -> Optional[bytes]:
         """Capture a frame from the VNC server.
 
+        Reads pending server messages (framebuffer updates, bell, cut-text),
+        converts the current framebuffer to a PIL Image, optionally resizes
+        it, and encodes it as JPEG.
+
         Returns:
             JPEG-encoded frame bytes, or None if capture failed.
         """
-        # This is a placeholder implementation
-        # In a full implementation, this would:
-        # 1. Request a framebuffer update from VNC server
-        # 2. Receive the raw pixel data
-        # 3. Convert to RGB/RGBA image
-        # 4. Resize if needed
-        # 5. Encode as JPEG
-        # 6. Return the bytes
+        if not self._vnc_client or not self._vnc_client.connected:
+            return None
 
-        # For now, return None to indicate no frame available
-        # The actual implementation would use the RFB protocol
-        return None
+        try:
+            frame = await self._read_vnc_update()
+
+            if frame is None:
+                # No update arrived, but we can still encode the current
+                # framebuffer (it may be unchanged since the last frame).
+                if self._vnc_client._framebuffer is None:
+                    return None
+                frame = VNCFrame(
+                    width=self._vnc_client.width,
+                    height=self._vnc_client.height,
+                    data=bytes(self._vnc_client._framebuffer),
+                    timestamp=asyncio.get_event_loop().time(),
+                )
+
+            # Convert raw pixel data to a PIL RGB image.
+            # The VNCClient's pixel format is 32-bit BGRX (red_shift=16,
+            # green_shift=8, blue_shift=0).  frame_to_image() handles the
+            # channel swap.
+            img = self._vnc_client.frame_to_image(frame)
+
+            # Resize if configured
+            if self.config.resize_width and self.config.resize_height:
+                target = (self.config.resize_width, self.config.resize_height)
+                if (img.width, img.height) != target:
+                    img = img.resize(target, Image.LANCZOS)
+
+            # Encode as JPEG
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=self.config.quality)
+            return buf.getvalue()
+
+        except Exception as e:
+            logger.error(f"Frame capture error: {e}")
+            return None
+
+    async def _read_vnc_update(self) -> Optional[VNCFrame]:
+        """Read a single server message, processing framebuffer updates.
+
+        Uses a short timeout so the stream loop is never blocked for long.
+
+        Returns:
+            A VNCFrame if a framebuffer update was received, else None.
+        """
+        client = self._vnc_client
+        reader = client._reader
+
+        if reader is None:
+            return None
+
+        frame: Optional[VNCFrame] = None
+        frame_interval = 1.0 / self.config.fps
+
+        try:
+            # Read the 1-byte message type with a short timeout so we
+            # don't stall the stream loop if the server has nothing to send.
+            raw = await asyncio.wait_for(
+                reader.readexactly(1),
+                timeout=frame_interval * 2,
+            )
+            msg_type = struct.unpack("!B", raw)[0]
+
+            if msg_type == RFBMessageType.FRAMEBUFFER_UPDATE:
+                frame = await client._handle_framebuffer_update()
+
+            elif msg_type == RFBMessageType.BELL:
+                pass  # nothing to do
+
+            elif msg_type == RFBMessageType.SERVER_CUT_TEXT:
+                # Read and discard server cut text
+                await reader.readexactly(3)  # padding
+                text_len = struct.unpack("!I", await reader.readexactly(4))[0]
+                await reader.readexactly(text_len)
+
+            elif msg_type == RFBMessageType.SET_COLOUR_MAP_ENTRIES:
+                # Read and discard colour map entries
+                await reader.readexactly(1)  # padding
+                _ = struct.unpack("!H", await reader.readexactly(2))[0]  # first colour
+                num_colours = struct.unpack("!H", await reader.readexactly(2))[0]
+                await reader.readexactly(num_colours * 6)  # 3x uint16 per entry
+
+            else:
+                logger.warning(f"Unknown VNC message type: {msg_type}")
+
+        except asyncio.TimeoutError:
+            # No message within the timeout window -- that's fine.
+            pass
+
+        # Always request the next incremental update so the server
+        # keeps sending changes.
+        try:
+            await client.request_update(incremental=True)
+        except Exception:
+            pass
+
+        return frame
 
     async def _emit_frame(self, frame_data: bytes):
         """Emit frame data to callback.

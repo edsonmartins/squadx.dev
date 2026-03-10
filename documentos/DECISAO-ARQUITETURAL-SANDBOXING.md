@@ -47,7 +47,7 @@
 
 **Stack:**
 - Docker com hardening completo
-- OpenHands SDK V1 (opcional - acelera dev)
+- LiteLLM (LLM routing)
 - Falco para runtime monitoring
 - HashiCorp Vault para secrets
 - Network filtering proxy (Squid/Envoy)
@@ -513,7 +513,7 @@ Conclusão: Firecracker self-hosted vale a pena com >1500 exec/dia
 ```
 📅 SEMANA 1-2 (AGORA):
    ✅ Implementar Docker Hardened (Fase 1)
-   ✅ NÃO usar OpenHands SDK ainda (adiciona complexidade)
+   ✅ Usar LiteLLM para LLM routing
    ✅ Focar em hardening completo + Vault + Falco
    ✅ Criar security whitepaper para clientes
 
@@ -541,12 +541,12 @@ Conclusão: Firecracker self-hosted vale a pena com >1500 exec/dia
 ❌ **Custo alto** sem receita  
 ❌ **Risco de never ship** (perfeição é inimiga do bom)
 
-### Por que NÃO usar OpenHands SDK?
+### Por que usar LiteLLM ao invés de OpenHands SDK?
 
-⚠️ **Adiciona camada de abstração** que precisaremos debugar  
-⚠️ **Security controls não são production-ready** (admitem isso)  
-⚠️ **Vendor lock-in** em abstrações deles  
-✅ **Melhor:** Construir slim wrapper sobre Docker puro, mais controle
+✅ **LiteLLM** foca apenas em LLM routing (100+ providers)
+✅ **Sem vendor lock-in** em abstrações de execução
+✅ **Melhor:** Construir slim wrapper sobre Docker puro para sandboxing, mais controle
+✅ **Cost tracking** integrado por provider/modelo
 
 ---
 

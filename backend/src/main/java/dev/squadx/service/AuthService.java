@@ -1,6 +1,12 @@
 package dev.squadx.service;
 
-import dev.squadx.dto.auth.*;
+import dev.squadx.dto.auth.AuthResponse;
+import dev.squadx.dto.auth.ChangePasswordRequest;
+import dev.squadx.dto.auth.LoginRequest;
+import dev.squadx.dto.auth.RefreshTokenRequest;
+import dev.squadx.dto.auth.RegisterRequest;
+import dev.squadx.dto.auth.UpdateProfileRequest;
+import dev.squadx.dto.auth.UserResponse;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.User;
@@ -99,6 +105,35 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         return mapToUserResponse(user);
+    }
+
+    @Transactional
+    public UserResponse updateProfile(String email, UpdateProfileRequest request) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (request.getFullName() != null) {
+            user.setFullName(request.getFullName());
+        }
+        if (request.getAvatarUrl() != null) {
+            user.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        user = userRepository.save(user);
+        return mapToUserResponse(user);
+    }
+
+    @Transactional
+    public void changePassword(String email, ChangePasswordRequest request) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 
     private UserResponse mapToUserResponse(User user) {

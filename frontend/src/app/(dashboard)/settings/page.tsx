@@ -24,15 +24,21 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/stores/auth-store";
+import { api } from "@/lib/api";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Profile state
   const [fullName, setFullName] = useState(user?.full_name || "");
   const [email, setEmail] = useState(user?.email || "");
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Notification preferences
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -45,10 +51,75 @@ export default function SettingsPage() {
   const [defaultQuality, setDefaultQuality] = useState("hd");
   const [maxViewers, setMaxViewers] = useState("5");
 
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: { full_name: string }) =>
+      api.put("/api/v1/auth/me", data),
+    onSuccess: () => {
+      if (user) {
+        setUser({ ...user, full_name: fullName });
+      }
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Password change mutation
+  const changePasswordMutation = useMutation({
+    mutationFn: (data: { current_password: string; new_password: string }) =>
+      api.post("/api/v1/auth/me/change-password", data),
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Password changed",
+        description: "Your password has been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to change password. Check your current password.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveProfile = () => {
-    toast({
-      title: "Profile updated",
-      description: "Your profile has been updated successfully.",
+    updateProfileMutation.mutate({ full_name: fullName });
+  };
+
+  const handleChangePassword = () => {
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 8 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+    changePasswordMutation.mutate({
+      current_password: currentPassword,
+      new_password: newPassword,
     });
   };
 
@@ -137,9 +208,9 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <Button onClick={handleSaveProfile}>
+              <Button onClick={handleSaveProfile} disabled={updateProfileMutation.isPending}>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </CardContent>
           </Card>
@@ -154,20 +225,41 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="currentPassword">Current Password</Label>
-                <Input id="currentPassword" type="password" />
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="newPassword">New Password</Label>
-                <Input id="newPassword" type="password" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input id="confirmPassword" type="password" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
 
-              <Button variant="outline">Update Password</Button>
+              <Button
+                variant="outline"
+                onClick={handleChangePassword}
+                disabled={changePasswordMutation.isPending}
+              >
+                {changePasswordMutation.isPending ? "Updating..." : "Update Password"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

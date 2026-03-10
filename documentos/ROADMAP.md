@@ -36,7 +36,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 **Deliverables:**
 - ✅ AWS account setup (ECS, RDS, S3)
 - ✅ PostgreSQL schema (tasks, projects, organizations)
-- ✅ FastAPI boilerplate (REST API structure)
+- ✅ Spring Boot 3.4 boilerplate (REST API structure)
 - ✅ Docker Compose (local development)
 - ✅ CI/CD pipeline (GitHub Actions)
 
@@ -57,7 +57,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 ### Weeks 3-4: Frontend + Client
 
 **Deliverables:**
-- ✅ Next.js 15 setup (App Router)
+- ✅ Next.js 16 setup (App Router)
 - ✅ Dashboard UI (basic Kanban)
 - ✅ Python client daemon (WebSocket connection)
 - ✅ Task creation flow

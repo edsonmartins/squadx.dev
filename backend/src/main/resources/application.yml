@@ -66,6 +66,19 @@ supabase:
   anon-key: ${SUPABASE_ANON_KEY}
   service-key: ${SUPABASE_SERVICE_KEY:}
 
+# Email Configuration (Resend)
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:noreply@squadx.dev}
+
+# Billing Configuration (Stripe)
+stripe:
+  api-key: ${STRIPE_API_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER:}
+    professional: ${STRIPE_PRICE_PROFESSIONAL:}
+
 # API Documentation
 springdoc:
   api-docs:
@@ -97,6 +110,14 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# S3 Configuration (Session Recording)
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:squadx-recordings}
+    region: ${AWS_REGION:us-east-1}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
 
 ---
 # Development Profile

@@ -32,8 +32,9 @@ describe('formatDate', () => {
   })
 
   it('formats a Date object', () => {
-    const result = formatDate(new Date('2025-01-01T00:00:00Z'))
-    expect(result).toMatch(/2025/)
+    const result = formatDate(new Date('2025-06-15T12:00:00Z'))
+    expect(result).toMatch(/Jun/)
+    expect(result).toMatch(/15/)
   })
 })
 

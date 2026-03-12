@@ -9,6 +9,9 @@ import {
   Users,
   Monitor,
   BarChart3,
+  ShieldCheck,
+  CalendarDays,
+  Video,
   Settings,
   LogOut,
   ChevronLeft,
@@ -30,7 +33,10 @@ const navigation = [
   { name: "Projects", href: "/projects", icon: FolderKanban },
   { name: "Tasks", href: "/tasks", icon: ListTodo },
   { name: "Squads", href: "/squads", icon: Users },
+  { name: "Approvals", href: "/approvals", icon: ShieldCheck },
+  { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Live View", href: "/live", icon: Monitor },
+  { name: "Recordings", href: "/recordings", icon: Video },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 

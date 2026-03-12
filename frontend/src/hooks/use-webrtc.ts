@@ -26,6 +26,8 @@ interface UseWebRTCOptions {
   maxReconnectAttempts?: number;
   /** Base delay in ms for exponential backoff (default: 1000) */
   reconnectBaseDelay?: number;
+  /** Enable a data channel for remote control (default: false) */
+  enableDataChannel?: boolean;
 }
 
 interface UseWebRTCReturn {
@@ -36,6 +38,8 @@ interface UseWebRTCReturn {
   stats: RTCStatsReport | null;
   /** Number of reconnection attempts made */
   reconnectAttempts: number;
+  /** Data channel for remote control (null if not enabled) */
+  dataChannel: RTCDataChannel | null;
 }
 
 /**
@@ -89,6 +93,7 @@ export function useWebRTC({
   autoReconnect = true,
   maxReconnectAttempts = 5,
   reconnectBaseDelay = 1000,
+  enableDataChannel = false,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
@@ -97,6 +102,8 @@ export function useWebRTC({
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
   const hostIdRef = useRef<string | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -172,6 +179,13 @@ export function useWebRTC({
     if (statsIntervalRef.current) {
       clearInterval(statsIntervalRef.current);
       statsIntervalRef.current = null;
+    }
+
+    // Close data channel
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+      setDataChannel(null);
     }
 
     // Close peer connection
@@ -317,8 +331,39 @@ export function useWebRTC({
     // Add transceivers for receiving video
     pc.addTransceiver("video", { direction: "recvonly" });
 
+    // Create data channel for remote control (offerer side)
+    if (enableDataChannel) {
+      const dc = pc.createDataChannel("remote-control", { ordered: true });
+      dc.onopen = () => {
+        log("[WebRTC] Data channel opened (initiator)");
+        dataChannelRef.current = dc;
+        setDataChannel(dc);
+      };
+      dc.onclose = () => {
+        log("[WebRTC] Data channel closed (initiator)");
+        dataChannelRef.current = null;
+        setDataChannel(null);
+      };
+    }
+
+    // Handle incoming data channel (answerer side)
+    pc.ondatachannel = (event) => {
+      log("[WebRTC] Received data channel:", event.channel.label);
+      const dc = event.channel;
+      dc.onopen = () => {
+        log("[WebRTC] Data channel opened (remote)");
+        dataChannelRef.current = dc;
+        setDataChannel(dc);
+      };
+      dc.onclose = () => {
+        log("[WebRTC] Data channel closed (remote)");
+        dataChannelRef.current = null;
+        setDataChannel(null);
+      };
+    };
+
     return pc;
-  }, [onTrack, updateConnectionState]);
+  }, [onTrack, updateConnectionState, enableDataChannel]);
 
   // Start collecting WebRTC stats
   const startStatsCollection = useCallback((pc: RTCPeerConnection) => {
@@ -331,7 +376,7 @@ export function useWebRTC({
         const report = await pc.getStats();
         setStats(report);
       }
-    }, 2000);
+    }, 5000);
   }, []);
 
   // Internal function to perform connection (used by connect and reconnect)
@@ -440,6 +485,7 @@ export function useWebRTC({
     disconnect,
     stats,
     reconnectAttempts,
+    dataChannel,
   };
 }
 

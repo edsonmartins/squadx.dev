@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Input event types for remote control.
@@ -73,6 +73,7 @@ export function useRemoteControl({
   enabled,
   onControlStateChange,
 }: UseRemoteControlOptions): UseRemoteControlReturn {
+  const [isActive, setIsActive] = useState(false);
   const isActiveRef = useRef(false);
 
   // Send input event via data channel
@@ -331,6 +332,7 @@ export function useRemoteControl({
     );
 
     isActiveRef.current = true;
+    setIsActive(true);
     onControlStateChange?.(true);
   }, [dataChannel, onControlStateChange]);
 
@@ -338,6 +340,7 @@ export function useRemoteControl({
   const releaseControl = useCallback(() => {
     if (!dataChannel || dataChannel.readyState !== "open") {
       isActiveRef.current = false;
+      setIsActive(false);
       onControlStateChange?.(false);
       return;
     }
@@ -350,11 +353,12 @@ export function useRemoteControl({
     );
 
     isActiveRef.current = false;
+    setIsActive(false);
     onControlStateChange?.(false);
   }, [dataChannel, onControlStateChange]);
 
   return {
-    isActive: isActiveRef.current,
+    isActive,
     requestControl,
     releaseControl,
   };

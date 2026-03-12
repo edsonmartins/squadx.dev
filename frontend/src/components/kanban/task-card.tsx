@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Clock, User, Video } from "lucide-react";
+import { ListTree, Clock, User, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskResponse, TaskPriority } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -123,8 +123,8 @@ export function TaskCardContent({
       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/50">
         <div className="flex items-center gap-2">
           {task.subtasks_count > 0 && (
-            <span className="flex items-center gap-1">
-              <MessageSquare className="h-3 w-3" />
+            <span className="flex items-center gap-1" title={`${task.subtasks_count} subtask${task.subtasks_count > 1 ? "s" : ""}`}>
+              <ListTree className="h-3 w-3" />
               {task.subtasks_count}
             </span>
           )}

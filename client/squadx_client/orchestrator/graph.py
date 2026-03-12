@@ -19,22 +19,34 @@ logger = structlog.get_logger()
 
 
 def should_continue(state: OrchestratorState) -> Literal["execute", "review", "error", "end"]:
-    """Determine the next step based on current state."""
-    if state.error:
+    """Determine the next step based on current state.
+
+    Note: LangGraph may pass the state as either a Pydantic model or a dict
+    depending on the version and graph configuration. We use getattr/get
+    defensively to handle both cases.
+    """
+    # Support both attribute access (Pydantic) and dict access (TypedDict)
+    _get = (lambda s, k, d=None: s.get(k, d)) if isinstance(state, dict) else (lambda s, k, d=None: getattr(s, k, d))
+
+    if _get(state, "error"):
         return "error"
 
-    if state.should_end:
+    if _get(state, "should_end", False):
         return "end"
 
-    if not state.plan:
+    plan = _get(state, "plan")
+    if not plan:
         return "error"
 
     # Check if all subtasks are completed
-    all_subtask_ids = [st.id for st in state.plan.subtasks]
+    subtasks = plan.subtasks if hasattr(plan, "subtasks") else plan.get("subtasks", [])
+    all_subtask_ids = [st.id if hasattr(st, "id") else st["id"] for st in subtasks]
+    completed = _get(state, "completed_subtasks", [])
+    failed = _get(state, "failed_subtasks", [])
     pending_subtasks = [
         st_id
         for st_id in all_subtask_ids
-        if st_id not in state.completed_subtasks and st_id not in state.failed_subtasks
+        if st_id not in completed and st_id not in failed
     ]
 
     if not pending_subtasks:

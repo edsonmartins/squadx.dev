@@ -21,6 +21,10 @@ interface UseRealtimeChatReturn {
   clearMessages: () => void;
   /** Whether the chat is connected */
   isConnected: boolean;
+  /** Error from last send attempt, if any */
+  error: string | null;
+  /** Clear the current error */
+  clearError: () => void;
 }
 
 /**
@@ -33,6 +37,7 @@ export function useRealtimeChat({
 }: UseRealtimeChatOptions): UseRealtimeChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const isSetupRef = useRef(false);
 
   // Set display name
@@ -94,8 +99,10 @@ export function useRealtimeChat({
           }
           return newMessages;
         });
-      } catch (error) {
-        console.error("[Chat] Error sending message:", error);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to send message";
+        console.error("[Chat] Error sending message:", err);
+        setError(message);
       }
     },
     [displayName, maxMessages]
@@ -106,10 +113,17 @@ export function useRealtimeChat({
     setMessages([]);
   }, []);
 
+  // Clear error
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
     messages,
     sendMessage,
     clearMessages,
     isConnected,
+    error,
+    clearError,
   };
 }

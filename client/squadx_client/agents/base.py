@@ -110,9 +110,10 @@ Complete this task by using the available tools. After completing the task, prov
             response = await self.llm_with_tools.ainvoke(messages)
             messages.append(response)
 
-            # Estimate tokens
-            total_input_tokens += len(str(messages)) // 4
-            total_output_tokens += len(response.content or "") // 4
+            # Extract token counts from response metadata if available
+            input_tok, output_tok = self._extract_token_usage(response)
+            total_input_tokens += input_tok
+            total_output_tokens += output_tok
 
             # Check if there are tool calls
             if not response.tool_calls:
@@ -248,8 +249,11 @@ Format your response as:
         output = response.content
         files_modified = self._extract_files(output)
 
-        input_tokens = len(system_prompt + user_message) // 4
-        output_tokens = len(output) // 4
+        input_tokens, output_tokens = self._extract_token_usage(response)
+        if input_tokens == 0 and output_tokens == 0:
+            # Final fallback for _execute_simple if no metadata at all
+            input_tokens = len(system_prompt + user_message) // 4
+            output_tokens = len(output) // 4
 
         self.logger.info(
             "task_completed",
@@ -295,6 +299,39 @@ Format your response as:
                         files.append(file_path)
 
         return files
+
+    @staticmethod
+    def _extract_token_usage(response: AIMessage) -> tuple[int, int]:
+        """Extract token usage from an LLM response.
+
+        Checks multiple metadata locations used by different LangChain providers:
+        1. response.usage_metadata (newer LangChain standard)
+        2. response.response_metadata["usage"] (OpenAI-style)
+        3. Falls back to character-based estimate
+
+        Returns:
+            Tuple of (input_tokens, output_tokens)
+        """
+        # Try usage_metadata (LangChain >=0.2 standard)
+        usage_meta = getattr(response, "usage_metadata", None)
+        if usage_meta:
+            input_tok = getattr(usage_meta, "input_tokens", 0) or usage_meta.get("input_tokens", 0) if isinstance(usage_meta, dict) else getattr(usage_meta, "input_tokens", 0)
+            output_tok = getattr(usage_meta, "output_tokens", 0) or usage_meta.get("output_tokens", 0) if isinstance(usage_meta, dict) else getattr(usage_meta, "output_tokens", 0)
+            if input_tok or output_tok:
+                return int(input_tok), int(output_tok)
+
+        # Try response_metadata.usage (OpenAI / Anthropic style)
+        resp_meta = getattr(response, "response_metadata", None) or {}
+        usage = resp_meta.get("usage", {}) if isinstance(resp_meta, dict) else {}
+        if usage:
+            input_tok = usage.get("prompt_tokens") or usage.get("input_tokens", 0)
+            output_tok = usage.get("completion_tokens") or usage.get("output_tokens", 0)
+            if input_tok or output_tok:
+                return int(input_tok), int(output_tok)
+
+        # Fallback: character-based estimate
+        content = response.content or ""
+        return len(content) // 4, len(content) // 4
 
     def _estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """Estimate the cost based on token usage."""

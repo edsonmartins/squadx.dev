@@ -74,13 +74,45 @@ export default function AnalyticsPage() {
   });
 
   const isLoading = metricsLoading || executionsLoading;
-  const executionList = executions?.content ?? [];
+  const allExecutions = executions?.content ?? [];
+
+  // Compute period boundaries
+  const periodDays = useMemo(() => {
+    switch (period) {
+      case "7d": return 7;
+      case "30d": return 30;
+      case "90d": return 90;
+      case "year": return 365;
+    }
+  }, [period]);
+
+  const fromDate = useMemo(() => new Date(Date.now() - periodDays * 86400000), [periodDays]);
+  const prevFromDate = useMemo(() => new Date(fromDate.getTime() - periodDays * 86400000), [fromDate, periodDays]);
+
+  // Filter executions by current period
+  const executionList = useMemo(
+    () => allExecutions.filter((e) => new Date(e.started_at ?? e.created_at) >= fromDate),
+    [allExecutions, fromDate]
+  );
+
+  // Filter executions by previous period (for trend calculation)
+  const prevExecutionList = useMemo(
+    () => allExecutions.filter((e) => {
+      const d = new Date(e.started_at ?? e.created_at);
+      return d >= prevFromDate && d < fromDate;
+    }),
+    [allExecutions, prevFromDate, fromDate]
+  );
+
+  // Helper: compute trend percentage
+  const calcTrend = (current: number, previous: number): number =>
+    previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0;
 
   // Compute stats from metrics API response
   const stats = useMemo(() => {
-    const totalExecutions = (metrics?.total_executions as number) ?? executionList.length;
-    const totalCost = (metrics?.total_cost as number) ?? executionList.reduce((s, e) => s + (e.cost ?? 0), 0);
-    const totalTokens = (metrics?.total_tokens as number) ?? executionList.reduce((s, e) => s + (e.tokens_used ?? 0), 0);
+    const totalExecutions = executionList.length;
+    const totalCost = executionList.reduce((s, e) => s + (e.cost ?? 0), 0);
+    const totalTokens = executionList.reduce((s, e) => s + (e.tokens_used ?? 0), 0);
     const completed = executionList.filter((e) => e.status === "COMPLETED").length;
     const failed = executionList.filter((e) => e.status === "FAILED").length;
     const successRate = totalExecutions > 0 ? Math.round((completed / (completed + failed || 1)) * 100) : 0;
@@ -88,20 +120,30 @@ export default function AnalyticsPage() {
     const avgDuration = durations.length > 0 ? durations.reduce((s, d) => s + d, 0) / durations.length / 60 : 0;
     const uniqueAgents = new Set(executionList.map((e) => e.agent_name).filter(Boolean));
 
+    // Previous period stats
+    const prevTotal = prevExecutionList.length;
+    const prevCost = prevExecutionList.reduce((s, e) => s + (e.cost ?? 0), 0);
+    const prevTokens = prevExecutionList.reduce((s, e) => s + (e.tokens_used ?? 0), 0);
+    const prevCompleted = prevExecutionList.filter((e) => e.status === "COMPLETED").length;
+    const prevFailed = prevExecutionList.filter((e) => e.status === "FAILED").length;
+    const prevSuccessRate = prevTotal > 0 ? Math.round((prevCompleted / (prevCompleted + prevFailed || 1)) * 100) : 0;
+    const prevDurations = prevExecutionList.filter((e) => e.duration_seconds != null).map((e) => e.duration_seconds!);
+    const prevAvgDuration = prevDurations.length > 0 ? prevDurations.reduce((s, d) => s + d, 0) / prevDurations.length / 60 : 0;
+
     return {
       totalExecutions,
-      executionsTrend: 0,
+      executionsTrend: calcTrend(totalExecutions, prevTotal),
       totalCost,
-      costTrend: 0,
+      costTrend: calcTrend(totalCost, prevCost),
       totalTokens,
-      tokensTrend: 0,
+      tokensTrend: calcTrend(totalTokens, prevTokens),
       avgDuration,
-      durationTrend: 0,
+      durationTrend: calcTrend(avgDuration, prevAvgDuration),
       successRate,
-      successTrend: 0,
+      successTrend: calcTrend(successRate, prevSuccessRate),
       activeAgents: uniqueAgents.size,
     };
-  }, [metrics, executionList]);
+  }, [executionList, prevExecutionList]);
 
   // Group executions by week for trend chart
   const executionTrendData = useMemo(() => {

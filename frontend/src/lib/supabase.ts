@@ -8,13 +8,26 @@ import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "[Supabase] Missing environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set"
-  );
+// Lazy singleton — only throws when actually used (safe during SSR/build)
+let _supabaseInstance: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!_supabaseInstance) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error(
+        "Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set"
+      );
+    }
+    _supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return _supabaseInstance;
 }
 
-export const supabase = createClient(supabaseUrl ?? "", supabaseAnonKey ?? "");
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getSupabaseClient(), prop, receiver);
+  },
+});
 
 // Type definitions for live sessions
 export interface LiveSession {
@@ -111,18 +124,35 @@ export class SupabaseSignaling {
 
     // Subscribe to WebRTC signals
     this.channel.on("broadcast", { event: "webrtc-signal" }, ({ payload }) => {
-      const signal = payload as WebRTCSignal;
+      // Validate required fields before casting
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "type" in payload &&
+        "sender_id" in payload
+      ) {
+        const signal = payload as WebRTCSignal;
 
-      // Only process signals targeted to us or broadcast signals
-      if (!signal.target_id || signal.target_id === this.peerId) {
-        this.onSignalCallback?.(signal);
+        // Only process signals targeted to us or broadcast signals
+        if (!signal.target_id || signal.target_id === this.peerId) {
+          this.onSignalCallback?.(signal);
+        }
       }
     });
 
     // Subscribe to chat messages
     this.channel.on("broadcast", { event: "chat-message" }, ({ payload }) => {
-      const message = payload as ChatMessage;
-      this.onChatCallback?.(message);
+      // Validate required fields before casting
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "id" in payload &&
+        "sender_id" in payload &&
+        "content" in payload
+      ) {
+        const message = payload as ChatMessage;
+        this.onChatCallback?.(message);
+      }
     });
 
     // Track presence
@@ -307,7 +337,14 @@ export class SupabaseSignaling {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          callback(payload.new as LiveSession);
+          if (
+            payload.new &&
+            typeof payload.new === "object" &&
+            "id" in payload.new &&
+            "status" in payload.new
+          ) {
+            callback(payload.new as LiveSession);
+          }
         }
       )
       .subscribe();

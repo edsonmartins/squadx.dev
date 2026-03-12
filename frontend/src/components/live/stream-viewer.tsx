@@ -46,7 +46,6 @@ export function StreamViewer({
 }: StreamViewerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -54,7 +53,7 @@ export function StreamViewer({
   const [showStats, setShowStats] = useState(false);
   const [hasControl, setHasControl] = useState(false);
 
-  const { connectionState, remoteStream, connect, disconnect, stats } =
+  const { connectionState, remoteStream, connect, disconnect, stats, dataChannel } =
     useWebRTC({
       sessionId,
       onTrack: (stream) => {
@@ -63,12 +62,13 @@ export function StreamViewer({
         }
       },
       onConnectionStateChange: onConnectionChange,
+      enableDataChannel: enableRemoteControl,
     });
 
   // Remote control hook
   const { requestControl, releaseControl } = useRemoteControl({
     videoElement: videoRef.current,
-    dataChannel: dataChannelRef.current,
+    dataChannel,
     enabled: enableRemoteControl && hasControl,
     onControlStateChange: setHasControl,
   });
@@ -218,6 +218,30 @@ export function StreamViewer({
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Reconnect
                 </Button>
+              </>
+            )}
+
+            {connectionState === "closed" && (
+              <>
+                <WifiOff className="h-12 w-12 text-gray-500 mb-4" />
+                <p className="text-lg font-medium">Session ended</p>
+                <p className="text-sm text-gray-400 mt-2 mb-4">
+                  The live session has been closed
+                </p>
+                <Button variant="outline" onClick={handleReconnect}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reconnect
+                </Button>
+              </>
+            )}
+
+            {connectionState === "reconnecting" && (
+              <>
+                <Loader2 className="h-12 w-12 animate-spin text-yellow-500 mb-4" />
+                <p className="text-lg font-medium">Reconnecting...</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Attempting to restore the connection
+                </p>
               </>
             )}
           </div>

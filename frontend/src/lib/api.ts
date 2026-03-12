@@ -625,6 +625,57 @@ export const approvalsApi = {
     ),
 };
 
+// Meeting Types
+export type MeetingStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type RsvpStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "TENTATIVE";
+
+export interface MeetingResponse {
+  id: number;
+  title: string;
+  description?: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: MeetingStatus;
+  organizer_id: number;
+  organizer_name: string;
+  attendees_count: number;
+  my_rsvp?: RsvpStatus;
+  organization_id: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateMeetingRequest {
+  title: string;
+  description?: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  attendee_ids?: number[];
+  organization_id: number;
+}
+
+export interface RsvpRequest {
+  status: RsvpStatus;
+}
+
+// Meetings API
+export const meetingsApi = {
+  list: (organizationId?: number) =>
+    api.get<PageResponse<MeetingResponse>>(
+      `/api/v1/meetings${organizationId ? `?organizationId=${organizationId}` : ""}`
+    ),
+  get: (id: number) => api.get<MeetingResponse>(`/api/v1/meetings/${id}`),
+  create: (data: CreateMeetingRequest) =>
+    api.post<MeetingResponse>("/api/v1/meetings", data),
+  update: (id: number, data: Partial<CreateMeetingRequest>) =>
+    api.put<MeetingResponse>(`/api/v1/meetings/${id}`, data),
+  delete: (id: number) => api.delete(`/api/v1/meetings/${id}`),
+  rsvp: (id: number, data: RsvpRequest) =>
+    api.post<MeetingResponse>(`/api/v1/meetings/${id}/rsvp`, data),
+  upcoming: () =>
+    api.get<PageResponse<MeetingResponse>>("/api/v1/meetings/upcoming"),
+};
+
 // Recording Types
 export type RecordingStatus = "RECORDING" | "COMPLETED" | "FAILED";
 

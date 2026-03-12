@@ -19,6 +19,40 @@ from squadx_client.streaming.vnc_streamer import stream_manager
 logger = structlog.get_logger()
 
 
+def _validate_task_data(task_data: Any) -> str | None:
+    """Validate task data received from STOMP.
+
+    Returns:
+        None if valid, or an error message string describing the problem.
+    """
+    if not isinstance(task_data, dict):
+        return f"task_data must be a dict, got {type(task_data).__name__}"
+
+    required_fields = {
+        "task_id": (int, str),
+        "title": (str,),
+        "description": (str,),
+    }
+
+    for field, expected_types in required_fields.items():
+        value = task_data.get(field)
+        if value is None:
+            return f"missing required field: {field}"
+        if not isinstance(value, expected_types):
+            return (
+                f"field '{field}' must be {' or '.join(t.__name__ for t in expected_types)}, "
+                f"got {type(value).__name__}"
+            )
+
+    if isinstance(task_data.get("title"), str) and not task_data["title"].strip():
+        return "field 'title' must not be empty"
+
+    if isinstance(task_data.get("description"), str) and not task_data["description"].strip():
+        return "field 'description' must not be empty"
+
+    return None
+
+
 class SquadXDaemon:
     """Background daemon that connects to the backend and executes tasks.
 
@@ -140,6 +174,17 @@ class SquadXDaemon:
 
         if not task_id or not task_data:
             logger.error("invalid_task_data", data=data)
+            return
+
+        # Validate task data structure before processing
+        validation_error = _validate_task_data(task_data)
+        if validation_error:
+            logger.error(
+                "task_data_validation_failed",
+                task_id=task_id,
+                error=validation_error,
+            )
+            await self._send_task_rejected(task_id, f"Invalid task data: {validation_error}")
             return
 
         logger.info("task_assigned", task_id=task_id, title=task_data.get("title"))

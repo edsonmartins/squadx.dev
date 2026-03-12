@@ -1,5 +1,6 @@
 package dev.squadx.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
@@ -25,6 +26,19 @@ public class EmailService {
         this.restClient = RestClient.builder()
                 .baseUrl("https://api.resend.com")
                 .build();
+    }
+
+    @PostConstruct
+    void validateConfiguration() {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("========================================================");
+            log.warn("RESEND_API_KEY is not configured (resend.api-key is empty).");
+            log.warn("Email sending is DISABLED. All emails will be silently skipped.");
+            log.warn("Set RESEND_API_KEY environment variable to enable email delivery.");
+            log.warn("========================================================");
+        } else {
+            log.info("Email service initialized with from={}", fromEmail);
+        }
     }
 
     @Async

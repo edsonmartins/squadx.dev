@@ -109,6 +109,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 - ✅ Error recovery flows
 - ✅ Basic metrics (task completion time)
 - ✅ User authentication (Supabase Auth)
+- ✅ Approval workflow (create, review, approve/reject)
 
 **Team:**
 - Backend Dev (40h): Integrations
@@ -131,7 +132,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 - ✅ Xvfb + x11vnc in agent containers
 - ✅ SquadX Live Host (Tauri desktop app)
 - ✅ Single-viewer working end-to-end
-- ✅ Latency <500ms
+- ✅ Latency p95 < 500ms
 
 **Team:**
 - Edson (40h): PairUX fork + Tauri setup
@@ -140,7 +141,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 
 **Critical Success Factor:**
 - Live view must work smoothly
-- Latency acceptable (<300ms ideal)
+- Latency target: p95 < 500ms (MVP), p95 < 300ms (Phase 2)
 
 **Test Plan:**
 1. Start agent on task
@@ -233,7 +234,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 ### Weeks 17-18: Performance + Polish
 
 **Deliverables:**
-- ✅ Latency optimization (<200ms)
+- ✅ Latency optimization (p95 < 300ms)
 - ✅ VNC compression (TurboVNC)
 - ✅ Auto-stop idle sessions (save resources)
 - ✅ Mobile PWA (basic viewing)
@@ -244,7 +245,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 - Frontend Dev (40h): Mobile + analytics
 
 **Performance Targets:**
-- Latency p95: <300ms
+- Latency p95: < 300ms
 - FPS: 30 stable
 - CPU usage: <50% per agent
 - Memory: <2GB per agent
@@ -340,7 +341,7 @@ PHASE 4: Advanced Features (Weeks 27-32)
 **Load Test Targets:**
 - 100 concurrent sessions
 - 300 viewers total
-- <500ms latency p95
+- Latency p95 < 500ms
 - 0 crashes
 
 **Deliverable (Week 26):**
@@ -477,7 +478,7 @@ Total: 320 hours/week
 ```
 Technical:
 ✅ Live view working locally
-✅ Latency <500ms
+✅ Latency p95 < 500ms
 ✅ No crashes in 1h session
 ✅ Code commits successfully
 

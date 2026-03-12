@@ -434,7 +434,13 @@ class StompClient:
             try:
                 # Parse body as JSON
                 body = json.loads(frame.body) if frame.body else {}
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    "stomp_message_json_decode_failed",
+                    error=str(e),
+                    destination=destination,
+                    body_preview=frame.body[:200] if frame.body else "",
+                )
                 body = {"raw": frame.body}
 
             try:

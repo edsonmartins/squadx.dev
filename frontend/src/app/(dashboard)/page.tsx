@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -116,35 +117,47 @@ export default function DashboardPage() {
     },
   ];
 
-  const recentActivity = [
-    {
-      id: 1,
-      type: "completed",
-      title: "Implement user authentication",
-      project: "squadx-frontend",
-      time: "2 hours ago",
-      icon: CheckCircle2,
-      iconColor: "text-green-500",
-    },
-    {
-      id: 2,
-      type: "in_progress",
-      title: "Fix API response handling",
-      project: "squadx-backend",
-      time: "4 hours ago",
-      icon: Clock,
-      iconColor: "text-blue-500",
-    },
-    {
-      id: 3,
-      type: "blocked",
-      title: "Database migration script",
-      project: "squadx-backend",
-      time: "1 day ago",
-      icon: AlertCircle,
-      iconColor: "text-yellow-500",
-    },
-  ];
+  const { data: executionsData, isLoading: executionsLoading } = useQuery({
+    queryKey: ["recent-executions", currentOrganization?.id],
+    queryFn: () =>
+      currentOrganization
+        ? executionsApi.listByOrganization(currentOrganization.id)
+        : Promise.resolve({ content: [] }),
+    enabled: !!currentOrganization,
+  });
+
+  const recentActivity = useMemo(() => {
+    const executions = executionsData?.content || [];
+    return executions.slice(0, 8).map((exec) => {
+      const statusMap: Record<string, { icon: typeof CheckCircle2; iconColor: string }> = {
+        COMPLETED: { icon: CheckCircle2, iconColor: "text-green-500" },
+        RUNNING: { icon: Play, iconColor: "text-blue-500" },
+        FAILED: { icon: AlertCircle, iconColor: "text-red-500" },
+        PENDING: { icon: Clock, iconColor: "text-yellow-500" },
+        CANCELLED: { icon: AlertCircle, iconColor: "text-gray-500" },
+      };
+      const { icon, iconColor } = statusMap[exec.status] || statusMap.PENDING;
+      const time = exec.started_at || exec.created_at;
+      const elapsed = Date.now() - new Date(time).getTime();
+      const hours = Math.floor(elapsed / 3600000);
+      const timeLabel =
+        hours < 1
+          ? "Less than 1 hour ago"
+          : hours < 24
+          ? `${hours} hour${hours > 1 ? "s" : ""} ago`
+          : `${Math.floor(hours / 24)} day${Math.floor(hours / 24) > 1 ? "s" : ""} ago`;
+
+      return {
+        id: exec.id,
+        type: exec.status.toLowerCase(),
+        title: exec.task_title,
+        project: exec.agent_name || "Unknown agent",
+        time: timeLabel,
+        icon,
+        iconColor,
+      };
+    });
+  }, [executionsData]);
 
   const handleProjectCreated = () => {
     setIsProjectModalOpen(false);
@@ -249,6 +262,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {executionsLoading && (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading activity...</span>
+                </div>
+              )}
+              {!executionsLoading && recentActivity.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <Clock className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                </div>
+              )}
               {recentActivity.map((activity) => (
                 <div
                   key={activity.id}

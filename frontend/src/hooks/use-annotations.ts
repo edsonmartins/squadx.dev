@@ -19,7 +19,7 @@ export interface Annotation {
 /** Duration in ms before annotations start fading */
 const ANNOTATION_TTL = 30_000;
 /** How often to prune expired annotations */
-const CLEANUP_INTERVAL = 1_000;
+const CLEANUP_INTERVAL = 5_000;
 
 const PRESET_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#ffffff"];
 

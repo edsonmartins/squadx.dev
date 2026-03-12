@@ -1,0 +1,16 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "squadx.fullname" . }}-postgres
+  labels:
+    {{- include "squadx.componentLabels" (dict "context" . "component" "postgres") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    {{- include "squadx.selectorLabels" (dict "context" . "component" "postgres") | nindent 4 }}
+{{- end }}

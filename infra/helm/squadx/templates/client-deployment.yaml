@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "squadx.fullname" . }}-client
+  labels:
+    {{- include "squadx.componentLabels" (dict "context" . "component" "client") | nindent 4 }}
+spec:
+  replicas: {{ .Values.client.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "squadx.selectorLabels" (dict "context" . "component" "client") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "squadx.componentLabels" (dict "context" . "component" "client") | nindent 8 }}
+    spec:
+      containers:
+        - name: client
+          image: "{{ .Values.client.image.repository }}:{{ .Values.client.image.tag }}"
+          imagePullPolicy: {{ .Values.client.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.client.resources | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "squadx.fullname" . }}-config
+            - secretRef:
+                name: {{ include "squadx.fullname" . }}-secrets
+      restartPolicy: Always

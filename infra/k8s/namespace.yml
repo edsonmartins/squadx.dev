@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: squadx
+  labels:
+    app.kubernetes.io/name: squadx
+    app.kubernetes.io/managed-by: kubectl

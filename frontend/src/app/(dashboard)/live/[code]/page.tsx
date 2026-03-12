@@ -11,6 +11,7 @@ import {
   Check,
   MessageSquare,
   Send,
+  PenTool,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -24,9 +25,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StreamViewer } from "@/components/live/stream-viewer";
+import { AnnotationOverlay } from "@/components/live/annotation-overlay";
+import { AnnotationToolbar } from "@/components/live/annotation-toolbar";
 import { signaling, LiveSession, LiveParticipant, ChatMessage } from "@/lib/supabase";
 import { liveViewApi } from "@/lib/api";
 import { useRealtimeChat } from "@/hooks/use-realtime-chat";
+import { useAnnotations } from "@/hooks/use-annotations";
 import { ConnectionState } from "@/hooks/use-webrtc";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -43,6 +47,7 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [newMessage, setNewMessage] = useState("");
+  const [annotationsEnabled, setAnnotationsEnabled] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch session from backend API (try Spring Boot first, then Supabase)
@@ -80,6 +85,23 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
   const { messages: chatMessages, sendMessage } = useRealtimeChat({
     sessionCode: code,
     displayName: user?.full_name || user?.email || "Anonymous",
+  });
+
+  // Annotations
+  const {
+    annotations,
+    activeTool,
+    activeColor,
+    setActiveTool,
+    setActiveColor,
+    startAnnotation,
+    updateAnnotation,
+    endAnnotation,
+    clearAnnotations,
+  } = useAnnotations({
+    sessionCode: code,
+    userId: user?.id?.toString() || "anonymous",
+    userName: user?.full_name || user?.email || "Anonymous",
   });
 
   // Auto-scroll chat to bottom when new messages arrive
@@ -178,6 +200,16 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
             )}
           </Button>
 
+          {/* Annotations Toggle */}
+          <Button
+            variant={annotationsEnabled ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAnnotationsEnabled((prev) => !prev)}
+          >
+            <PenTool className="h-4 w-4 mr-2" />
+            {annotationsEnabled ? "Drawing" : "Annotate"}
+          </Button>
+
           {/* Status Badge */}
           <Badge
             variant={session.status === "ACTIVE" ? "destructive" : "secondary"}
@@ -196,11 +228,30 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
       <div className="flex flex-1 overflow-hidden">
         {/* Video Area */}
         <div className="flex-1 p-4">
-          <StreamViewer
-            sessionId={sessionId}
-            className="w-full h-full min-h-[400px]"
-            onConnectionChange={setConnectionState}
-          />
+          <div className="relative w-full h-full min-h-[400px]">
+            <StreamViewer
+              sessionId={sessionId}
+              className="w-full h-full"
+              onConnectionChange={setConnectionState}
+            />
+            <AnnotationOverlay
+              annotations={annotations}
+              activeTool={activeTool}
+              onAnnotationStart={startAnnotation}
+              onAnnotationUpdate={updateAnnotation}
+              onAnnotationEnd={endAnnotation}
+              isEnabled={annotationsEnabled}
+            />
+            {annotationsEnabled && (
+              <AnnotationToolbar
+                activeTool={activeTool}
+                activeColor={activeColor}
+                onToolChange={setActiveTool}
+                onColorChange={setActiveColor}
+                onClear={clearAnnotations}
+              />
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}

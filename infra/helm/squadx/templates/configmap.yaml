@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "squadx.fullname" . }}-config
+  labels:
+    {{- include "squadx.labels" . | nindent 4 }}
+data:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://{{ include "squadx.fullname" . }}-postgres:5432/{{ .Values.postgres.auth.database }}"
+  SPRING_DATA_REDIS_HOST: "{{ include "squadx.fullname" . }}-redis"
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

@@ -1,0 +1,16 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "squadx.fullname" . }}-redis
+  labels:
+    {{- include "squadx.componentLabels" (dict "context" . "component" "redis") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    {{- include "squadx.selectorLabels" (dict "context" . "component" "redis") | nindent 4 }}
+{{- end }}

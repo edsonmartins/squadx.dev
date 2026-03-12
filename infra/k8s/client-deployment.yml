@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: squadx-client
+  namespace: squadx
+  labels:
+    app.kubernetes.io/name: squadx
+    app.kubernetes.io/component: client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: squadx
+      app.kubernetes.io/component: client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: squadx
+        app.kubernetes.io/component: client
+    spec:
+      containers:
+        - name: client
+          image: ghcr.io/edsonmartins/squadx.dev/client:latest
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          envFrom:
+            - configMapRef:
+                name: squadx-config
+            - secretRef:
+                name: squadx-secrets
+      restartPolicy: Always

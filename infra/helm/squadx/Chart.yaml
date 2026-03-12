@@ -1,0 +1,12 @@
+apiVersion: v2
+name: squadx
+description: Helm chart for SquadX.dev — collaborative development platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Edson Martins
+keywords:
+  - squadx
+  - collaboration
+  - development

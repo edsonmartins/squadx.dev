@@ -46,6 +46,9 @@ public class Meeting extends BaseEntity {
     @JoinColumn(name = "created_by_id", nullable = false)
     private User createdBy;
 
+    @Column(name = "external_event_id", length = 500)
+    private String externalEventId;
+
     @OneToMany(mappedBy = "meeting", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<MeetingAttendee> attendees = new HashSet<>();

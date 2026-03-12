@@ -34,6 +34,34 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: 2000ms
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${OAUTH2_GOOGLE_CLIENT_ID:}
+            client-secret: ${OAUTH2_GOOGLE_CLIENT_SECRET:}
+            scope: openid,profile,email
+          microsoft:
+            client-id: ${OAUTH2_MICROSOFT_CLIENT_ID:}
+            client-secret: ${OAUTH2_MICROSOFT_CLIENT_SECRET:}
+            scope: openid,profile,email
+            client-name: Microsoft
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+          okta:
+            client-id: ${OAUTH2_OKTA_CLIENT_ID:}
+            client-secret: ${OAUTH2_OKTA_CLIENT_SECRET:}
+            scope: openid,profile,email
+            client-name: Okta
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          microsoft:
+            issuer-uri: https://login.microsoftonline.com/${OAUTH2_MICROSOFT_TENANT_ID:common}/v2.0
+          okta:
+            issuer-uri: ${OAUTH2_OKTA_ISSUER_URI:}
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -116,6 +144,21 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# Multi-Region Configuration
+squadx:
+  region:
+    current: ${SQUADX_REGION:us-east-1}
+    available: ${SQUADX_REGIONS:us-east-1,eu-west-1,ap-southeast-1}
+  routing:
+    strategy: ${SQUADX_ROUTING_STRATEGY:nearest}
+
+# Google Calendar Integration
+google:
+  calendar:
+    client-id: ${GOOGLE_CALENDAR_CLIENT_ID:}
+    client-secret: ${GOOGLE_CALENDAR_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_CALENDAR_REDIRECT_URI:http://localhost:3000/api/calendar/callback}
 
 # S3 Configuration (Session Recording)
 aws:

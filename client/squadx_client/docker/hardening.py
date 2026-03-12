@@ -18,13 +18,17 @@ Upgrade Path:
 - Phase 3: Firecracker - When multi-tenant or >1000 exec/day
 """
 
+import logging
 import os
+import shutil
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from squadx_client.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityLevel(str, Enum):
@@ -38,6 +42,43 @@ class SecurityLevel(str, Enum):
 
     # Maximum security - all restrictions enabled
     MAXIMUM = "maximum"
+
+
+class SandboxRuntime(str, Enum):
+    """Container runtime for sandbox execution.
+
+    - DOCKER: Standard Docker runtime (runc) - Phase 1
+    - GVISOR: gVisor (runsc) kernel-level isolation - Phase 2
+    - FIRECRACKER: Firecracker microVM isolation - Phase 3
+    """
+
+    DOCKER = "docker"
+    GVISOR = "gvisor"
+    FIRECRACKER = "firecracker"
+
+
+def get_runtime_config(runtime: SandboxRuntime) -> dict[str, Any]:
+    """Get container configuration overrides for the specified runtime.
+
+    Args:
+        runtime: The sandbox runtime to configure for.
+
+    Returns:
+        Dictionary of kwargs to merge into docker.containers.run() call.
+    """
+    if runtime == SandboxRuntime.GVISOR:
+        logger.info("Configuring gVisor (runsc) runtime")
+        return {
+            "runtime": "runsc",
+        }
+    elif runtime == SandboxRuntime.FIRECRACKER:
+        logger.info("Configuring Firecracker (firecracker-containerd) runtime")
+        return {
+            "runtime": "firecracker",
+        }
+    else:
+        # Standard Docker (runc) - no extra config needed
+        return {}
 
 
 @dataclass
@@ -366,3 +407,60 @@ def get_hardened_config(
             setattr(config, key, value)
 
     return config
+
+
+def detect_available_runtimes() -> list[SandboxRuntime]:
+    """Detect which sandbox runtimes are available on this system.
+
+    Checks for the presence of runtime binaries:
+    - Docker (runc): always available if Docker is running
+    - gVisor: checks for 'runsc' binary in PATH
+    - Firecracker: checks for 'firecracker-containerd' binary in PATH
+
+    Returns:
+        List of available SandboxRuntime values.
+    """
+    available = [SandboxRuntime.DOCKER]
+
+    if shutil.which("runsc"):
+        available.append(SandboxRuntime.GVISOR)
+        logger.debug("gVisor (runsc) runtime detected")
+
+    if shutil.which("firecracker-containerd"):
+        available.append(SandboxRuntime.FIRECRACKER)
+        logger.debug("Firecracker runtime detected")
+
+    return available
+
+
+def resolve_runtime() -> SandboxRuntime:
+    """Resolve which sandbox runtime to use based on settings.
+
+    Reads the configured runtime from settings and validates
+    that it is available on the system. Falls back to DOCKER
+    if the requested runtime is not available.
+
+    Returns:
+        The SandboxRuntime to use.
+    """
+    configured = settings.sandbox_runtime.lower()
+
+    try:
+        requested = SandboxRuntime(configured)
+    except ValueError:
+        logger.warning(
+            f"Unknown sandbox runtime '{configured}', falling back to docker"
+        )
+        return SandboxRuntime.DOCKER
+
+    available = detect_available_runtimes()
+
+    if requested in available:
+        logger.info(f"Using sandbox runtime: {requested.value}")
+        return requested
+
+    logger.warning(
+        f"Requested runtime '{requested.value}' is not available, "
+        f"falling back to docker. Available: {[r.value for r in available]}"
+    )
+    return SandboxRuntime.DOCKER

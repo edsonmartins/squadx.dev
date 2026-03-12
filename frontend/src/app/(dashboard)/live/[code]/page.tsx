@@ -12,6 +12,8 @@ import {
   MessageSquare,
   Send,
   PenTool,
+  Phone,
+  PhoneOff,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -27,10 +29,13 @@ import {
 import { StreamViewer } from "@/components/live/stream-viewer";
 import { AnnotationOverlay } from "@/components/live/annotation-overlay";
 import { AnnotationToolbar } from "@/components/live/annotation-toolbar";
+import { VoiceControls } from "@/components/live/voice-controls";
+import { VideoGrid } from "@/components/live/video-grid";
 import { signaling, LiveSession, LiveParticipant, ChatMessage } from "@/lib/supabase";
 import { liveViewApi } from "@/lib/api";
 import { useRealtimeChat } from "@/hooks/use-realtime-chat";
 import { useAnnotations } from "@/hooks/use-annotations";
+import { useVoiceVideo } from "@/hooks/use-voice-video";
 import { ConnectionState } from "@/hooks/use-webrtc";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -48,6 +53,8 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
     useState<ConnectionState>("disconnected");
   const [newMessage, setNewMessage] = useState("");
   const [annotationsEnabled, setAnnotationsEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [videoGridCollapsed, setVideoGridCollapsed] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch session from backend API (try Spring Boot first, then Supabase)
@@ -103,6 +110,51 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
     userId: user?.id?.toString() || "anonymous",
     userName: user?.full_name || user?.email || "Anonymous",
   });
+
+  // Voice/Video calls
+  const voiceVideo = useVoiceVideo({
+    sessionCode: code,
+    userId: user?.id?.toString() || "anonymous",
+    userName: user?.full_name || user?.email || "Anonymous",
+    enabled: voiceEnabled,
+  });
+
+  // Push-to-talk keyboard shortcut (Space key)
+  useEffect(() => {
+    if (!voiceEnabled || !voiceVideo.isPushToTalk) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger on Space, and not when typing in an input
+      if (
+        e.code === "Space" &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(
+          (e.target as HTMLElement)?.tagName
+        )
+      ) {
+        e.preventDefault();
+        voiceVideo.startPushToTalk();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (
+        e.code === "Space" &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(
+          (e.target as HTMLElement)?.tagName
+        )
+      ) {
+        e.preventDefault();
+        voiceVideo.stopPushToTalk();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [voiceEnabled, voiceVideo]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -210,6 +262,25 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
             {annotationsEnabled ? "Drawing" : "Annotate"}
           </Button>
 
+          {/* Voice/Video Toggle */}
+          <Button
+            variant={voiceEnabled ? "destructive" : "outline"}
+            size="sm"
+            onClick={() => setVoiceEnabled((prev) => !prev)}
+          >
+            {voiceEnabled ? (
+              <>
+                <PhoneOff className="h-4 w-4 mr-2" />
+                Leave Call
+              </>
+            ) : (
+              <>
+                <Phone className="h-4 w-4 mr-2" />
+                Join Call
+              </>
+            )}
+          </Button>
+
           {/* Status Badge */}
           <Badge
             variant={session.status === "ACTIVE" ? "destructive" : "secondary"}
@@ -227,31 +298,68 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Video Area */}
-        <div className="flex-1 p-4">
-          <div className="relative w-full h-full min-h-[400px]">
-            <StreamViewer
-              sessionId={sessionId}
-              className="w-full h-full"
-              onConnectionChange={setConnectionState}
-            />
-            <AnnotationOverlay
-              annotations={annotations}
-              activeTool={activeTool}
-              onAnnotationStart={startAnnotation}
-              onAnnotationUpdate={updateAnnotation}
-              onAnnotationEnd={endAnnotation}
-              isEnabled={annotationsEnabled}
-            />
-            {annotationsEnabled && (
-              <AnnotationToolbar
-                activeTool={activeTool}
-                activeColor={activeColor}
-                onToolChange={setActiveTool}
-                onColorChange={setActiveColor}
-                onClear={clearAnnotations}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 p-4">
+            <div className="relative w-full h-full min-h-[400px]">
+              <StreamViewer
+                sessionId={sessionId}
+                className="w-full h-full"
+                onConnectionChange={setConnectionState}
               />
-            )}
+              <AnnotationOverlay
+                annotations={annotations}
+                activeTool={activeTool}
+                onAnnotationStart={startAnnotation}
+                onAnnotationUpdate={updateAnnotation}
+                onAnnotationEnd={endAnnotation}
+                isEnabled={annotationsEnabled}
+              />
+              {annotationsEnabled && (
+                <AnnotationToolbar
+                  activeTool={activeTool}
+                  activeColor={activeColor}
+                  onToolChange={setActiveTool}
+                  onColorChange={setActiveColor}
+                  onClear={clearAnnotations}
+                />
+              )}
+            </div>
           </div>
+
+          {/* Video Grid (collapsible, below stream viewer) */}
+          {voiceEnabled && (
+            <VideoGrid
+              localStream={voiceVideo.localStream}
+              remoteStreams={voiceVideo.remoteStreams}
+              participants={voiceVideo.participants}
+              isAudioEnabled={voiceVideo.isAudioEnabled}
+              isVideoEnabled={voiceVideo.isVideoEnabled}
+              userName={user?.full_name || user?.email || "Anonymous"}
+              collapsed={videoGridCollapsed}
+              onToggleCollapse={() => setVideoGridCollapsed((prev) => !prev)}
+            />
+          )}
+
+          {/* Bottom bar with voice controls */}
+          {voiceEnabled && (
+            <div className="flex items-center justify-center border-t px-4 py-2 bg-muted/30">
+              <VoiceControls
+                isAudioEnabled={voiceVideo.isAudioEnabled}
+                isVideoEnabled={voiceVideo.isVideoEnabled}
+                toggleAudio={voiceVideo.toggleAudio}
+                toggleVideo={voiceVideo.toggleVideo}
+                isPushToTalk={voiceVideo.isPushToTalk}
+                setPushToTalk={voiceVideo.setPushToTalk}
+                audioLevel={voiceVideo.audioLevel}
+                participants={voiceVideo.participants}
+                availableDevices={voiceVideo.availableDevices}
+                selectedAudioDevice={voiceVideo.selectedAudioDevice}
+                selectedVideoDevice={voiceVideo.selectedVideoDevice}
+                onSelectAudioDevice={voiceVideo.setSelectedAudioDevice}
+                onSelectVideoDevice={voiceVideo.setSelectedVideoDevice}
+              />
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}

@@ -6,6 +6,7 @@ from typing import Optional, Callable, Any
 from dataclasses import dataclass
 from enum import Enum
 
+from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
 from .manager import DockerManager, ContainerConfig, docker_manager
 
 logger = logging.getLogger(__name__)
@@ -43,12 +44,19 @@ class AgentSandbox:
         workspace_path: str,
         manager: Optional[DockerManager] = None,
         enable_live_streaming: bool = True,
+        runtime: Optional[SandboxRuntime] = None,
     ):
         self.task_id = task_id
         self.agent_type = agent_type
         self.workspace_path = workspace_path
         self.manager = manager or docker_manager
         self.enable_live_streaming = enable_live_streaming
+
+        # Resolve sandbox runtime (auto-detect if not specified)
+        self.runtime = runtime or resolve_runtime()
+        logger.info(
+            f"Sandbox for task {task_id} using runtime: {self.runtime.value}"
+        )
 
         self.container_id: Optional[str] = None
         self.status = SandboxStatus.CREATED
@@ -97,6 +105,13 @@ class AgentSandbox:
                     self._set_status(SandboxStatus.ERROR)
                     return False
 
+            # Get runtime-specific configuration overrides
+            runtime_kwargs = get_runtime_config(self.runtime)
+            logger.info(
+                f"Starting sandbox for task {self.task_id} with "
+                f"runtime={self.runtime.value}"
+            )
+
             # Create container config
             config = ContainerConfig(
                 image=image,
@@ -110,6 +125,7 @@ class AgentSandbox:
                         "mode": "rw",
                     }
                 },
+                **runtime_kwargs,
             )
 
             # Create and start container

@@ -47,6 +47,12 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "sso_provider")
+    private String ssoProvider;
+
+    @Column(name = "sso_subject_id")
+    private String ssoSubjectId;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<OrganizationMember> organizationMemberships = new HashSet<>();

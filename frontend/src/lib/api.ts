@@ -714,3 +714,125 @@ export const recordingsApi = {
   listBySession: (sessionId: number) =>
     api.get<RecordingResponse[]>(`/api/v1/recordings/session/${sessionId}`),
 };
+
+// Brand (White-Label) Types
+export interface BrandConfigResponse {
+  id: number;
+  organization_id: number;
+  app_name?: string;
+  logo_url?: string;
+  favicon_url?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  custom_domain?: string;
+  custom_css?: string;
+  footer_text?: string;
+  support_email?: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface BrandConfigRequest {
+  app_name?: string;
+  logo_url?: string;
+  favicon_url?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  custom_domain?: string;
+  custom_css?: string;
+  footer_text?: string;
+  support_email?: string;
+  enabled?: boolean;
+}
+
+// Branding API
+export const brandApi = {
+  get: (orgId: number) =>
+    api.get<BrandConfigResponse>(`/api/v1/branding/${orgId}`),
+  upsert: (orgId: number, data: BrandConfigRequest) =>
+    api.put<BrandConfigResponse>(`/api/v1/branding/${orgId}`, data),
+  delete: (orgId: number) =>
+    api.delete(`/api/v1/branding/${orgId}`),
+  getByDomain: (domain: string) =>
+    api.get<BrandConfigResponse>(`/api/v1/branding/domain/${domain}`),
+};
+
+// Region Types
+export interface RegionInfo {
+  name: string;
+  display_name: string;
+  status: string;
+  latency_ms?: number;
+}
+
+// Regions API
+export const regionsApi = {
+  list: () => api.get<RegionInfo[]>("/api/v1/regions"),
+  current: () => api.get<RegionInfo>("/api/v1/regions/current"),
+};
+
+// Highlight Types
+export type HighlightType =
+  | "BUG_FOUND"
+  | "FEATURE_COMPLETED"
+  | "TEST_PASSED"
+  | "TEST_FAILED"
+  | "ERROR_DETECTED"
+  | "COMMIT_MADE"
+  | "DEPLOY"
+  | "CUSTOM";
+
+export interface HighlightResponse {
+  id: number;
+  recording_id: number;
+  highlight_type: HighlightType;
+  timestamp_seconds: number;
+  title: string;
+  description?: string;
+  confidence: number;
+  metadata?: string;
+  created_at: string;
+}
+
+export interface GenerateHighlightsRequest {
+  recording_id: number;
+  execution_logs?: string[];
+}
+
+// Highlights API
+export const highlightsApi = {
+  generate: (data: GenerateHighlightsRequest) =>
+    api.post<HighlightResponse[]>("/api/v1/highlights/generate", data),
+  getByRecording: (recordingId: number) =>
+    api.get<HighlightResponse[]>(`/api/v1/highlights/recording/${recordingId}`),
+  getSummary: (recordingId: number) =>
+    api.get<{ summary: string }>(`/api/v1/highlights/recording/${recordingId}/summary`),
+};
+
+// Calendar Sync Types
+export interface CalendarSyncStatus {
+  connected: boolean;
+  configured: boolean;
+  enabled?: boolean;
+  provider?: string;
+  calendar_id?: string;
+}
+
+// Calendar Sync API
+export const calendarSyncApi = {
+  getAuthUrl: (organizationId: number) =>
+    api.get<{ url: string }>(`/api/v1/calendar-sync/auth-url?organizationId=${organizationId}`),
+  handleCallback: (code: string, state: string) =>
+    api.get<{ integration_id: number; provider: string; enabled: boolean }>(
+      `/api/v1/calendar-sync/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
+    ),
+  sync: () =>
+    api.post<string>("/api/v1/calendar-sync/sync"),
+  disconnect: (organizationId: number) =>
+    api.delete(`/api/v1/calendar-sync/disconnect?organizationId=${organizationId}`),
+  getStatus: (organizationId: number) =>
+    api.get<CalendarSyncStatus>(`/api/v1/calendar-sync/status?organizationId=${organizationId}`),
+};

@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
 
+    # Sandbox Runtime Configuration
+    # Which container runtime to use: docker, gvisor, firecracker
+    sandbox_runtime: str = Field(default="docker", alias="SQUADX_SANDBOX_RUNTIME")
+    # Auto-upgrade to stronger runtime when execution thresholds are met
+    auto_upgrade_runtime: bool = Field(default=True, alias="SQUADX_AUTO_UPGRADE_RUNTIME")
+    # Daily execution threshold to auto-upgrade to gVisor (runsc)
+    gvisor_threshold: int = Field(default=100, alias="SQUADX_GVISOR_THRESHOLD")
+    # Daily execution threshold to auto-upgrade to Firecracker
+    firecracker_threshold: int = Field(default=1000, alias="SQUADX_FIRECRACKER_THRESHOLD")
+
     # Supabase Configuration (Live Streaming)
     supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
     supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")

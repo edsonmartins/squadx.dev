@@ -1,6 +1,7 @@
 package dev.squadx.config;
 
 import dev.squadx.security.JwtAuthenticationFilter;
+import dev.squadx.service.CustomOidcUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.util.Arrays;
@@ -33,6 +35,8 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
+    private final CustomOidcUserService customOidcUserService;
+    private final AuthenticationSuccessHandler oauth2SuccessHandler;
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
@@ -59,11 +63,21 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // OAuth2 login endpoints are public
+                .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
                 // All other requests (including /ws/**) require authentication
                 .anyRequest().authenticated()
             )
+            // OAuth2/OIDC login (SSO) - session-based for the OAuth2 flow redirect,
+            // but the success handler issues a JWT and redirects to the SPA
+            .oauth2Login(oauth2 -> oauth2
+                .userInfoEndpoint(userInfo -> userInfo
+                    .oidcUserService(customOidcUserService)
+                )
+                .successHandler(oauth2SuccessHandler)
+            )
             .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

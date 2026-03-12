@@ -113,6 +113,28 @@ ingress:
     frontend: squadx.dev
     backend: api.squadx.dev
 
+# -- Multi-Region Configuration
+region:
+  # Current region name for this deployment
+  name: us-east-1
+  # Display name for the region
+  displayName: "US East (N. Virginia)"
+  # Routing strategy: nearest, round-robin, failover
+  routingStrategy: nearest
+  # All available regions (comma-separated, injected into backend)
+  available: "us-east-1,eu-west-1,ap-southeast-1"
+
+# -- Node selector for region-based pod placement
+nodeSelector: {}
+  # topology.kubernetes.io/region: us-east-1
+
+# -- Topology spread constraints for multi-region scheduling
+topologySpreadConstraints:
+  enabled: false
+  maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: DoNotSchedule
+
 # -- Application config (non-secret)
 config:
   SPRING_PROFILES_ACTIVE: "prod"
@@ -124,6 +146,9 @@ config:
   RESEND_FROM_EMAIL: "noreply@squadx.dev"
   AWS_S3_BUCKET: "squadx-recordings"
   AWS_REGION: "us-east-1"
+  SQUADX_REGION: "us-east-1"
+  SQUADX_REGIONS: "us-east-1,eu-west-1,ap-southeast-1"
+  SQUADX_ROUTING_STRATEGY: "nearest"
   NEXT_PUBLIC_API_URL: "https://api.squadx.dev"
   NEXT_PUBLIC_WS_URL: "wss://api.squadx.dev/ws"
 

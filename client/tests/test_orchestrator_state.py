@@ -225,3 +225,40 @@ class TestOrchestratorState:
     def test_live_session_codes_default_empty(self):
         state = OrchestratorState(task_id=1, task={})
         assert state.live_session_codes == []
+
+    def test_git_fields_default_none(self):
+        state = OrchestratorState(task_id=1, task={})
+        assert state.git_branch is None
+        assert state.git_commit is None
+
+    def test_plan_assignment(self):
+        state = OrchestratorState(task_id=1, task={"title": "Test"})
+        subtask = SubTask(id="s1", title="T", description="D", agent_type="backend")
+        plan = TaskPlan(
+            analysis="A", approach="B",
+            subtasks=[subtask],
+            execution_order=["s1"],
+        )
+        state.plan = plan
+        assert state.plan is not None
+        assert len(state.plan.subtasks) == 1
+
+
+class TestAgentMetrics:
+    def test_defaults(self):
+        am = AgentMetrics(
+            agent_type="backend", subtask_id="s1", subtask_title="Task"
+        )
+        assert am.input_tokens == 0
+        assert am.output_tokens == 0
+        assert am.cost == 0.0
+        assert am.success is True
+        assert am.error is None
+
+    def test_failed_metrics(self):
+        am = AgentMetrics(
+            agent_type="qa", subtask_id="s1", subtask_title="Test",
+            success=False, error="Timeout",
+        )
+        assert am.success is False
+        assert am.error == "Timeout"

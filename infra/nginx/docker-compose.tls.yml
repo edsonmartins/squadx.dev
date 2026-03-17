@@ -1,0 +1,71 @@
+# =============================================================================
+# Docker Compose overlay — TLS-enabled Nginx reverse proxy for SquadX.dev
+# Usage:
+#   docker compose -f docker-compose.yml -f infra/nginx/docker-compose.tls.yml up -d
+#
+# Prerequisites:
+#   - Place SSL certificates in ./certs/cert.pem and ./certs/key.pem
+#   - For local dev, generate self-signed certs (see infra/nginx/README.md)
+#   - For production, use Let's Encrypt / cert-manager
+# =============================================================================
+
+services:
+  nginx:
+    build:
+      context: ./infra/nginx
+      dockerfile: Dockerfile
+    container_name: squadx-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # SSL certificates (read-only)
+      - ./certs:/etc/nginx/ssl:ro
+      # ACME challenge directory for Let's Encrypt renewal
+      - certbot-webroot:/var/www/certbot:ro
+      # Log persistence
+      - nginx-logs:/var/log/nginx
+    networks:
+      - squadx-network
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "-q", "https://localhost/api/v1/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+
+  # Override backend and frontend to join the shared network
+  backend:
+    networks:
+      - squadx-network
+
+  frontend:
+    networks:
+      - squadx-network
+
+  postgres:
+    networks:
+      - squadx-network
+
+  redis:
+    networks:
+      - squadx-network
+
+networks:
+  squadx-network:
+    driver: bridge
+
+volumes:
+  certbot-webroot:
+    driver: local
+  nginx-logs:
+    driver: local

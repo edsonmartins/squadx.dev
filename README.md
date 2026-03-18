@@ -6,255 +6,147 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Java](https://img.shields.io/badge/java-21+-orange.svg)](https://openjdk.org)
 [![Next.js](https://img.shields.io/badge/next.js-16+-black.svg)](https://nextjs.org)
+[![Tests](https://img.shields.io/badge/tests-591%2B-brightgreen.svg)]()
 
 ---
 
-## 🎯 O Problema
+## O Problema
 
 Empresas de software enfrentam desafios crescentes:
 
 - **Escassez de talentos**: Dificuldade em contratar e reter desenvolvedores qualificados
 - **Custos elevados**: Equipes de desenvolvimento representam o maior custo operacional
-- **Velocidade de entrega**: Pressão constante para entregar mais rápido
-- **Qualidade inconsistente**: Variação na qualidade do código entre desenvolvedores
+- **Velocidade de entrega**: Pressao constante para entregar mais rapido
+- **Qualidade inconsistente**: Variacao na qualidade do codigo entre desenvolvedores
 - **Escalabilidade limitada**: Impossibilidade de escalar a equipe rapidamente para picos de demanda
 
-## 💡 A Solução
+## A Solucao
 
-**SquadX.dev** é uma plataforma SaaS B2B que permite às empresas "contratar" squads virtuais de agentes AI especializados para desenvolvimento de software.
-
-### Como Funciona
+**SquadX.dev** e uma plataforma SaaS B2B que permite as empresas "contratar" squads virtuais de agentes AI especializados para desenvolvimento de software.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    DASHBOARD WEB                             │
-│  • Crie projetos e defina tasks no Kanban                   │
-│  • Acompanhe o progresso em tempo real                      │
-│  • Visualize custos e métricas de produtividade             │
-│  • Assista agentes trabalhando via Live View                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    SQUADX BACKEND                            │
-│  • Gerencia projetos, tasks e squads                        │
-│  • Orquestra comunicação em tempo real                      │
-│  • Controle de acesso e billing                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              SQUADX CLIENT (Ambiente Local)                  │
-│  • Executa na infraestrutura do cliente                     │
-│  • Código permanece 100% local (compliance)                 │
-│  • Agentes AI trabalham em containers isolados              │
-│  • Streaming de tela via VNC → WebRTC                       │
-└─────────────────────────────────────────────────────────────┘
+                         DASHBOARD WEB (Next.js 16)
+       Kanban | Live View | Analytics | Voice/Video | Calendar
+                              |
+                              v
+                     SQUADX BACKEND (Spring Boot 3.4)
+         REST API | WebSocket | SSO/OIDC | RBAC | Billing
+                              |
+                              v
+                SQUADX CLIENT (Python - Ambiente Local)
+      LangGraph Orchestration | Docker Sandbox | WebRTC Bridge
+                              |
+                              v
+                    CONTAINERS DOCKER HARDENED
+        Seccomp | Read-only FS | gVisor/Firecracker | Network Policy
 ```
 
-### Agentes Especializados
+---
 
-O SquadX disponibiliza 6 tipos de agentes AI, cada um especializado em uma área:
+## Agentes Especializados
 
-| Agente | Especialização | Modelo |
+O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
+
+| Agente | Especializacao | Modelo |
 |--------|---------------|--------|
-| 🧠 **Coordinator** | Análise de requisitos, planejamento, code review | Claude Sonnet |
-| 🎨 **Frontend** | React, Next.js, Vue, CSS, TypeScript | GPT-4o |
-| ⚙️ **Backend** | Python, Java, Node.js, APIs, Databases | Claude Sonnet |
-| 🔧 **DevOps** | Docker, Kubernetes, CI/CD, Infrastructure | GPT-4o |
-| 🧪 **QA** | Testes unitários, integração, E2E, qualidade | GPT-4o Mini |
-| 🔀 **Fullstack** | Tarefas gerais que envolvem múltiplas áreas | GPT-4o |
+| **Coordinator** | Analise de requisitos, planejamento, decomposicao de tasks | Claude Sonnet |
+| **Frontend** | React, Next.js, Vue, CSS, TypeScript, a11y | GPT-4o |
+| **Backend** | Python, Java, Node.js, APIs, Databases | Claude Sonnet |
+| **DevOps** | Docker, Kubernetes, CI/CD, Infrastructure as Code | GPT-4o |
+| **QA** | Testes unitarios, integracao, E2E (Playwright, Cypress) | GPT-4o Mini |
+| **Database** | PostgreSQL, schema design, migrations, query optimization | Claude Sonnet |
+| **Fullstack** | Tarefas cross-cutting que envolvem multiplas areas | GPT-4o |
 
 ---
 
-## ✨ Diferenciais Competitivos
+## Stack Tecnologico
 
-### 1. Multi-Agent Coordination
-Diferente de ferramentas que usam um único agente, o SquadX orquestra múltiplos agentes especializados trabalhando em paralelo, similar a uma equipe real de desenvolvimento.
-
-### 2. Código 100% Local
-O código da sua empresa nunca sai da sua infraestrutura. O SquadX Client executa localmente, garantindo compliance com **LGPD**, **GDPR** e **HIPAA**.
-
-### 3. Transparência Total (Live View)
-Acompanhe em tempo real o que cada agente está fazendo através do **Live View** - streaming WebRTC das telas dos agentes com chat integrado.
-
-### 4. Enterprise-Ready
-- Controle de acesso granular (RBAC)
-- Audit logs completos
-- Integração com SSO corporativo
-- SLA garantido
-
-### 5. Modelo de Custo Previsível
-Pague apenas pelo que usar, com visibilidade completa dos custos por projeto, task e agente.
+| Camada | Tecnologia |
+|--------|-----------|
+| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (14 migrations) |
+| **Frontend** | Next.js 16, React 19, TypeScript 5.7, Tailwind CSS, Zustand, TanStack Query |
+| **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
+| **Mobile** | Expo 52, React Native, expo-router 4 |
+| **Desktop** | Tauri v2, Rust, WebView |
+| **Streaming** | VNC (RFB), WebRTC mesh, Supabase Realtime signaling |
+| **Infra** | Docker, Kubernetes, Helm, nginx TLS 1.3, GitHub Actions CI/CD |
+| **Observability** | Prometheus, Grafana, Loki, Tempo, AlertManager, OpenTelemetry |
 
 ---
 
-## 📺 Live View - Streaming de Agentes
+## Features
 
-O SquadX Live permite assistir seus agentes AI trabalhando em tempo real através de streaming WebRTC de baixa latência.
+### Core Platform
+- **Kanban Board** com drag-and-drop para gestao de tasks
+- **7 agentes AI especializados** com agentic loop e 9 ferramentas (bash, file I/O, git, Python, dependencies)
+- **LangGraph orchestration** com state machine (analyze -> plan -> execute -> review)
+- **WebSocket real-time** via STOMP/SockJS para updates de progresso
+- **Audit logging** completo com AOP aspect
 
-### Arquitetura do Live Streaming
+### Live View
+- **WebRTC P2P streaming** das telas dos agentes (< 500ms latencia)
+- **Voice/Video** mesh com push-to-talk via Supabase Realtime signaling
+- **Annotation tools** (drawing, pointing, text) sobre o stream
+- **Chat em tempo real** integrado
+- **Controle remoto** (keyboard/mouse forwarding)
+- **Join Code** de 8 caracteres para compartilhar sessoes
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Docker Container                           │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐  │
-│  │    Xvfb     │───▶│   x11vnc    │───▶│   VNC Client    │  │
-│  │   :99       │    │   :5900     │    │   (RFB Proto)   │  │
-│  └─────────────┘    └─────────────┘    └────────┬────────┘  │
-└────────────────────────────────────────────────│────────────┘
-                                                 │
-                                                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Python Client                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              WebRTC Bridge (aiortc)                  │    │
-│  │   • Converte frames VNC para MediaStreamTrack       │    │
-│  │   • Gerencia peer connections                       │    │
-│  │   • Signaling via Supabase Realtime                 │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                                 │
-                                 ▼ WebRTC (P2P/SFU)
-┌─────────────────────────────────────────────────────────────┐
-│                   Browser Viewer                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              StreamViewer Component                  │    │
-│  │   • Video player com controles                      │    │
-│  │   • Stats (bitrate, fps, resolução)                 │    │
-│  │   • Chat e lista de participantes                   │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
+### Seguranca & Sandbox
+- **Docker hardened**: `CAP_DROP=ALL`, read-only FS, `no-new-privileges`, seccomp (336 syscalls)
+- **3 security levels**: Development, Standard, Maximum
+- **Network Policy**: Egress filtering com domain allowlist (none, package-managers, full)
+- **Lifecycle manager**: TTL-based expiration, state machine, renewal
+- **File I/O robusto**: Tar-based binary-safe via Docker `put_archive`/`get_archive`
+- **Metricas internas**: CPU, memory, network, PIDs, block I/O em real-time
+- **Runtime upgrades**: Docker (runc) -> gVisor (runsc) -> Firecracker (microVM)
+- **Seccomp profile** customizado para agentes de desenvolvimento
 
-### Features do Live View
+### Enterprise
+- **SSO/OIDC**: Google, Microsoft, Okta com JIT user provisioning
+- **Advanced RBAC**: Custom roles com permission matrix (resource + action)
+- **Google Calendar sync**: OAuth2 bidirecional, meeting auto-creation
+- **AI Highlights**: Analise de logs com 8 tipos de highlight + summary
+- **White-label**: Brand configs por organizacao (cores, logo, dominio custom)
+- **Multi-region**: Region config com Helm nodeSelector/topologySpread
+- **Billing**: Stripe integration com checkout, webhooks, subscription management
+- **Email**: Notificacoes transacionais via Resend
+- **Rate limiting**: Redis-based com sliding window
 
-- **WebRTC P2P**: Streaming direto para até 25 viewers
-- **Baixa Latência**: < 500ms end-to-end
-- **TURN Server**: Suporte a NAT traversal em produção (Cloudflare TURN ou custom)
-- **Auto-Reconnect**: Reconexão automática com backoff exponencial
-- **Chat em Tempo Real**: Comunicação via Supabase Realtime
-- **Controle Remoto**: Keyboard/mouse do viewer para o container
-- **Controles**: Fullscreen, mute, estatísticas de conexão
-- **Join Code**: Compartilhe sessões com código de 8 caracteres
+### Infrastructure
+- **TLS 1.3**: nginx reverse proxy com HSTS, OCSP, HTTP/2, modern ciphers
+- **Kubernetes**: Manifests + Helm chart com ingress, cert-manager, autoscaling
+- **CI/CD**: GitHub Actions (lint, test, build, push to GHCR, deploy)
+- **Monitoring**: Prometheus + Grafana dashboards + Loki logs + Tempo traces
+- **Alerting**: AlertManager com rules para CPU, memory, error rate
+- **PWA**: Service worker, manifest com 9 tamanhos de icone, apple-touch-icon
 
----
-
-## 🏗️ Casos de Uso
-
-### Para Startups
-- Acelere o desenvolvimento do MVP com uma equipe AI disponível 24/7
-- Reduza o tempo de contratação e onboarding
-
-### Para Scale-ups
-- Escale a capacidade de desenvolvimento sem aumentar headcount
-- Mantenha velocidade de entrega durante picos de demanda
-
-### Para Enterprises
-- Automatize tarefas repetitivas de desenvolvimento
-- Padronize qualidade de código em toda a organização
-- Reduza custos operacionais de TI
+### Multi-Platform
+- **Web**: Next.js 16 PWA com offline support
+- **Mobile**: Expo/React Native com dashboard, tasks, live view, settings
+- **Desktop**: Tauri v2 wrapping o frontend em WebView nativo
 
 ---
 
-## 📦 Componentes
+## Quick Start
 
-### Backend (`/backend`)
-API REST e WebSocket construída com **Spring Boot 3.4** e **Java 21**.
-
-- Gerenciamento de projetos, tasks e squads
-- Autenticação JWT
-- WebSocket (STOMP/SockJS) para comunicação real-time
-- PostgreSQL para persistência
-- API de Live Sessions (local + Supabase)
-- **Supabase Integration**: Sincronização com sessions criadas pelo Python Client
-
-### Frontend (`/frontend`)
-Dashboard web construído com **Next.js 16** e **React 19**.
-
-- Kanban board para gestão de tasks
-- Visualização em tempo real do progresso
-- **Live View** com player WebRTC
-- Analytics de custos e produtividade
-- Interface responsiva com Tailwind CSS
-
-### Client (`/client`)
-Daemon Python que executa no ambiente do cliente.
-
-- Orquestração de agentes com **LangGraph**
-- Suporte multi-provider (OpenAI, Anthropic, Gemini) via **LiteLLM**
-- Execução segura em containers Docker hardened
-- **VNC→WebRTC Bridge** para Live Streaming
-- Comunicação STOMP/SockJS com o backend
-
-### Agent Image (`/client/docker`)
-Imagem Docker otimizada para execução de agentes.
-
-- Ubuntu 22.04 base com Python 3.12, Node.js 20, Java 21
-- Xvfb + x11vnc para interface gráfica virtual
-- Ferramentas de desenvolvimento (git, vim, build tools)
-- Browser headless (Chromium)
-- Profiles Seccomp para segurança
-
----
-
-## 🔒 Segurança
-
-A segurança é prioridade máxima no SquadX. O Client executa agentes em containers Docker com múltiplas camadas de proteção:
-
-```bash
-# Exemplo de container hardened
-docker run \
-  --rm --read-only \
-  --cap-drop=ALL \
-  --security-opt no-new-privileges:true \
-  --security-opt seccomp=/path/to/seccomp.json \
-  --user 1000:1000 \
-  --memory=2g --cpus=2.0 --pids-limit=256 \
-  --network=none \
-  --tmpfs /tmp:size=100M,noexec,nosuid \
-  -v /workspace:/workspace:rw \
-  squadx/agent:latest
-```
-
-### Camadas de Segurança
-
-| Camada | Proteção |
-|--------|----------|
-| **Capabilities** | `CAP_DROP=ALL` - Remove todas as capabilities Linux |
-| **Filesystem** | Read-only root, tmpfs com noexec |
-| **Privileges** | `no-new-privileges` - Bloqueia escalação |
-| **Syscalls** | Seccomp profile restritivo |
-| **Network** | Isolamento total (`--network=none`) |
-| **Resources** | Limites de memória, CPU e processos |
-
-### Roadmap de Segurança
-
-- **Fase 1 (Atual)**: Docker Hardened ✅
-- **Fase 2**: gVisor (runsc) para isolamento de kernel
-- **Fase 3**: Firecracker para micro-VMs
-
----
-
-## 🚀 Quick Start
-
-### Pré-requisitos
+### Pre-requisitos
 
 - Docker e Docker Compose
-- Java 21+
+- Java 21+ (com Maven)
 - Node.js 20+ (com pnpm)
 - Python 3.12+
 - PostgreSQL 16+
+- Redis 7+
 
 ### Desenvolvimento Local
 
 ```bash
-# Clone o repositório
+# Clone o repositorio
 git clone https://github.com/edsonmartins/squadx.dev.git
 cd squadx.dev
 
-# Inicie os serviços com Docker Compose
-docker-compose up -d
+# Inicie os servicos com Docker Compose
+docker compose up -d postgres redis
 
 # Backend (porta 8080)
 cd backend
@@ -262,8 +154,7 @@ cd backend
 
 # Frontend (porta 3000)
 cd frontend
-pnpm install
-pnpm dev
+pnpm install && pnpm dev
 
 # Client
 cd client
@@ -275,58 +166,87 @@ squadx-client start
 
 ```bash
 cd client/docker
-docker build -f agent.Dockerfile -t squadx/agent:latest .
+
+# Headless (sem interface grafica)
+docker build -f agent.Dockerfile --target base -t squadx/agent:latest .
+
+# Com Live View (VNC + noVNC)
+docker build -f agent.Dockerfile --target live-view -t squadx/agent:live .
 ```
 
-### Configurar Supabase
-
-O Live Streaming usa Supabase para signaling WebRTC. Crie um projeto em [supabase.com](https://supabase.com) e execute a migration:
+### Docker Compose com TLS
 
 ```bash
-# Aplicar schema via SQL Editor no Supabase Dashboard
-# ou usando supabase CLI:
-cd client
-supabase db push
+# Gere certificados self-signed para dev
+mkdir -p infra/nginx/certs
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout infra/nginx/certs/key.pem \
+  -out infra/nginx/certs/cert.pem \
+  -subj "/CN=localhost"
+
+# Inicie com TLS
+docker compose -f docker-compose.yml -f infra/nginx/docker-compose.tls.yml up
 ```
 
-O arquivo de migration está em `client/supabase/migrations/001_live_sessions.sql`.
-
-### Variáveis de Ambiente
-
-Copie os arquivos de exemplo e configure:
+### Desktop App (Tauri)
 
 ```bash
-# Frontend
-cp frontend/.env.example frontend/.env.local
-
-# Client
-cp client/.env.example client/.env
+cd desktop
+pnpm install
+pnpm tauri dev    # Desenvolvimento
+pnpm tauri build  # Build para distribuicao
 ```
 
-#### Backend
+### Mobile App (Expo)
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+---
+
+## Variaveis de Ambiente
+
+### Backend
 ```bash
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/squadx
 SPRING_DATASOURCE_USERNAME=squadx
 SPRING_DATASOURCE_PASSWORD=your_password
 JWT_SECRET=your-secret-key-at-least-32-characters
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# SSO (opcional)
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID=...
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
+
+# Billing (opcional)
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Email (opcional)
+RESEND_API_KEY=re_...
+
+# Google Calendar (opcional)
+GOOGLE_CALENDAR_CLIENT_ID=...
+GOOGLE_CALENDAR_CLIENT_SECRET=...
 ```
 
-#### Frontend
+### Frontend
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
-# WebRTC TURN Server (opcional, para NAT traversal em produção)
-# Opção 1: Custom TURN
+# WebRTC TURN Server (opcional)
 NEXT_PUBLIC_TURN_URL=turn:your-turn-server.com:3478
 NEXT_PUBLIC_TURN_USERNAME=your-username
 NEXT_PUBLIC_TURN_CREDENTIAL=your-credential
-# Opção 2: Cloudflare TURN
-NEXT_PUBLIC_CLOUDFLARE_TURN_TOKEN=your-cloudflare-token
 ```
 
-#### Client
+### Client
 ```bash
 SQUADX_API_URL=http://localhost:8080
 SQUADX_API_TOKEN=your-api-token
@@ -334,214 +254,253 @@ OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_KEY=your-service-key
 
-# WebRTC TURN Server (opcional, para NAT traversal em produção)
-# Opção 1: Custom TURN
-TURN_URL=turn:your-turn-server.com:3478
-TURN_USERNAME=your-username
-TURN_CREDENTIAL=your-credential
-# Opção 2: Cloudflare TURN
-CLOUDFLARE_TURN_TOKEN=your-cloudflare-token
+# Sandbox
+SQUADX_SANDBOX_RUNTIME=docker          # docker | gvisor | firecracker
+SQUADX_NETWORK_POLICY=package-managers  # none | package-managers | full
+SQUADX_SANDBOX_TTL=3600                 # seconds
+SQUADX_AGENT_MEMORY_LIMIT=2g
+SQUADX_AGENT_CPU_LIMIT=2.0
 ```
 
 ---
 
-## 📐 Arquitetura Técnica
+## Testes
 
-### Stack Tecnológico
+O projeto possui **591+ testes** distribuidos em 80 arquivos:
 
-| Camada | Tecnologia |
+### Backend (Java - JUnit 5 + Mockito)
+```bash
+cd backend
+./mvnw test
+
+# 22 services + 20 controllers = 274 testes
+```
+
+### Frontend (TypeScript - Vitest + Testing Library)
+```bash
+cd frontend
+npx vitest run
+
+# 20 arquivos = 141 testes
+```
+
+### Client (Python - pytest)
+```bash
+cd client
+pytest tests/ -v
+
+# 22 arquivos = 176+ testes
+```
+
+| Area | Arquivos | Testes | Cobertura |
+|------|----------|--------|-----------|
+| Backend Services | 22 | ~160 | 100% dos services |
+| Backend Controllers | 20 | ~114 | 100% dos controllers |
+| Frontend | 20 | 141 | ~60% componentes |
+| Python Client | 22 | ~176 | ~60% modulos |
+| **Total** | **84** | **~591** | |
+
+---
+
+## Seguranca do Sandbox
+
+### Container Hardening (Producao)
+
+```bash
+docker run \
+  --rm --read-only \
+  --cap-drop=ALL \
+  --security-opt no-new-privileges:true \
+  --security-opt seccomp=client/docker/seccomp/agent.json \
+  --user 1000:1000 \
+  --memory=2g --cpus=2.0 --pids-limit=256 \
+  --network=none \
+  --tmpfs /tmp:size=100M,noexec,nosuid \
+  --tmpfs /run:size=10M,noexec,nosuid \
+  -v /workspace:/workspace:rw \
+  squadx/agent:latest
+```
+
+### Camadas de Seguranca
+
+| Camada | Mecanismo | Status |
+|--------|-----------|--------|
+| **Capabilities** | `CAP_DROP=ALL` | Producao |
+| **Filesystem** | Read-only root + tmpfs noexec | Producao |
+| **Privileges** | `no-new-privileges` | Producao |
+| **Syscalls** | Seccomp profile (336 syscalls permitidos) | Producao |
+| **Network** | Policy-based egress filtering | Producao |
+| **Resources** | Memory 2g, CPU 2.0, PIDs 256 | Producao |
+| **User** | Non-root (UID 1000) | Producao |
+| **Runtime** | gVisor (runsc) | Scaffold |
+| **Runtime** | Firecracker (microVM) | Scaffold |
+
+### Network Policies
+
+| Policy | Descricao |
 |--------|-----------|
-| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL, Redis, Supabase |
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS, Supabase |
-| **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
-| **Streaming** | VNC (RFB), WebRTC, Supabase Realtime |
-| **Infraestrutura** | Docker, Kubernetes (produção) |
+| `none` | Sem acesso a rede (maximo isolamento) |
+| `package-managers` | Permite PyPI, npm, Maven, GitHub |
+| `full` | Permite tudo exceto cloud metadata endpoints |
 
-### Fluxo de Execução de Task
+---
 
-```
-1. Usuário cria task no Dashboard
-                │
-                ▼
-2. Backend persiste e notifica Client via WebSocket
-                │
-                ▼
-3. Client recebe task e inicia orquestração
-                │
-                ▼
-4. Coordinator Agent analisa e cria plano de execução
-                │
-                ▼
-5. Subtasks são delegadas para agentes especializados
-                │
-                ▼
-6. Agentes executam em containers Docker isolados
-   └── Live View streaming disponível via WebRTC
-                │
-                ▼
-7. Resultados são commitados no Git local
-                │
-                ▼
-8. Client reporta conclusão para Backend
-                │
-                ▼
-9. Dashboard atualiza status em tempo real
-```
-
-### Estrutura do Monorepo
+## Estrutura do Monorepo
 
 ```
 squadx.dev/
-├── backend/                 # Spring Boot API
+├── backend/                    # Spring Boot 3.4 API
 │   ├── src/main/java/dev/squadx/
-│   │   ├── config/
-│   │   ├── controller/
-│   │   ├── dto/
-│   │   ├── model/
-│   │   ├── repository/
-│   │   ├── security/
-│   │   ├── service/
-│   │   └── websocket/
-│   └── pom.xml
-├── frontend/                # Next.js Dashboard
+│   │   ├── config/             # Security, OAuth2, Region, WebSocket
+│   │   ├── controller/         # 20 REST controllers
+│   │   ├── dto/                # Request/Response DTOs
+│   │   ├── model/              # 20+ JPA entities
+│   │   ├── repository/         # Spring Data JPA repos
+│   │   ├── security/           # JWT, PermissionChecker
+│   │   └── service/            # 22 business services
+│   └── src/main/resources/
+│       └── db/migration/       # V1-V14 Flyway migrations
+├── frontend/                   # Next.js 16 Dashboard
 │   ├── src/
-│   │   ├── app/
-│   │   │   └── (dashboard)/
-│   │   │       └── live/    # Live View pages
-│   │   ├── components/
-│   │   │   ├── kanban/
-│   │   │   ├── live/        # Stream viewer
-│   │   │   └── ui/
-│   │   ├── hooks/
-│   │   │   ├── use-webrtc.ts        # WebRTC connection management
-│   │   │   ├── use-realtime-chat.ts # Chat via Supabase Realtime
-│   │   │   └── use-remote-control.ts # Keyboard/mouse control
-│   │   ├── lib/
-│   │   │   └── supabase.ts
-│   │   └── stores/
-│   └── package.json
-├── client/                  # Python Daemon
+│   │   ├── app/(dashboard)/    # Dashboard pages
+│   │   ├── components/         # 34 React components
+│   │   ├── hooks/              # WebRTC, voice/video, chat
+│   │   ├── lib/                # API client, utils, supabase
+│   │   └── stores/             # Zustand state management
+│   └── public/
+│       ├── icons/              # PWA icons (9 tamanhos)
+│       └── manifest.json       # PWA manifest
+├── client/                     # Python Daemon
 │   ├── squadx_client/
-│   │   ├── agents/         # Agentes especializados
-│   │   ├── docker/         # Container management
-│   │   ├── live/           # Session management
-│   │   ├── orchestrator/   # LangGraph workflow
-│   │   ├── streaming/      # VNC client + WebRTC bridge
-│   │   ├── tools/          # LangChain tools
-│   │   └── websocket/      # STOMP client
-│   ├── docker/             # Dockerfiles e profiles
-│   │   ├── agent.Dockerfile
-│   │   └── seccomp/
-│   ├── supabase/           # Database migrations
-│   │   └── migrations/
-│   ├── tests/              # Test suite
-│   │   └── e2e/
-│   └── pyproject.toml
-└── docker-compose.yml
-```
-
-### API Endpoints
-
-| Endpoint | Descrição |
-|----------|-----------|
-| `POST /api/v1/auth/register` | Registro de usuário |
-| `POST /api/v1/auth/login` | Login (retorna JWT) |
-| `GET/POST /api/v1/organizations` | Gerenciamento de organizações |
-| `GET/POST /api/v1/projects` | Gerenciamento de projetos |
-| `GET/POST/PATCH /api/v1/tasks` | CRUD de tasks |
-| `GET/POST /api/v1/live-view/sessions` | Gerenciamento de live sessions |
-| `GET /api/v1/live-view/supabase/sessions/*` | Sessions do Supabase (Python Client) |
-| `WS /ws` | WebSocket para real-time |
-
----
-
-## 🧪 Testes
-
-### Client (Python)
-
-```bash
-cd client
-
-# Instalar dependências de teste
-pip install -e ".[dev]"
-
-# Executar testes unitários
-pytest tests/
-
-# Executar testes E2E (requer Docker)
-pytest tests/e2e/ -v
-
-# Cobertura de código
-pytest --cov=squadx_client tests/
-```
-
-### Frontend
-
-```bash
-cd frontend
-
-# Type checking
-pnpm type-check
-
-# Linting
-pnpm lint
-
-# Formatação
-pnpm format
-```
-
-### Backend
-
-```bash
-cd backend
-
-# Executar testes
-./mvnw test
-
-# Build
-./mvnw clean package -DskipTests
+│   │   ├── agents/             # 7 agentes especializados + tools
+│   │   ├── docker/             # Sandbox, hardening, lifecycle,
+│   │   │                       #   file_ops, metrics, network_policy
+│   │   ├── live/               # Session management
+│   │   ├── orchestrator/       # LangGraph state machine
+│   │   ├── streaming/          # VNC + WebRTC bridge
+│   │   └── websocket/          # STOMP client
+│   ├── docker/
+│   │   ├── agent.Dockerfile    # Multi-stage (base + live-view)
+│   │   └── seccomp/agent.json  # Seccomp profile
+│   └── tests/                  # 22 test files
+├── mobile/                     # Expo/React Native
+│   ├── app/                    # expo-router screens
+│   └── lib/                    # API client, auth
+├── desktop/                    # Tauri v2
+│   ├── src-tauri/              # Rust backend + config
+│   └── package.json
+├── infra/
+│   ├── helm/squadx/            # Helm chart + templates
+│   ├── k8s/                    # Kubernetes manifests
+│   ├── nginx/                  # TLS 1.3 reverse proxy
+│   └── monitoring/             # Prometheus, Grafana, Loki, Tempo
+├── documentos/                 # 18 docs (architecture, roadmap, etc.)
+└── docker-compose.yml          # Local dev + monitoring profile
 ```
 
 ---
 
-## 🗺️ Roadmap
+## API Endpoints
 
-### Q1 2025 - MVP ✅
-- [x] Backend com API REST e WebSocket
-- [x] Frontend com Kanban e gestão de tasks
-- [x] Client com orquestração básica
-- [x] Docker sandbox com hardening
-- [x] Live View streaming (VNC→WebRTC)
-- [x] Chat em tempo real via Supabase
-- [x] TURN server para NAT traversal
-- [x] Controle remoto (keyboard/mouse)
-- [x] Auto-reconnect WebRTC
-- [ ] 5-10 beta customers
+### Auth & Users
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| POST | `/api/v1/auth/register` | Registro |
+| POST | `/api/v1/auth/login` | Login (JWT) |
+| GET | `/oauth2/authorization/{provider}` | SSO login |
 
-### Q2 2025 - Multi-Agent
-- [x] 6 tipos de agentes especializados
-- [ ] Execução paralela de subtasks
-- [ ] Métricas de performance por agente
+### Core Resources
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| CRUD | `/api/v1/organizations` | Organizacoes |
+| CRUD | `/api/v1/projects` | Projetos |
+| CRUD | `/api/v1/tasks` | Tasks |
+| CRUD | `/api/v1/squads` | Squads |
+| CRUD | `/api/v1/agents` | Agentes AI |
 
-### Q3 2025 - Enterprise
-- [ ] SSO (SAML/OIDC)
-- [ ] Audit logs avançados
-- [ ] API pública
+### Live View & Collaboration
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| CRUD | `/api/v1/live-view/sessions` | Live sessions |
+| CRUD | `/api/v1/meetings` | Meetings |
+| CRUD | `/api/v1/recordings` | Recordings |
+
+### Enterprise
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| CRUD | `/api/v1/organizations/{id}/rbac` | Custom roles & permissions |
+| CRUD | `/api/v1/organizations/{id}/sso` | SSO config |
+| CRUD | `/api/v1/calendar-sync` | Google Calendar sync |
+| GET | `/api/v1/highlights` | AI session highlights |
+| CRUD | `/api/v1/branding` | White-label config |
+| GET | `/api/v1/regions` | Multi-region info |
+
+### Operations
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| POST | `/api/v1/billing/checkout` | Stripe checkout |
+| POST | `/api/v1/billing/webhook` | Stripe webhook |
+| GET | `/api/v1/audit-logs` | Audit trail |
+| CRUD | `/api/v1/approvals` | Approval workflow |
+| GET | `/api/v1/executions` | Execution logs |
+| GET | `/health` | Health check |
+| WS | `/ws` | WebSocket (STOMP/SockJS) |
+
+---
+
+## Roadmap
+
+### Phase 1 - MVP (Completed)
+- [x] Backend REST API + WebSocket
+- [x] Frontend Kanban + dashboard
+- [x] 7 agentes AI especializados
+- [x] Docker sandbox hardened
+- [x] Live View (VNC -> WebRTC)
+- [x] Chat + controle remoto
+- [x] Rate limiting + audit logging
+- [x] Billing (Stripe) + Email (Resend)
+- [x] Approval workflow
+- [x] Recording (S3)
+
+### Phase 2 - Enterprise (Completed)
+- [x] SSO/OIDC (Google, Microsoft, Okta)
+- [x] Advanced RBAC (custom roles + permissions)
+- [x] Google Calendar sync
+- [x] AI Highlights (session analysis)
+- [x] CI/CD pipeline (GitHub Actions)
+- [x] Kubernetes + Helm chart
+- [x] Observability stack (Prometheus, Grafana, Loki, Tempo)
+
+### Phase 3 - Scale (Completed)
+- [x] Voice/Video (WebRTC mesh + push-to-talk)
+- [x] White-label (branding por organizacao)
+- [x] Multi-region (config + Helm topology)
+- [x] Mobile app (Expo/React Native)
+- [x] Desktop app (Tauri v2)
+- [x] PWA (service worker + icons)
+- [x] TLS 1.3 (nginx + cert-manager)
+
+### Phase 4 - Advanced Sandbox (Completed)
+- [x] Network policy (egress filtering por dominio)
+- [x] Sandbox lifecycle (TTL, state machine, renewal)
+- [x] File ops (tar-based binary-safe I/O)
+- [x] Container metrics (CPU, memory, network, PIDs)
+- [x] gVisor runtime scaffold
+- [x] Firecracker runtime scaffold
+
+### Future
 - [ ] SFU mode para 100+ viewers
-
-### Q4 2025 - Scale
 - [ ] Marketplace de agentes
-- [ ] White-label
-- [ ] Mobile app (PWA)
-- [ ] gVisor/Firecracker isolation
+- [ ] API publica + SDKs
+- [ ] execd daemon injection (image-agnostic sandbox)
+- [ ] Kubernetes BatchSandbox (O(1) provisioning)
 
 ---
 
-## 🤝 Contribuindo
+## Contribuindo
 
-Contribuições são bem-vindas!
+Contribuicoes sao bem-vindas!
 
 ```bash
 # Fork e clone
@@ -551,33 +510,33 @@ cd squadx.dev
 # Crie uma branch
 git checkout -b feature/minha-feature
 
-# Faça suas alterações e commit
+# Faca suas alteracoes e commit
 git commit -m "feat: minha nova feature"
 
 # Push e abra um PR
 git push origin feature/minha-feature
 ```
 
-### Convenções de Commit
+### Convencoes de Commit
 
 Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 
 - `feat:` Nova funcionalidade
-- `fix:` Correção de bug
-- `docs:` Documentação
-- `refactor:` Refatoração
+- `fix:` Correcao de bug
+- `docs:` Documentacao
+- `refactor:` Refatoracao
 - `test:` Testes
-- `chore:` Manutenção
+- `chore:` Manutencao
 
 ---
 
-## 📄 Licença
+## Licenca
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+Este projeto esta licenciado sob a [MIT License](LICENSE).
 
 ---
 
-## 📞 Contato
+## Contato
 
 - **Website**: [squadx.dev](https://squadx.dev)
 - **Email**: team@squadx.dev
@@ -586,5 +545,5 @@ Este projeto está licenciado sob a [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <strong>SquadX.dev</strong> - Transformando a forma como software é desenvolvido.
+  <strong>SquadX.dev</strong> - Transformando a forma como software e desenvolvido.
 </p>

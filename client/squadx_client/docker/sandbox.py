@@ -8,6 +8,10 @@ from enum import Enum
 
 from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
 from .manager import DockerManager, ContainerConfig, docker_manager
+from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
+from .file_ops import SandboxFileOps
+from .metrics import ContainerMetricsCollector, ContainerMetrics
+from .network_policy import NetworkPolicy, get_predefined_policy
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +49,15 @@ class AgentSandbox:
         manager: Optional[DockerManager] = None,
         enable_live_streaming: bool = True,
         runtime: Optional[SandboxRuntime] = None,
+        network_policy: Optional[str] = None,
+        ttl_seconds: int = 3600,
     ):
         self.task_id = task_id
         self.agent_type = agent_type
         self.workspace_path = workspace_path
         self.manager = manager or docker_manager
         self.enable_live_streaming = enable_live_streaming
+        self.ttl_seconds = ttl_seconds
 
         # Resolve sandbox runtime (auto-detect if not specified)
         self.runtime = runtime or resolve_runtime()
@@ -58,10 +65,22 @@ class AgentSandbox:
             f"Sandbox for task {task_id} using runtime: {self.runtime.value}"
         )
 
+        # Network policy
+        self._network_policy: Optional[NetworkPolicy] = None
+        if network_policy:
+            try:
+                self._network_policy = get_predefined_policy(network_policy)
+            except ValueError:
+                logger.warning(f"Unknown network policy '{network_policy}', using none")
+
         self.container_id: Optional[str] = None
         self.status = SandboxStatus.CREATED
         self.vnc_port: Optional[int] = None
         self.live_join_code: Optional[str] = None
+
+        # Enhanced file operations and metrics (initialized after container start)
+        self.file_ops: Optional[SandboxFileOps] = None
+        self.metrics_collector: Optional[ContainerMetricsCollector] = None
 
         self._output_callback: Optional[Callable[[str], Any]] = None
         self._status_callback: Optional[Callable[[SandboxStatus], Any]] = None
@@ -142,6 +161,11 @@ class AgentSandbox:
             if not await self.manager.start_container(self.container_id):
                 self._set_status(SandboxStatus.ERROR)
                 return False
+
+            # Initialize enhanced file operations and metrics collector
+            if self.manager.client:
+                self.file_ops = SandboxFileOps(self.manager.client, self.container_id)
+                self.metrics_collector = ContainerMetricsCollector(self.manager.client)
 
             # Get VNC port if enabled
             if enable_vnc:
@@ -283,18 +307,41 @@ class AgentSandbox:
             )
 
     async def write_file(self, path: str, content: str) -> bool:
-        """Write a file in the sandbox."""
-        # Use echo with heredoc to write file
+        """Write a file in the sandbox.
+
+        Uses tar-based file_ops when available for binary-safe writes,
+        falls back to heredoc/cat approach otherwise.
+        """
+        if self.file_ops:
+            return self.file_ops.write_file(path, content)
+        # Fallback: use echo with heredoc to write file
         command = ["sh", "-c", f"cat > {path} << 'SQUADX_EOF'\n{content}\nSQUADX_EOF"]
         result = await self.execute(command)
         return result.success
 
     async def read_file(self, path: str) -> Optional[str]:
-        """Read a file from the sandbox."""
+        """Read a file from the sandbox.
+
+        Uses tar-based file_ops when available for binary-safe reads,
+        falls back to cat approach otherwise.
+        """
+        if self.file_ops:
+            return self.file_ops.read_file_text(path)
+        # Fallback: use cat
         result = await self.execute(["cat", path])
         if result.success:
             return result.output
         return None
+
+    def get_metrics(self) -> Optional[ContainerMetrics]:
+        """Get current container resource metrics."""
+        if self.metrics_collector and self.container_id:
+            return self.metrics_collector.collect(self.container_id)
+        return None
+
+    def get_network_policy(self) -> Optional[NetworkPolicy]:
+        """Get the network policy applied to this sandbox."""
+        return self._network_policy
 
     async def get_logs(self, tail: int = 100) -> Optional[str]:
         """Get sandbox container logs."""

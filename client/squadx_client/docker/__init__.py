@@ -9,6 +9,21 @@ from squadx_client.docker.hardening import (
     hardening_manager,
     get_hardened_config,
 )
+from squadx_client.docker.lifecycle import (
+    SandboxLifecycleManager,
+    SandboxState,
+    SandboxInfo,
+)
+from squadx_client.docker.file_ops import SandboxFileOps, FileInfo
+from squadx_client.docker.metrics import ContainerMetricsCollector, ContainerMetrics
+from squadx_client.docker.network_policy import (
+    NetworkPolicy,
+    EgressRule,
+    EgressAction,
+    EgressSidecarConfig,
+    get_predefined_policy,
+    generate_network_setup_script,
+)
 
 __all__ = [
     # Manager
@@ -25,4 +40,21 @@ __all__ = [
     "HardeningManager",
     "hardening_manager",
     "get_hardened_config",
+    # Lifecycle
+    "SandboxLifecycleManager",
+    "SandboxState",
+    "SandboxInfo",
+    # File Operations
+    "SandboxFileOps",
+    "FileInfo",
+    # Metrics
+    "ContainerMetricsCollector",
+    "ContainerMetrics",
+    # Network Policy
+    "NetworkPolicy",
+    "EgressRule",
+    "EgressAction",
+    "EgressSidecarConfig",
+    "get_predefined_policy",
+    "generate_network_setup_script",
 ]

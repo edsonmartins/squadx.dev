@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
 
+    # Network policy
+    network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full
+    sandbox_ttl_seconds: int = Field(default=3600, alias="SQUADX_SANDBOX_TTL")
+    sandbox_max_ttl_seconds: int = Field(default=86400, alias="SQUADX_SANDBOX_MAX_TTL")
+
     # Sandbox Runtime Configuration
     # Which container runtime to use: docker, gvisor, firecracker
     sandbox_runtime: str = Field(default="docker", alias="SQUADX_SANDBOX_RUNTIME")

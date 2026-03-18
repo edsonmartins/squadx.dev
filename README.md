@@ -16,50 +16,37 @@ Empresas de software enfrentam desafios crescentes:
 
 - **Escassez de talentos**: Dificuldade em contratar e reter desenvolvedores qualificados
 - **Custos elevados**: Equipes de desenvolvimento representam o maior custo operacional
-- **Velocidade de entrega**: Pressao constante para entregar mais rapido
-- **Qualidade inconsistente**: Variacao na qualidade do codigo entre desenvolvedores
+- **Velocidade de entrega**: Pressão constante para entregar mais rápido
+- **Qualidade inconsistente**: Variação na qualidade do código entre desenvolvedores
 - **Escalabilidade limitada**: Impossibilidade de escalar a equipe rapidamente para picos de demanda
 
-## A Solucao
+## A Solução
 
-**SquadX.dev** e uma plataforma SaaS B2B que permite as empresas "contratar" squads virtuais de agentes AI especializados para desenvolvimento de software.
+**SquadX.dev** é uma plataforma SaaS B2B que permite às empresas "contratar" squads virtuais de agentes AI especializados para desenvolvimento de software.
 
-```
-                         DASHBOARD WEB (Next.js 16)
-       Kanban | Live View | Analytics | Voice/Video | Calendar
-                              |
-                              v
-                     SQUADX BACKEND (Spring Boot 3.4)
-         REST API | WebSocket | SSO/OIDC | RBAC | Billing
-                              |
-                              v
-                SQUADX CLIENT (Python - Ambiente Local)
-      LangGraph Orchestration | Docker Sandbox | WebRTC Bridge
-                              |
-                              v
-                    CONTAINERS DOCKER HARDENED
-        Seccomp | Read-only FS | gVisor/Firecracker | Network Policy
-```
+<p align="center">
+  <img src="frontend/public/docs/architecture.svg" alt="Arquitetura SquadX.dev" width="700"/>
+</p>
 
 ---
 
 ## Agentes Especializados
 
-O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
+O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área:
 
-| Agente | Especializacao | Modelo |
+| Agente | Especialização | Modelo |
 |--------|---------------|--------|
-| **Coordinator** | Analise de requisitos, planejamento, decomposicao de tasks | Claude Sonnet |
+| **Coordinator** | Análise de requisitos, planejamento, decomposição de tasks | Claude Sonnet |
 | **Frontend** | React, Next.js, Vue, CSS, TypeScript, a11y | GPT-4o |
 | **Backend** | Python, Java, Node.js, APIs, Databases | Claude Sonnet |
 | **DevOps** | Docker, Kubernetes, CI/CD, Infrastructure as Code | GPT-4o |
-| **QA** | Testes unitarios, integracao, E2E (Playwright, Cypress) | GPT-4o Mini |
+| **QA** | Testes unitários, integração, E2E (Playwright, Cypress) | GPT-4o Mini |
 | **Database** | PostgreSQL, schema design, migrations, query optimization | Claude Sonnet |
-| **Fullstack** | Tarefas cross-cutting que envolvem multiplas areas | GPT-4o |
+| **Fullstack** | Tarefas cross-cutting que envolvem múltiplas áreas | GPT-4o |
 
 ---
 
-## Stack Tecnologico
+## Stack Tecnológico
 
 | Camada | Tecnologia |
 |--------|-----------|
@@ -77,27 +64,31 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
 ## Features
 
 ### Core Platform
-- **Kanban Board** com drag-and-drop para gestao de tasks
+- **Kanban Board** com drag-and-drop para gestão de tasks
 - **7 agentes AI especializados** com agentic loop e 9 ferramentas (bash, file I/O, git, Python, dependencies)
 - **LangGraph orchestration** com state machine (analyze -> plan -> execute -> review)
 - **WebSocket real-time** via STOMP/SockJS para updates de progresso
 - **Audit logging** completo com AOP aspect
 
 ### Live View
-- **WebRTC P2P streaming** das telas dos agentes (< 500ms latencia)
+- **WebRTC P2P streaming** das telas dos agentes (< 500ms latência)
 - **Voice/Video** mesh com push-to-talk via Supabase Realtime signaling
 - **Annotation tools** (drawing, pointing, text) sobre o stream
 - **Chat em tempo real** integrado
 - **Controle remoto** (keyboard/mouse forwarding)
-- **Join Code** de 8 caracteres para compartilhar sessoes
+- **Join Code** de 8 caracteres para compartilhar sessões
 
-### Seguranca & Sandbox
+<p align="center">
+  <img src="frontend/public/docs/live-streaming.svg" alt="Arquitetura Live Streaming" width="700"/>
+</p>
+
+### Segurança & Sandbox
 - **Docker hardened**: `CAP_DROP=ALL`, read-only FS, `no-new-privileges`, seccomp (336 syscalls)
 - **3 security levels**: Development, Standard, Maximum
 - **Network Policy**: Egress filtering com domain allowlist (none, package-managers, full)
 - **Lifecycle manager**: TTL-based expiration, state machine, renewal
 - **File I/O robusto**: Tar-based binary-safe via Docker `put_archive`/`get_archive`
-- **Metricas internas**: CPU, memory, network, PIDs, block I/O em real-time
+- **Métricas internas**: CPU, memória, rede, PIDs, block I/O em real-time
 - **Runtime upgrades**: Docker (runc) -> gVisor (runsc) -> Firecracker (microVM)
 - **Seccomp profile** customizado para agentes de desenvolvimento
 
@@ -105,11 +96,11 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
 - **SSO/OIDC**: Google, Microsoft, Okta com JIT user provisioning
 - **Advanced RBAC**: Custom roles com permission matrix (resource + action)
 - **Google Calendar sync**: OAuth2 bidirecional, meeting auto-creation
-- **AI Highlights**: Analise de logs com 8 tipos de highlight + summary
-- **White-label**: Brand configs por organizacao (cores, logo, dominio custom)
+- **AI Highlights**: Análise de logs com 8 tipos de highlight + summary
+- **White-label**: Brand configs por organização (cores, logo, domínio custom)
 - **Multi-region**: Region config com Helm nodeSelector/topologySpread
 - **Billing**: Stripe integration com checkout, webhooks, subscription management
-- **Email**: Notificacoes transacionais via Resend
+- **Email**: Notificações transacionais via Resend
 - **Rate limiting**: Redis-based com sliding window
 
 ### Infrastructure
@@ -118,18 +109,24 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
 - **CI/CD**: GitHub Actions (lint, test, build, push to GHCR, deploy)
 - **Monitoring**: Prometheus + Grafana dashboards + Loki logs + Tempo traces
 - **Alerting**: AlertManager com rules para CPU, memory, error rate
-- **PWA**: Service worker, manifest com 9 tamanhos de icone, apple-touch-icon
+- **PWA**: Service worker, manifest com 9 tamanhos de ícone, apple-touch-icon
 
 ### Multi-Platform
 - **Web**: Next.js 16 PWA com offline support
 - **Mobile**: Expo/React Native com dashboard, tasks, live view, settings
 - **Desktop**: Tauri v2 wrapping o frontend em WebView nativo
 
+### Fluxo de Execução
+
+<p align="center">
+  <img src="frontend/public/docs/task-flow.svg" alt="Fluxo de Execução de Task" width="700"/>
+</p>
+
 ---
 
 ## Quick Start
 
-### Pre-requisitos
+### Pré-requisitos
 
 - Docker e Docker Compose
 - Java 21+ (com Maven)
@@ -141,11 +138,11 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma area:
 ### Desenvolvimento Local
 
 ```bash
-# Clone o repositorio
+# Clone o repositório
 git clone https://github.com/edsonmartins/squadx.dev.git
 cd squadx.dev
 
-# Inicie os servicos com Docker Compose
+# Inicie os serviços com Docker Compose
 docker compose up -d postgres redis
 
 # Backend (porta 8080)
@@ -167,7 +164,7 @@ squadx-client start
 ```bash
 cd client/docker
 
-# Headless (sem interface grafica)
+# Headless (sem interface gráfica)
 docker build -f agent.Dockerfile --target base -t squadx/agent:latest .
 
 # Com Live View (VNC + noVNC)
@@ -194,7 +191,7 @@ docker compose -f docker-compose.yml -f infra/nginx/docker-compose.tls.yml up
 cd desktop
 pnpm install
 pnpm tauri dev    # Desenvolvimento
-pnpm tauri build  # Build para distribuicao
+pnpm tauri build  # Build para distribuição
 ```
 
 ### Mobile App (Expo)
@@ -207,7 +204,7 @@ npx expo start
 
 ---
 
-## Variaveis de Ambiente
+## Variáveis de Ambiente
 
 ### Backend
 ```bash
@@ -267,7 +264,7 @@ SQUADX_AGENT_CPU_LIMIT=2.0
 
 ## Testes
 
-O projeto possui **591+ testes** distribuidos em 80 arquivos:
+O projeto possui **591+ testes** distribuídos em 80 arquivos:
 
 ### Backend (Java - JUnit 5 + Mockito)
 ```bash
@@ -298,14 +295,14 @@ pytest tests/ -v
 | Backend Services | 22 | ~160 | 100% dos services |
 | Backend Controllers | 20 | ~114 | 100% dos controllers |
 | Frontend | 20 | 141 | ~60% componentes |
-| Python Client | 22 | ~176 | ~60% modulos |
+| Python Client | 22 | ~176 | ~60% módulos |
 | **Total** | **84** | **~591** | |
 
 ---
 
-## Seguranca do Sandbox
+## Segurança do Sandbox
 
-### Container Hardening (Producao)
+### Container Hardening (Produção)
 
 ```bash
 docker run \
@@ -322,25 +319,25 @@ docker run \
   squadx/agent:latest
 ```
 
-### Camadas de Seguranca
+### Camadas de Segurança
 
 | Camada | Mecanismo | Status |
 |--------|-----------|--------|
-| **Capabilities** | `CAP_DROP=ALL` | Producao |
-| **Filesystem** | Read-only root + tmpfs noexec | Producao |
-| **Privileges** | `no-new-privileges` | Producao |
-| **Syscalls** | Seccomp profile (336 syscalls permitidos) | Producao |
-| **Network** | Policy-based egress filtering | Producao |
-| **Resources** | Memory 2g, CPU 2.0, PIDs 256 | Producao |
-| **User** | Non-root (UID 1000) | Producao |
+| **Capabilities** | `CAP_DROP=ALL` | Produção |
+| **Filesystem** | Read-only root + tmpfs noexec | Produção |
+| **Privileges** | `no-new-privileges` | Produção |
+| **Syscalls** | Seccomp profile (336 syscalls permitidos) | Produção |
+| **Network** | Policy-based egress filtering | Produção |
+| **Resources** | Memory 2g, CPU 2.0, PIDs 256 | Produção |
+| **User** | Non-root (UID 1000) | Produção |
 | **Runtime** | gVisor (runsc) | Scaffold |
 | **Runtime** | Firecracker (microVM) | Scaffold |
 
 ### Network Policies
 
-| Policy | Descricao |
+| Policy | Descrição |
 |--------|-----------|
-| `none` | Sem acesso a rede (maximo isolamento) |
+| `none` | Sem acesso à rede (máximo isolamento) |
 | `package-managers` | Permite PyPI, npm, Maven, GitHub |
 | `full` | Permite tudo exceto cloud metadata endpoints |
 
@@ -404,30 +401,30 @@ squadx.dev/
 ## API Endpoints
 
 ### Auth & Users
-| Method | Endpoint | Descricao |
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
 | POST | `/api/v1/auth/register` | Registro |
 | POST | `/api/v1/auth/login` | Login (JWT) |
 | GET | `/oauth2/authorization/{provider}` | SSO login |
 
 ### Core Resources
-| Method | Endpoint | Descricao |
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
-| CRUD | `/api/v1/organizations` | Organizacoes |
+| CRUD | `/api/v1/organizations` | Organizações |
 | CRUD | `/api/v1/projects` | Projetos |
 | CRUD | `/api/v1/tasks` | Tasks |
 | CRUD | `/api/v1/squads` | Squads |
 | CRUD | `/api/v1/agents` | Agentes AI |
 
 ### Live View & Collaboration
-| Method | Endpoint | Descricao |
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
 | CRUD | `/api/v1/live-view/sessions` | Live sessions |
 | CRUD | `/api/v1/meetings` | Meetings |
 | CRUD | `/api/v1/recordings` | Recordings |
 
 ### Enterprise
-| Method | Endpoint | Descricao |
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
 | CRUD | `/api/v1/organizations/{id}/rbac` | Custom roles & permissions |
 | CRUD | `/api/v1/organizations/{id}/sso` | SSO config |
@@ -437,7 +434,7 @@ squadx.dev/
 | GET | `/api/v1/regions` | Multi-region info |
 
 ### Operations
-| Method | Endpoint | Descricao |
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
 | POST | `/api/v1/billing/checkout` | Stripe checkout |
 | POST | `/api/v1/billing/webhook` | Stripe webhook |
@@ -474,7 +471,7 @@ squadx.dev/
 
 ### Phase 3 - Scale (Completed)
 - [x] Voice/Video (WebRTC mesh + push-to-talk)
-- [x] White-label (branding por organizacao)
+- [x] White-label (branding por organização)
 - [x] Multi-region (config + Helm topology)
 - [x] Mobile app (Expo/React Native)
 - [x] Desktop app (Tauri v2)
@@ -482,7 +479,7 @@ squadx.dev/
 - [x] TLS 1.3 (nginx + cert-manager)
 
 ### Phase 4 - Advanced Sandbox (Completed)
-- [x] Network policy (egress filtering por dominio)
+- [x] Network policy (egress filtering por domínio)
 - [x] Sandbox lifecycle (TTL, state machine, renewal)
 - [x] File ops (tar-based binary-safe I/O)
 - [x] Container metrics (CPU, memory, network, PIDs)
@@ -492,7 +489,7 @@ squadx.dev/
 ### Future
 - [ ] SFU mode para 100+ viewers
 - [ ] Marketplace de agentes
-- [ ] API publica + SDKs
+- [ ] API pública + SDKs
 - [ ] execd daemon injection (image-agnostic sandbox)
 - [ ] Kubernetes BatchSandbox (O(1) provisioning)
 
@@ -500,7 +497,7 @@ squadx.dev/
 
 ## Contribuindo
 
-Contribuicoes sao bem-vindas!
+Contribuições são bem-vindas!
 
 ```bash
 # Fork e clone
@@ -510,29 +507,29 @@ cd squadx.dev
 # Crie uma branch
 git checkout -b feature/minha-feature
 
-# Faca suas alteracoes e commit
+# Faça suas alterações e commit
 git commit -m "feat: minha nova feature"
 
 # Push e abra um PR
 git push origin feature/minha-feature
 ```
 
-### Convencoes de Commit
+### Convenções de Commit
 
 Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 
 - `feat:` Nova funcionalidade
-- `fix:` Correcao de bug
-- `docs:` Documentacao
-- `refactor:` Refatoracao
+- `fix:` Correção de bug
+- `docs:` Documentação
+- `refactor:` Refatoração
 - `test:` Testes
-- `chore:` Manutencao
+- `chore:` Manutenção
 
 ---
 
-## Licenca
+## Licença
 
-Este projeto esta licenciado sob a [MIT License](LICENSE).
+Este projeto está licenciado sob a [MIT License](LICENSE).
 
 ---
 
@@ -545,5 +542,5 @@ Este projeto esta licenciado sob a [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <strong>SquadX.dev</strong> - Transformando a forma como software e desenvolvido.
+  <strong>SquadX.dev</strong> - Transformando a forma como software é desenvolvido.
 </p>

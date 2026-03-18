@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" fill="none">
+  <defs>
+    <linearGradient id="gCont" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e40af"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="gPy" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="gBrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="sh" x="-2%" y="-4%" width="104%" height="116%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="400" rx="16" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="16" fill="#94a3b8">Arquitetura do Live Streaming</text>
+
+  <!-- Docker Container Box -->
+  <rect x="30" y="50" width="230" height="300" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="145" y="75" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#64748b">Docker Container</text>
+
+  <!-- Xvfb -->
+  <rect x="50" y="90" width="190" height="50" rx="8" fill="url(#gCont)" opacity="0.9"/>
+  <text x="145" y="112" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">Xvfb :99</text>
+  <text x="145" y="128" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#bfdbfe">Virtual Framebuffer</text>
+
+  <!-- x11vnc -->
+  <rect x="50" y="155" width="190" height="50" rx="8" fill="url(#gCont)" opacity="0.9"/>
+  <text x="145" y="177" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">x11vnc :5900</text>
+  <text x="145" y="193" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#bfdbfe">VNC Server (RFB)</text>
+
+  <!-- VNC Client -->
+  <rect x="50" y="220" width="190" height="50" rx="8" fill="url(#gCont)" opacity="0.9"/>
+  <text x="145" y="242" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">VNC Client</text>
+  <text x="145" y="258" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#bfdbfe">Frame Capture</text>
+
+  <!-- Arrows inside container -->
+  <line x1="145" y1="140" x2="145" y2="155" stroke="#60a5fa" stroke-width="1.5"/>
+  <polygon points="141,153 145,159 149,153" fill="#60a5fa"/>
+  <line x1="145" y1="205" x2="145" y2="220" stroke="#60a5fa" stroke-width="1.5"/>
+  <polygon points="141,218 145,224 149,218" fill="#60a5fa"/>
+
+  <!-- Python Client Box -->
+  <rect x="290" y="90" width="230" height="220" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="405" y="115" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#64748b">Python Client</text>
+
+  <!-- WebRTC Bridge -->
+  <rect x="310" y="130" width="190" height="70" rx="8" fill="url(#gPy)" opacity="0.9"/>
+  <text x="405" y="155" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">WebRTC Bridge</text>
+  <text x="405" y="172" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#ddd6fe">aiortc · MediaStreamTrack</text>
+  <text x="405" y="188" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#ddd6fe">Peer Connections</text>
+
+  <!-- Signaling -->
+  <rect x="310" y="215" width="190" height="50" rx="8" fill="url(#gPy)" opacity="0.7"/>
+  <text x="405" y="237" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">Supabase Realtime</text>
+  <text x="405" y="253" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#ddd6fe">Signaling (SDP/ICE)</text>
+
+  <!-- Arrow Container → Python -->
+  <line x1="260" y1="245" x2="290" y2="200" stroke="#a78bfa" stroke-width="2"/>
+  <polygon points="287,203 293,198 288,194" fill="#a78bfa"/>
+
+  <!-- Browser Viewer Box -->
+  <rect x="550" y="90" width="220" height="220" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="660" y="115" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#64748b">Browser Viewer</text>
+
+  <!-- StreamViewer -->
+  <rect x="570" y="130" width="180" height="55" rx="8" fill="url(#gBrow)" opacity="0.9"/>
+  <text x="660" y="152" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">StreamViewer</text>
+  <text x="660" y="172" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">Video Player + Stats</text>
+
+  <!-- VoiceVideo -->
+  <rect x="570" y="195" width="180" height="45" rx="8" fill="url(#gBrow)" opacity="0.8"/>
+  <text x="660" y="215" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">Voice/Video</text>
+  <text x="660" y="230" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">Push-to-Talk · Mesh</text>
+
+  <!-- Annotations -->
+  <rect x="570" y="250" width="180" height="45" rx="8" fill="url(#gBrow)" opacity="0.7"/>
+  <text x="660" y="270" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="13" fill="#fff">Annotations</text>
+  <text x="660" y="285" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">Draw · Point · Text</text>
+
+  <!-- Arrow Python → Browser -->
+  <line x1="520" y1="165" x2="550" y2="165" stroke="#34d399" stroke-width="2"/>
+  <polygon points="547,161 555,165 547,169" fill="#34d399"/>
+  <text x="535" y="155" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#64748b">WebRTC</text>
+  <text x="535" y="178" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#64748b">P2P</text>
+
+  <!-- Bottom labels -->
+  <rect x="80" y="360" width="100" height="24" rx="6" fill="#3b82f6" opacity="0.2"/>
+  <text x="130" y="376" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#60a5fa">&lt; 500ms latência</text>
+
+  <rect x="240" y="360" width="120" height="24" rx="6" fill="#a78bfa" opacity="0.2"/>
+  <text x="300" y="376" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a78bfa">até 25 viewers</text>
+
+  <rect x="420" y="360" width="130" height="24" rx="6" fill="#34d399" opacity="0.2"/>
+  <text x="485" y="376" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#34d399">controle remoto</text>
+
+  <rect x="610" y="360" width="120" height="24" rx="6" fill="#f59e0b" opacity="0.2"/>
+  <text x="670" y="376" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#fbbf24">auto-reconnect</text>
+</svg>

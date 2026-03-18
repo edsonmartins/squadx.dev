@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" fill="none">
+  <defs>
+    <linearGradient id="gStep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <filter id="s" x="-2%" y="-4%" width="104%" height="116%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="460" rx="16" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="16" fill="#94a3b8">Fluxo de Execução de Task</text>
+
+  <!-- Step 1 -->
+  <rect x="40" y="50" width="160" height="70" rx="10" fill="url(#gStep)" filter="url(#s)"/>
+  <circle cx="60" cy="68" r="10" fill="#fff" opacity="0.2"/>
+  <text x="60" y="72" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">1</text>
+  <text x="120" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Cria Task</text>
+  <text x="120" y="100" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">Dashboard Kanban</text>
+
+  <!-- Step 2 -->
+  <rect x="240" y="50" width="160" height="70" rx="10" fill="url(#gStep)" filter="url(#s)"/>
+  <circle cx="260" cy="68" r="10" fill="#fff" opacity="0.2"/>
+  <text x="260" y="72" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">2</text>
+  <text x="320" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Notifica Client</text>
+  <text x="320" y="100" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">WebSocket STOMP</text>
+
+  <!-- Step 3 -->
+  <rect x="440" y="50" width="160" height="70" rx="10" fill="url(#gStep)" filter="url(#s)"/>
+  <circle cx="460" cy="68" r="10" fill="#fff" opacity="0.2"/>
+  <text x="460" y="72" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">3</text>
+  <text x="520" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Orquestração</text>
+  <text x="520" y="100" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">LangGraph State</text>
+
+  <!-- Step 4 -->
+  <rect x="40" y="160" width="160" height="70" rx="10" fill="#059669" filter="url(#s)"/>
+  <circle cx="60" cy="178" r="10" fill="#fff" opacity="0.2"/>
+  <text x="60" y="182" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">4</text>
+  <text x="120" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Coordinator</text>
+  <text x="120" y="210" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">Analisa e planeja</text>
+
+  <!-- Step 5 -->
+  <rect x="240" y="160" width="160" height="70" rx="10" fill="#059669" filter="url(#s)"/>
+  <circle cx="260" cy="178" r="10" fill="#fff" opacity="0.2"/>
+  <text x="260" y="182" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">5</text>
+  <text x="320" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Delega Subtasks</text>
+  <text x="320" y="210" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">Agentes especializados</text>
+
+  <!-- Step 6 -->
+  <rect x="440" y="160" width="160" height="70" rx="10" fill="#dc2626" filter="url(#s)"/>
+  <circle cx="460" cy="178" r="10" fill="#fff" opacity="0.2"/>
+  <text x="460" y="182" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">6</text>
+  <text x="520" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Executa em Sandbox</text>
+  <text x="520" y="210" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#fecaca">Docker hardened</text>
+
+  <!-- Step 6b - Live View -->
+  <rect x="640" y="160" width="130" height="70" rx="10" fill="#7c3aed" filter="url(#s)"/>
+  <text x="705" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Live View</text>
+  <text x="705" y="210" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#ddd6fe">WebRTC stream</text>
+
+  <!-- Step 7 -->
+  <rect x="40" y="270" width="160" height="70" rx="10" fill="#d97706" filter="url(#s)"/>
+  <circle cx="60" cy="288" r="10" fill="#fff" opacity="0.2"/>
+  <text x="60" y="292" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">7</text>
+  <text x="120" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Git Commit</text>
+  <text x="120" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#fde68a">Resultados locais</text>
+
+  <!-- Step 8 -->
+  <rect x="240" y="270" width="160" height="70" rx="10" fill="#d97706" filter="url(#s)"/>
+  <circle cx="260" cy="288" r="10" fill="#fff" opacity="0.2"/>
+  <text x="260" y="292" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">8</text>
+  <text x="320" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Reporta Backend</text>
+  <text x="320" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#fde68a">Status + métricas</text>
+
+  <!-- Step 9 -->
+  <rect x="440" y="270" width="160" height="70" rx="10" fill="url(#gStep)" filter="url(#s)"/>
+  <circle cx="460" cy="288" r="10" fill="#fff" opacity="0.2"/>
+  <text x="460" y="292" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="11" fill="#fff">9</text>
+  <text x="520" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="600" font-size="12" fill="#fff">Dashboard Atualiza</text>
+  <text x="520" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">Real-time update</text>
+
+  <!-- Arrows Row 1 -->
+  <line x1="200" y1="85" x2="240" y2="85" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="237,81 245,85 237,89" fill="#475569"/>
+  <line x1="400" y1="85" x2="440" y2="85" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="437,81 445,85 437,89" fill="#475569"/>
+
+  <!-- Arrow Row 1 → Row 2 -->
+  <line x1="520" y1="120" x2="520" y2="140" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="516,137 520,145 524,137" fill="#475569"/>
+  <line x1="520" y1="140" x2="120" y2="140" stroke="#475569" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="120" y1="140" x2="120" y2="160" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="116,157 120,165 124,157" fill="#475569"/>
+
+  <!-- Arrows Row 2 -->
+  <line x1="200" y1="195" x2="240" y2="195" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="237,191 245,195 237,199" fill="#475569"/>
+  <line x1="400" y1="195" x2="440" y2="195" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="437,191 445,195 437,199" fill="#475569"/>
+  <line x1="600" y1="195" x2="640" y2="195" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polygon points="637,191 645,195 637,199" fill="#7c3aed"/>
+
+  <!-- Arrow Row 2 → Row 3 -->
+  <line x1="520" y1="230" x2="520" y2="250" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="516,247 520,255 524,247" fill="#475569"/>
+  <line x1="520" y1="250" x2="120" y2="250" stroke="#475569" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="120" y1="250" x2="120" y2="270" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="116,267 120,275 124,267" fill="#475569"/>
+
+  <!-- Arrows Row 3 -->
+  <line x1="200" y1="305" x2="240" y2="305" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="237,301 245,305 237,309" fill="#475569"/>
+  <line x1="400" y1="305" x2="440" y2="305" stroke="#475569" stroke-width="1.5"/>
+  <polygon points="437,301 445,305 437,309" fill="#475569"/>
+
+  <!-- Legend -->
+  <rect x="40" y="380" width="14" height="14" rx="3" fill="#6366f1"/>
+  <text x="62" y="392" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Plataforma</text>
+  <rect x="140" y="380" width="14" height="14" rx="3" fill="#059669"/>
+  <text x="162" y="392" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Agentes AI</text>
+  <rect x="240" y="380" width="14" height="14" rx="3" fill="#dc2626"/>
+  <text x="262" y="392" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Sandbox</text>
+  <rect x="330" y="380" width="14" height="14" rx="3" fill="#d97706"/>
+  <text x="352" y="392" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Resultados</text>
+  <rect x="440" y="380" width="14" height="14" rx="3" fill="#7c3aed"/>
+  <text x="462" y="392" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Live View</text>
+</svg>

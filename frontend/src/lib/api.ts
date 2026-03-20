@@ -200,6 +200,15 @@ export const tasksApi = {
   updateOrder: (id: number, orderIndex: number) =>
     api.patch(`/api/v1/tasks/${id}/order?orderIndex=${orderIndex}`),
   delete: (id: number) => api.delete(`/api/v1/tasks/${id}`),
+  addDependency: (taskId: number, dependsOnId: number) =>
+    api.post<{ id: number; taskId: number; dependsOnId: number }>(
+      `/api/v1/tasks/${taskId}/dependencies`,
+      { dependsOnId }
+    ),
+  removeDependency: (taskId: number, depId: number) =>
+    api.delete(`/api/v1/tasks/${taskId}/dependencies/${depId}`),
+  getBlockers: (taskId: number) =>
+    api.get<TaskResponse[]>(`/api/v1/tasks/${taskId}/blockers`),
 };
 
 // Types
@@ -325,6 +334,9 @@ export interface TaskResponse {
   created_by_id?: number;
   created_by_name?: string;
   tags?: string[];
+  blocked?: boolean;
+  blocked_by_ids?: number[];
+  dependent_ids?: number[];
   created_at: string;
   updated_at?: string;
 }
@@ -715,6 +727,43 @@ export const recordingsApi = {
     api.get<RecordingResponse[]>(`/api/v1/recordings/session/${sessionId}`),
 };
 
+// Templates API
+export const templatesApi = {
+  list: () => api.get<TemplateResponse[]>("/api/v1/templates"),
+  get: (name: string) =>
+    api.get<TemplateResponse>(`/api/v1/templates/${name}`),
+  apply: (name: string, request: ApplyTemplateRequest) =>
+    api.post<SquadResponse>(`/api/v1/templates/${name}/apply`, request),
+};
+
+// Template Types
+export interface TemplateAgent {
+  name: string;
+  type: AgentType;
+  description: string;
+}
+
+export interface TemplateTask {
+  subject: string;
+  assign_to: string;
+  priority: TaskPriority;
+}
+
+export interface TemplateResponse {
+  name: string;
+  description: string;
+  icon: string;
+  agents: TemplateAgent[];
+  default_tasks: TemplateTask[];
+}
+
+export interface ApplyTemplateRequest {
+  project_id?: number;
+  organization_id: number;
+  squad_name?: string;
+  goal?: string;
+}
+
 // Brand (White-Label) Types
 export interface BrandConfigResponse {
   id: number;
@@ -810,6 +859,103 @@ export const highlightsApi = {
     api.get<HighlightResponse[]>(`/api/v1/highlights/recording/${recordingId}`),
   getSummary: (recordingId: number) =>
     api.get<{ summary: string }>(`/api/v1/highlights/recording/${recordingId}/summary`),
+};
+
+// Cost Tracking Types
+export interface CostBreakdownEntry {
+  label: string;
+  cost_cents: number;
+  input_tokens: number;
+  output_tokens: number;
+  percentage: number;
+}
+
+export interface CostSummaryResponse {
+  total_cost_cents: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  breakdown: CostBreakdownEntry[];
+}
+
+export interface RecordCostRequest {
+  execution_id?: number;
+  agent_id?: number;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_cents: number;
+}
+
+export interface BudgetStatusResponse {
+  organizationId: number;
+  totalSpentCents: number;
+  currency: string;
+}
+
+// Costs API
+export const costsApi = {
+  getSummary: (orgId: number, from?: string, to?: string) => {
+    const params = new URLSearchParams({ orgId: orgId.toString() });
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    return api.get<CostSummaryResponse>(`/api/v1/costs/summary?${params}`);
+  },
+  getByAgent: (orgId: number) =>
+    api.get<CostSummaryResponse>(`/api/v1/costs/by-agent?orgId=${orgId}`),
+  getByModel: (orgId: number) =>
+    api.get<CostSummaryResponse>(`/api/v1/costs/by-model?orgId=${orgId}`),
+  getBudgetStatus: (orgId: number) =>
+    api.get<BudgetStatusResponse>(`/api/v1/costs/budget-status?orgId=${orgId}`),
+  record: (orgId: number, request: RecordCostRequest) =>
+    api.post<unknown>(`/api/v1/costs?orgId=${orgId}`, request),
+};
+
+// Agent Message Types
+export type AgentMessageType = "TASK_UPDATE" | "HANDOFF" | "QUESTION" | "RESULT" | "BROADCAST" | "STATUS" | "ERROR";
+
+export interface AgentMessageResponse {
+  id: number;
+  fromAgentId: number;
+  fromAgentName: string;
+  toAgentId?: number;
+  toAgentName?: string;
+  executionId?: number;
+  messageType: AgentMessageType;
+  content: string;
+  isRead: boolean;
+  isBroadcast: boolean;
+  createdAt: string;
+}
+
+export interface SendAgentMessageRequest {
+  fromAgentId: number;
+  toAgentId?: number;
+  executionId?: number;
+  messageType?: AgentMessageType;
+  content: string;
+}
+
+export interface BroadcastAgentMessageRequest {
+  fromAgentId: number;
+  executionId: number;
+  content: string;
+}
+
+// Agent Messages API
+export const agentMessagesApi = {
+  send: (data: SendAgentMessageRequest) =>
+    api.post<AgentMessageResponse>("/api/v1/agent-messages", data),
+  broadcast: (data: BroadcastAgentMessageRequest) =>
+    api.post<AgentMessageResponse[]>("/api/v1/agent-messages/broadcast", data),
+  getUnread: (agentId: number) =>
+    api.get<AgentMessageResponse[]>(`/api/v1/agent-messages/unread?agentId=${agentId}`),
+  markRead: (id: number) =>
+    api.put<void>(`/api/v1/agent-messages/${id}/read`),
+  markAllRead: (agentId: number) =>
+    api.put<void>(`/api/v1/agent-messages/read-all?agentId=${agentId}`),
+  getByExecution: (executionId: number) =>
+    api.get<AgentMessageResponse[]>(`/api/v1/agent-messages/execution/${executionId}`),
 };
 
 // Calendar Sync Types

@@ -1,0 +1,17 @@
+{
+  "name": "Data Pipeline",
+  "description": "Data engineering team with coordinator, backend, database and DevOps agents",
+  "icon": "database",
+  "agents": [
+    {"name": "Data Architect", "type": "COORDINATOR", "description": "Designs data models, plans ETL workflows, coordinates team"},
+    {"name": "Backend Engineer", "type": "BACKEND", "description": "Builds data processing services, API integrations, business logic"},
+    {"name": "Database Engineer", "type": "DATABASE", "description": "Schema design, query optimization, migrations, data integrity"},
+    {"name": "Infrastructure Engineer", "type": "DEVOPS", "description": "Pipeline orchestration, monitoring, deployment, scaling"}
+  ],
+  "defaultTasks": [
+    {"subject": "Design data model and pipeline architecture", "assignTo": "Data Architect", "priority": "HIGH"},
+    {"subject": "Set up database schemas and migrations", "assignTo": "Database Engineer", "priority": "HIGH"},
+    {"subject": "Implement data processing services", "assignTo": "Backend Engineer", "priority": "MEDIUM"},
+    {"subject": "Configure pipeline infrastructure and monitoring", "assignTo": "Infrastructure Engineer", "priority": "MEDIUM"}
+  ]
+}

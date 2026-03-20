@@ -3,29 +3,33 @@ package dev.squadx.service;
 import dev.squadx.dto.common.PageResponse;
 import dev.squadx.dto.task.TaskRequest;
 import dev.squadx.dto.task.TaskResponse;
+import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TaskService {
 
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final AgentRepository agentRepository;
     private final OrganizationMemberRepository memberRepository;
+    private final TaskDependencyRepository taskDependencyRepository;
     private final WebSocketEventService webSocketEventService;
 
     @Transactional
@@ -161,6 +165,11 @@ public class TaskService {
         TaskResponse response = mapToResponse(task);
         notifyTaskChange("status_changed", response, task.getProject().getId());
 
+        // When a task is completed, notify dependents that they may be unblocked
+        if (status == TaskStatus.DONE) {
+            notifyDependentsUnblocked(task);
+        }
+
         return response;
     }
 
@@ -189,6 +198,136 @@ public class TaskService {
         notifyTaskChange("deleted", TaskResponse.builder().id(id).build(), projectId);
     }
 
+    // ---- Task Dependency Methods ----
+
+    @Transactional
+    public TaskDependency addDependency(Long taskId, Long dependsOnId, User currentUser) {
+        if (taskId.equals(dependsOnId)) {
+            throw new BadRequestException("A task cannot depend on itself");
+        }
+
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task dependsOn = taskRepository.findById(dependsOnId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dependency task not found"));
+
+        validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
+
+        if (taskDependencyRepository.existsByTaskIdAndDependsOnId(taskId, dependsOnId)) {
+            throw new BadRequestException("Dependency already exists");
+        }
+
+        // Cycle detection: check if adding this dependency would create a cycle
+        if (wouldCreateCycle(taskId, dependsOnId)) {
+            throw new BadRequestException("Adding this dependency would create a circular dependency");
+        }
+
+        TaskDependency dependency = TaskDependency.builder()
+                .task(task)
+                .dependsOn(dependsOn)
+                .build();
+
+        dependency = taskDependencyRepository.save(dependency);
+
+        log.info("Added dependency: task {} depends on task {}", taskId, dependsOnId);
+
+        // Notify that the task was updated (dependency changed)
+        TaskResponse response = mapToResponse(task);
+        notifyTaskChange("updated", response, task.getProject().getId());
+
+        return dependency;
+    }
+
+    @Transactional
+    public void removeDependency(Long taskId, Long dependsOnId, User currentUser) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
+
+        if (!taskDependencyRepository.existsByTaskIdAndDependsOnId(taskId, dependsOnId)) {
+            throw new ResourceNotFoundException("Dependency not found");
+        }
+
+        taskDependencyRepository.deleteByTaskIdAndDependsOnId(taskId, dependsOnId);
+
+        log.info("Removed dependency: task {} no longer depends on task {}", taskId, dependsOnId);
+
+        // Notify that the task was updated (dependency changed)
+        TaskResponse response = mapToResponse(task);
+        notifyTaskChange("updated", response, task.getProject().getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getBlockers(Long taskId, User currentUser) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
+
+        List<TaskDependency> dependencies = taskDependencyRepository.findByTaskId(taskId);
+
+        return dependencies.stream()
+                .map(TaskDependency::getDependsOn)
+                .filter(dep -> dep.getStatus() != TaskStatus.DONE)
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    // ---- Private helpers ----
+
+    /**
+     * BFS-based cycle detection.
+     * Checks if adding an edge from taskId -> dependsOnId would create a cycle.
+     * A cycle exists if we can reach taskId by following dependencies starting from dependsOnId.
+     */
+    private boolean wouldCreateCycle(Long taskId, Long dependsOnId) {
+        Set<Long> visited = new HashSet<>();
+        Queue<Long> queue = new LinkedList<>();
+        queue.add(dependsOnId);
+
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            if (current.equals(taskId)) {
+                return true; // Cycle detected
+            }
+            if (visited.contains(current)) {
+                continue;
+            }
+            visited.add(current);
+
+            List<TaskDependency> deps = taskDependencyRepository.findByTaskId(current);
+            for (TaskDependency dep : deps) {
+                queue.add(dep.getDependsOn().getId());
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * When a task is completed, find all tasks that depend on it and send
+     * WebSocket events so they know they may be unblocked.
+     */
+    private void notifyDependentsUnblocked(Task completedTask) {
+        List<TaskDependency> dependents = taskDependencyRepository.findByDependsOnId(completedTask.getId());
+
+        for (TaskDependency dep : dependents) {
+            Task dependentTask = dep.getTask();
+            // Re-fetch to get fresh dependencies
+            List<TaskDependency> remainingBlockers = taskDependencyRepository.findByTaskId(dependentTask.getId());
+            boolean stillBlocked = remainingBlockers.stream()
+                    .anyMatch(d -> d.getDependsOn().getStatus() != TaskStatus.DONE);
+
+            if (!stillBlocked) {
+                log.info("Task {} is now unblocked after completion of task {}",
+                        dependentTask.getId(), completedTask.getId());
+                TaskResponse response = mapToResponse(dependentTask);
+                notifyTaskChange("unblocked", response, dependentTask.getProject().getId());
+            }
+        }
+    }
+
     private void updateTaskStatus(Task task, TaskStatus newStatus) {
         TaskStatus oldStatus = task.getStatus();
         task.setStatus(newStatus);
@@ -215,12 +354,27 @@ public class TaskService {
     private void notifyTaskChange(String action, TaskResponse task, Long projectId) {
         switch (action) {
             case "created" -> webSocketEventService.sendTaskCreated(projectId, task);
-            case "updated", "status_changed", "reordered" -> webSocketEventService.sendTaskUpdated(projectId, task.getId(), task);
+            case "updated", "status_changed", "reordered", "unblocked" ->
+                    webSocketEventService.sendTaskUpdated(projectId, task.getId(), task);
             case "deleted" -> webSocketEventService.sendTaskDeleted(projectId, task.getId());
         }
     }
 
     private TaskResponse mapToResponse(Task task) {
+        List<TaskDependency> dependencies = taskDependencyRepository.findByTaskId(task.getId());
+        List<TaskDependency> dependents = taskDependencyRepository.findByDependsOnId(task.getId());
+
+        List<Long> blockedByIds = dependencies.stream()
+                .map(dep -> dep.getDependsOn().getId())
+                .collect(Collectors.toList());
+
+        List<Long> dependentIds = dependents.stream()
+                .map(dep -> dep.getTask().getId())
+                .collect(Collectors.toList());
+
+        boolean blocked = dependencies.stream()
+                .anyMatch(dep -> dep.getDependsOn().getStatus() != TaskStatus.DONE);
+
         return TaskResponse.builder()
                 .id(task.getId())
                 .title(task.getTitle())
@@ -243,6 +397,9 @@ public class TaskService {
                 .createdById(task.getCreatedBy() != null ? task.getCreatedBy().getId() : null)
                 .createdByName(task.getCreatedBy() != null ? task.getCreatedBy().getFullName() : null)
                 .tags(task.getTags())
+                .blocked(blocked)
+                .blockedByIds(blockedByIds)
+                .dependentIds(dependentIds)
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .build();

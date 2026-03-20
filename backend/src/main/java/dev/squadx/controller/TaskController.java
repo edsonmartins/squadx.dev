@@ -4,6 +4,7 @@ import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.common.PageResponse;
 import dev.squadx.dto.task.TaskRequest;
 import dev.squadx.dto.task.TaskResponse;
+import dev.squadx.model.TaskDependency;
 import dev.squadx.model.User;
 import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.service.TaskService;
@@ -19,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/tasks")
@@ -112,5 +114,54 @@ public class TaskController {
     ) {
         taskService.delete(id, user);
         return ResponseEntity.ok(ApiResponse.success(null, "Task deleted successfully"));
+    }
+
+    // ---- Task Dependency Endpoints ----
+
+    @PostMapping("/{id}/dependencies")
+    @Operation(summary = "Add a dependency to a task")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> addDependency(
+            @PathVariable Long id,
+            @RequestBody Map<String, Long> body,
+            @AuthenticationPrincipal User user
+    ) {
+        Long dependsOnId = body.get("dependsOnId");
+        if (dependsOnId == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("dependsOnId is required"));
+        }
+
+        TaskDependency dependency = taskService.addDependency(id, dependsOnId, user);
+
+        Map<String, Object> result = Map.of(
+                "id", dependency.getId(),
+                "taskId", id,
+                "dependsOnId", dependsOnId
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result, "Dependency added successfully"));
+    }
+
+    @DeleteMapping("/{id}/dependencies/{depId}")
+    @Operation(summary = "Remove a dependency from a task")
+    public ResponseEntity<ApiResponse<Void>> removeDependency(
+            @PathVariable Long id,
+            @PathVariable Long depId,
+            @AuthenticationPrincipal User user
+    ) {
+        taskService.removeDependency(id, depId, user);
+        return ResponseEntity.ok(ApiResponse.success(null, "Dependency removed successfully"));
+    }
+
+    @GetMapping("/{id}/blockers")
+    @Operation(summary = "Get blocking tasks for a task")
+    public ResponseEntity<ApiResponse<List<TaskResponse>>> getBlockers(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
+    ) {
+        List<TaskResponse> blockers = taskService.getBlockers(id, user);
+        return ResponseEntity.ok(ApiResponse.success(blockers));
     }
 }

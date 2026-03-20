@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     git_user_name: str = Field(default="SquadX Agent", alias="SQUADX_GIT_USER_NAME")
     git_user_email: str = Field(default="agent@squadx.dev", alias="SQUADX_GIT_USER_EMAIL")
 
+    # Git worktree isolation
+    use_worktrees: bool = Field(default=True, alias="SQUADX_USE_WORKTREES")
+
     # Local Storage
     data_dir: str = Field(default="~/.squadx", alias="SQUADX_DATA_DIR")
     db_path: str = Field(default="~/.squadx/squadx.db", alias="SQUADX_DB_PATH")

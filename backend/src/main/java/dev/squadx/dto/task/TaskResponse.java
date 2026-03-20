@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 @Data
@@ -69,6 +70,14 @@ public class TaskResponse {
     private String createdByName;
 
     private Set<String> tags;
+
+    private Boolean blocked;
+
+    @JsonProperty("blocked_by_ids")
+    private List<Long> blockedByIds;
+
+    @JsonProperty("dependent_ids")
+    private List<Long> dependentIds;
 
     @JsonProperty("created_at")
     private Instant createdAt;

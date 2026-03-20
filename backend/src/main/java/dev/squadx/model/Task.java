@@ -3,10 +3,13 @@ package dev.squadx.model;
 import dev.squadx.model.enums.TaskPriority;
 import dev.squadx.model.enums.TaskStatus;
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -85,4 +88,23 @@ public class Task extends BaseEntity {
     @Column(name = "tag")
     @Builder.Default
     private Set<String> tags = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @JsonIgnore
+    private List<TaskDependency> dependencies = new ArrayList<>();
+
+    @OneToMany(mappedBy = "dependsOn", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @JsonIgnore
+    private List<TaskDependency> dependents = new ArrayList<>();
+
+    @Transient
+    public boolean isBlocked() {
+        if (dependencies == null || dependencies.isEmpty()) {
+            return false;
+        }
+        return dependencies.stream()
+                .anyMatch(dep -> dep.getDependsOn().getStatus() != TaskStatus.DONE);
+    }
 }

@@ -23,6 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,6 +49,9 @@ class TaskServiceTest {
 
     @Mock
     private OrganizationMemberRepository memberRepository;
+
+    @Mock
+    private TaskDependencyRepository taskDependencyRepository;
 
     @Mock
     private WebSocketEventService webSocketEventService;
@@ -95,6 +99,10 @@ class TaskServiceTest {
         task.setId(1000L);
         task.setCreatedAt(Instant.now());
         task.setUpdatedAt(Instant.now());
+
+        // Default stubs for dependency repository (used by mapToResponse)
+        lenient().when(taskDependencyRepository.findByTaskId(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(taskDependencyRepository.findByDependsOnId(anyLong())).thenReturn(Collections.emptyList());
     }
 
     @Nested

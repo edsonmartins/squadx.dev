@@ -1,0 +1,17 @@
+{
+  "name": "Code Review",
+  "description": "Specialized code review team with security, performance and style reviewers",
+  "icon": "search",
+  "agents": [
+    {"name": "Lead Reviewer", "type": "COORDINATOR", "description": "Coordinates review process, consolidates findings, ensures quality standards"},
+    {"name": "Security Reviewer", "type": "BACKEND", "description": "Identifies vulnerabilities, checks authentication, validates input sanitization"},
+    {"name": "Performance Reviewer", "type": "BACKEND", "description": "Analyzes time complexity, memory usage, query optimization"},
+    {"name": "Style Reviewer", "type": "QA", "description": "Enforces coding standards, naming conventions, documentation quality"}
+  ],
+  "defaultTasks": [
+    {"subject": "Perform security audit on codebase", "assignTo": "Security Reviewer", "priority": "HIGH"},
+    {"subject": "Analyze performance bottlenecks", "assignTo": "Performance Reviewer", "priority": "HIGH"},
+    {"subject": "Review code quality and standards compliance", "assignTo": "Style Reviewer", "priority": "MEDIUM"},
+    {"subject": "Consolidate findings and generate review report", "assignTo": "Lead Reviewer", "priority": "MEDIUM"}
+  ]
+}

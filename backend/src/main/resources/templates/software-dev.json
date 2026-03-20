@@ -1,0 +1,19 @@
+{
+  "name": "Software Development",
+  "description": "Full development team with coordinator, frontend, backend, QA and DevOps agents",
+  "icon": "code",
+  "agents": [
+    {"name": "Tech Lead", "type": "COORDINATOR", "description": "Plans architecture, reviews code, coordinates team"},
+    {"name": "Frontend Dev", "type": "FRONTEND", "description": "React, TypeScript, CSS, accessibility"},
+    {"name": "Backend Dev", "type": "BACKEND", "description": "APIs, databases, business logic"},
+    {"name": "QA Engineer", "type": "QA", "description": "Unit tests, integration tests, E2E"},
+    {"name": "DevOps", "type": "DEVOPS", "description": "CI/CD, Docker, deployment"}
+  ],
+  "defaultTasks": [
+    {"subject": "Analyze requirements and create technical plan", "assignTo": "Tech Lead", "priority": "HIGH"},
+    {"subject": "Set up project structure and CI/CD", "assignTo": "DevOps", "priority": "HIGH"},
+    {"subject": "Implement core business logic", "assignTo": "Backend Dev", "priority": "MEDIUM"},
+    {"subject": "Build user interface", "assignTo": "Frontend Dev", "priority": "MEDIUM"},
+    {"subject": "Write test suite", "assignTo": "QA Engineer", "priority": "MEDIUM"}
+  ]
+}

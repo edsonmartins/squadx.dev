@@ -1,0 +1,15 @@
+{
+  "name": "Full Stack",
+  "description": "Compact team with a coordinator, full-stack developer and QA engineer",
+  "icon": "layers",
+  "agents": [
+    {"name": "Coordinator", "type": "COORDINATOR", "description": "Plans tasks, reviews deliverables, manages priorities"},
+    {"name": "Fullstack Dev", "type": "FULLSTACK", "description": "Frontend and backend development, API design, database management"},
+    {"name": "QA Engineer", "type": "QA", "description": "Testing strategy, test automation, quality assurance"}
+  ],
+  "defaultTasks": [
+    {"subject": "Define project scope and technical approach", "assignTo": "Coordinator", "priority": "HIGH"},
+    {"subject": "Implement end-to-end feature", "assignTo": "Fullstack Dev", "priority": "MEDIUM"},
+    {"subject": "Create automated test coverage", "assignTo": "QA Engineer", "priority": "MEDIUM"}
+  ]
+}

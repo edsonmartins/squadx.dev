@@ -208,11 +208,14 @@ jobs:
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
 
+      - name: Ensure namespace exists
+        run: kubectl create namespace squadx --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply Kubernetes manifests
-        run: kubectl apply -f infra/k8s/
+        run: kubectl apply -n squadx -f infra/k8s/
 
       - name: Update image tags
         run: |
-          kubectl set image deployment/backend backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
-          kubectl set image deployment/frontend frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
-          kubectl set image deployment/client client=ghcr.io/${{ github.repository }}/client:${{ github.sha }}
+          kubectl set image deployment/backend backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }} -n squadx
+          kubectl set image deployment/frontend frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }} -n squadx
+          kubectl set image deployment/client client=ghcr.io/${{ github.repository }}/client:${{ github.sha }} -n squadx

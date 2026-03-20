@@ -16,6 +16,8 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # Build the application
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 

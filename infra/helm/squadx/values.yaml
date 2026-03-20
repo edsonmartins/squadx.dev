@@ -169,15 +169,17 @@ config:
   NEXT_PUBLIC_API_URL: "https://api.squadx.dev"
   NEXT_PUBLIC_WS_URL: "wss://api.squadx.dev/ws"
 
-# -- Secrets (base64-encoded, replace before deploying)
+# -- Secrets (base64-encoded — MUST be replaced before deploying!)
+# All values below decode to "change-me". Replace every one with real secrets.
+# Generate with: echo -n 'your-real-value' | base64
 secrets:
-  JWT_SECRET: "Y2hhbmdlLW1lLWluLXByb2R1Y3Rpb24tbWluLTMyLWNoYXJz"
-  SPRING_DATASOURCE_PASSWORD: "Y2hhbmdlLW1l"
-  SUPABASE_ANON_KEY: "Y2hhbmdlLW1l"
-  SUPABASE_SERVICE_KEY: "Y2hhbmdlLW1l"
-  STRIPE_API_KEY: "Y2hhbmdlLW1l"
-  STRIPE_WEBHOOK_SECRET: "Y2hhbmdlLW1l"
-  RESEND_API_KEY: "Y2hhbmdlLW1l"
-  AWS_ACCESS_KEY_ID: "Y2hhbmdlLW1l"
-  AWS_SECRET_ACCESS_KEY: "Y2hhbmdlLW1l"
-  POSTGRES_PASSWORD: "Y2hhbmdlLW1l"
+  JWT_SECRET: "Y2hhbmdlLW1lLWluLXByb2R1Y3Rpb24tbWluLTMyLWNoYXJz"          # REPLACE: min 32-char secret
+  SPRING_DATASOURCE_PASSWORD: "Y2hhbmdlLW1l"   # REPLACE: PostgreSQL password
+  SUPABASE_ANON_KEY: "Y2hhbmdlLW1l"            # REPLACE: from Supabase dashboard
+  SUPABASE_SERVICE_KEY: "Y2hhbmdlLW1l"         # REPLACE: from Supabase dashboard
+  STRIPE_API_KEY: "Y2hhbmdlLW1l"               # REPLACE: from Stripe dashboard
+  STRIPE_WEBHOOK_SECRET: "Y2hhbmdlLW1l"        # REPLACE: from Stripe webhook config
+  RESEND_API_KEY: "Y2hhbmdlLW1l"               # REPLACE: from Resend dashboard
+  AWS_ACCESS_KEY_ID: "Y2hhbmdlLW1l"            # REPLACE: from AWS IAM
+  AWS_SECRET_ACCESS_KEY: "Y2hhbmdlLW1l"        # REPLACE: from AWS IAM
+  POSTGRES_PASSWORD: "Y2hhbmdlLW1l"            # REPLACE: must match SPRING_DATASOURCE_PASSWORD

@@ -111,4 +111,32 @@ public class AgentController {
         agentService.delete(id, user);
         return ResponseEntity.ok(ApiResponse.success(null, "Agent deleted successfully"));
     }
+
+    @PostMapping("/{id}/heartbeat")
+    @Operation(summary = "Send agent heartbeat")
+    public ResponseEntity<ApiResponse<Void>> heartbeat(@PathVariable Long id) {
+        agentService.heartbeat(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Heartbeat received"));
+    }
+
+    @PutMapping("/{id}/lifecycle")
+    @Operation(summary = "Update agent lifecycle state")
+    public ResponseEntity<ApiResponse<Void>> updateLifecycle(
+            @PathVariable Long id,
+            @RequestParam String state
+    ) {
+        agentService.updateLifecycleState(id, state);
+        return ResponseEntity.ok(ApiResponse.success(null, "Lifecycle state updated"));
+    }
+
+    @GetMapping("/dead")
+    @Operation(summary = "Detect dead agents (no heartbeat)")
+    public ResponseEntity<ApiResponse<List<AgentResponse>>> detectDead(
+            @RequestParam(defaultValue = "120") int timeoutSeconds
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                agentService.detectDeadAgents(timeoutSeconds),
+                "Dead agents detected"
+        ));
+    }
 }

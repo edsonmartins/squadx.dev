@@ -4,6 +4,7 @@ import dev.squadx.model.enums.AgentType;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -57,4 +58,11 @@ public class Agent extends BaseEntity {
     @Column(name = "capability")
     @Builder.Default
     private Set<String> capabilities = new HashSet<>();
+
+    @Column(name = "last_heartbeat")
+    private LocalDateTime lastHeartbeat;
+
+    @Column(name = "lifecycle_state")
+    @Builder.Default
+    private String lifecycleState = "READY";
 }

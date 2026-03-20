@@ -11,12 +11,15 @@ import dev.squadx.model.User;
 import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.SquadRepository;
+import dev.squadx.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,6 +30,7 @@ public class AgentService {
     private final AgentRepository agentRepository;
     private final SquadRepository squadRepository;
     private final OrganizationMemberRepository memberRepository;
+    private final TaskRepository taskRepository;
 
     @Transactional
     public AgentResponse create(AgentRequest request, User currentUser) {
@@ -148,6 +152,66 @@ public class AgentService {
         agent = agentRepository.save(agent);
 
         return mapToResponse(agent);
+    }
+
+    // --- Agent Lifecycle ---
+
+    @Transactional
+    public void heartbeat(Long agentId) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        agent.setLastHeartbeat(LocalDateTime.now());
+        agent.setLifecycleState("WORKING");
+        agentRepository.save(agent);
+    }
+
+    @Transactional
+    public void updateLifecycleState(Long agentId, String state) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        agent.setLifecycleState(state);
+        if ("WORKING".equals(state) || "IDLE".equals(state)) {
+            agent.setLastHeartbeat(LocalDateTime.now());
+        }
+        agentRepository.save(agent);
+    }
+
+    public List<AgentResponse> detectDeadAgents(int timeoutSeconds) {
+        LocalDateTime threshold = LocalDateTime.now().minusSeconds(timeoutSeconds);
+        return agentRepository.findAll().stream()
+                .filter(a -> a.isActive()
+                        && a.getLastHeartbeat() != null
+                        && a.getLastHeartbeat().isBefore(threshold)
+                        && !"DEAD".equals(a.getLifecycleState()))
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void recoverTasksFromDeadAgent(Long agentId) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        agent.setLifecycleState("DEAD");
+        agent.setActive(false);
+        agentRepository.save(agent);
+
+        // Reset in-progress tasks assigned to this agent back to pending
+        taskRepository.findByAgentId(agentId).stream()
+                .filter(t -> "IN_PROGRESS".equals(t.getStatus().name()))
+                .forEach(t -> {
+                    t.setStatus(dev.squadx.model.enums.TaskStatus.TODO);
+                    t.setAgent(null);
+                    taskRepository.save(t);
+                });
+    }
+
+    @Scheduled(fixedRate = 60000) // Every 60 seconds
+    @Transactional
+    public void checkDeadAgents() {
+        List<AgentResponse> dead = detectDeadAgents(120); // 2 minutes without heartbeat
+        for (AgentResponse agent : dead) {
+            recoverTasksFromDeadAgent(agent.getId());
+        }
     }
 
     private void validateUserAccess(Long organizationId, Long userId) {

@@ -21,7 +21,9 @@ class StompClient {
 
     const token = api.getToken();
     if (!token) {
-      console.warn("No token available for socket connection");
+      if (process.env.NODE_ENV === "development") {
+        console.warn("No token available for socket connection");
+      }
       return;
     }
 
@@ -53,18 +55,24 @@ class StompClient {
         this.isConnecting = false;
       },
       onStompError: (frame) => {
-        console.error("STOMP error:", frame.headers["message"]);
-        console.error("Details:", frame.body);
+        if (process.env.NODE_ENV === "development") {
+          console.error("STOMP error:", frame.headers["message"]);
+          console.error("Details:", frame.body);
+        }
         this.isConnecting = false;
         this.reconnectAttempts++;
 
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          console.error("Max reconnection attempts reached");
+          if (process.env.NODE_ENV === "development") {
+            console.error("Max reconnection attempts reached");
+          }
           this.client?.deactivate();
         }
       },
       onWebSocketError: (event) => {
-        console.error("WebSocket error:", event);
+        if (process.env.NODE_ENV === "development") {
+          console.error("WebSocket error:", event);
+        }
         this.isConnecting = false;
       },
     });
@@ -103,7 +111,9 @@ class StompClient {
         const data = JSON.parse(message.body);
         callbacks.forEach((callback) => callback(data));
       } catch (e) {
-        console.error("Error parsing message:", e);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Error parsing message:", e);
+        }
         callbacks.forEach((callback) => callback(message.body));
       }
     });
@@ -157,7 +167,9 @@ class StompClient {
         body: JSON.stringify(body),
       });
     } else {
-      console.warn("STOMP not connected, cannot send:", destination);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("STOMP not connected, cannot send:", destination);
+      }
     }
   }
 

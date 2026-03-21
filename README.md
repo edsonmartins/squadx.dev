@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Java](https://img.shields.io/badge/java-21+-orange.svg)](https://openjdk.org)
 [![Next.js](https://img.shields.io/badge/next.js-16+-black.svg)](https://nextjs.org)
-[![Tests](https://img.shields.io/badge/tests-591%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-680%2B-brightgreen.svg)]()
 
 ---
 
@@ -50,7 +50,7 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 
 | Camada | Tecnologia |
 |--------|-----------|
-| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (14 migrations) |
+| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (18 migrations) |
 | **Frontend** | Next.js 16, React 19, TypeScript 5.7, Tailwind CSS, Zustand, TanStack Query |
 | **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
 | **Mobile** | Expo 52, React Native, expo-router 4 |
@@ -264,7 +264,7 @@ SQUADX_AGENT_CPU_LIMIT=2.0
 
 ## Testes
 
-O projeto possui **591+ testes** distribuídos em 80 arquivos:
+O projeto possui **680+ testes** distribuídos em 80+ arquivos:
 
 ### Backend (Java - JUnit 5 + Mockito)
 ```bash
@@ -357,7 +357,7 @@ squadx.dev/
 │   │   ├── security/           # JWT, PermissionChecker
 │   │   └── service/            # 22 business services
 │   └── src/main/resources/
-│       └── db/migration/       # V1-V14 Flyway migrations
+│       └── db/migration/       # V1-V18 Flyway migrations
 ├── frontend/                   # Next.js 16 Dashboard
 │   ├── src/
 │   │   ├── app/(dashboard)/    # Dashboard pages
@@ -444,6 +444,15 @@ squadx.dev/
 | GET | `/health` | Health check |
 | WS | `/ws` | WebSocket (STOMP/SockJS) |
 
+### ClawTeam-Inspired Extensions
+| Method | Endpoint | Descricao |
+|--------|----------|-----------|
+| CRUD | `/api/v1/templates` | Team templates |
+| CRUD | `/api/v1/costs` | Cost tracking |
+| CRUD | `/api/v1/agent-messages` | Inter-agent messaging |
+| CRUD | `/api/v1/tasks/{id}/dependencies` | Task dependencies |
+| POST | `/api/v1/agents/{id}/heartbeat` | Agent heartbeat |
+
 ---
 
 ## Roadmap
@@ -485,6 +494,14 @@ squadx.dev/
 - [x] Container metrics (CPU, memory, network, PIDs)
 - [x] gVisor runtime scaffold
 - [x] Firecracker runtime scaffold
+- [x] Task dependencies (DAG-based execution ordering)
+- [x] Team templates (reusable squad configurations)
+- [x] Cost tracking (per-agent, per-task token/cost accounting)
+- [x] Inter-agent messaging (mailbox with broadcast)
+- [x] Agent lifecycle protocol (heartbeat, idle detection, dead recovery)
+- [x] Git worktree isolation (parallel branch execution)
+- [x] Checkpoint/restore (snapshot sandbox state)
+- [x] Waiter pattern (agent coordination primitives)
 
 ### Future
 - [ ] SFU mode para 100+ viewers

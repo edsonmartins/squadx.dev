@@ -218,10 +218,22 @@ class SandboxLifecycleManager:
                 for sid, info in self._sandboxes.items():
                     if info.is_active and info.is_expired:
                         expired.append(sid)
+                # Transition INSIDE the lock to avoid race condition
+                for sid in expired:
+                    info = self._sandboxes.get(sid)
+                    if info and info.is_active:
+                        now = datetime.now(timezone.utc)
+                        info.state = SandboxState.EXPIRED
+                        info.stopped_at = now
+                        logger.warning(f"Sandbox {sid} expired, triggering cleanup")
 
+            # Callbacks OUTSIDE the lock to avoid deadlock
             for sid in expired:
-                logger.warning(f"Sandbox {sid} expired, triggering cleanup")
-                self.transition(sid, SandboxState.EXPIRED)
+                if self._on_state_change_callback:
+                    try:
+                        self._on_state_change_callback(sid, SandboxState.RUNNING, SandboxState.EXPIRED)
+                    except Exception as e:
+                        logger.error(f"State change callback error: {e}")
                 if self._on_expire_callback:
                     try:
                         if asyncio.iscoroutinefunction(self._on_expire_callback):

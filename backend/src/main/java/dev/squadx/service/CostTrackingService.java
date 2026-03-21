@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +84,9 @@ public class CostTrackingService {
 
     public CostSummaryResponse getCostByAgent(Long orgId) {
         List<Object[]> rows = costEventRepository.sumCostGroupedByAgent(orgId);
+        if (rows == null) {
+            rows = Collections.emptyList();
+        }
         BigDecimal grandTotal = costEventRepository.sumTotalCostByOrganization(orgId);
 
         return buildBreakdownResponse(rows, grandTotal, true);
@@ -90,6 +94,9 @@ public class CostTrackingService {
 
     public CostSummaryResponse getCostByModel(Long orgId) {
         List<Object[]> rows = costEventRepository.sumCostGroupedByModel(orgId);
+        if (rows == null) {
+            rows = Collections.emptyList();
+        }
         BigDecimal grandTotal = costEventRepository.sumTotalCostByOrganization(orgId);
 
         return buildBreakdownResponse(rows, grandTotal, false);
@@ -119,21 +126,31 @@ public class CostTrackingService {
         long totalOutput = 0;
 
         for (Object[] row : rows) {
+            if (row == null) {
+                continue;
+            }
+
             String label;
             BigDecimal cost;
             Long input;
             Long output;
 
             if (hasAgentId) {
+                if (row.length < 5) {
+                    continue;
+                }
                 label = row[1] != null ? row[1].toString() : "Unknown";
-                cost = (BigDecimal) row[2];
-                input = ((Number) row[3]).longValue();
-                output = ((Number) row[4]).longValue();
+                cost = row[2] instanceof BigDecimal ? (BigDecimal) row[2] : BigDecimal.ZERO;
+                input = row[3] instanceof Number ? ((Number) row[3]).longValue() : 0L;
+                output = row[4] instanceof Number ? ((Number) row[4]).longValue() : 0L;
             } else {
+                if (row.length < 4) {
+                    continue;
+                }
                 label = row[0] != null ? row[0].toString() : "Unknown";
-                cost = (BigDecimal) row[1];
-                input = ((Number) row[2]).longValue();
-                output = ((Number) row[3]).longValue();
+                cost = row[1] instanceof BigDecimal ? (BigDecimal) row[1] : BigDecimal.ZERO;
+                input = row[2] instanceof Number ? ((Number) row[2]).longValue() : 0L;
+                output = row[3] instanceof Number ? ((Number) row[3]).longValue() : 0L;
             }
 
             double percentage = grandTotal.compareTo(BigDecimal.ZERO) > 0

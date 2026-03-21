@@ -38,4 +38,6 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("SELECT COUNT(t) FROM Task t WHERE t.parentTask.id = :parentTaskId")
     long countSubtasksByParentTaskId(Long parentTaskId);
+
+    List<Task> findByAssignedAgentId(Long agentId);
 }

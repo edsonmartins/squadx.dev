@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional
 import json
 import logging
+import shlex
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ def generate_network_setup_script(policy: NetworkPolicy) -> str:
                 # For domain-based rules, resolve at setup time
                 lines.append(f"# Allow {rule.target}")
                 domain = rule.target.lstrip("*.")
-                lines.append(f'for ip in $(dig +short {domain} 2>/dev/null); do')
+                lines.append(f'for ip in $(dig +short {shlex.quote(domain)} 2>/dev/null); do')
                 for port in rule.ports:
                     lines.append(f'  iptables -A OUTPUT -d "$ip" -p tcp --dport {port} -j ACCEPT')
                 lines.append("done")

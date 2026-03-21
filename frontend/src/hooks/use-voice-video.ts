@@ -413,16 +413,26 @@ export function useVoiceVideo({
         const state = channel.presenceState();
         const peers: VoiceParticipant[] = [];
         for (const [, presences] of Object.entries(state)) {
-          for (const p of presences as unknown as VoicePresence[]) {
-            if (p.peerId !== peerIdRef.current) {
-              peers.push({
-                peerId: p.peerId,
-                userId: p.userId,
-                userName: p.userName,
-                isAudioEnabled: p.isAudioEnabled,
-                isVideoEnabled: p.isVideoEnabled,
-                isSpeaking: false,
-              });
+          const presenceList = Array.isArray(presences) ? presences : [];
+          for (const p of presenceList) {
+            if (
+              p &&
+              typeof p === "object" &&
+              "peerId" in p &&
+              "userId" in p &&
+              "userName" in p
+            ) {
+              const presence = p as VoicePresence;
+              if (presence.peerId !== peerIdRef.current) {
+                peers.push({
+                  peerId: presence.peerId,
+                  userId: presence.userId,
+                  userName: presence.userName,
+                  isAudioEnabled: !!presence.isAudioEnabled,
+                  isVideoEnabled: !!presence.isVideoEnabled,
+                  isSpeaking: false,
+                });
+              }
             }
           }
         }

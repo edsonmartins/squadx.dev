@@ -200,7 +200,9 @@ export class SupabaseSignaling {
    */
   async sendChatMessage(content: string): Promise<void> {
     if (!this.channel) {
-      console.error("[Supabase] Not connected to a session");
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Not connected to a session");
+      }
       return;
     }
 
@@ -219,7 +221,9 @@ export class SupabaseSignaling {
         payload: message,
       });
     } catch (error) {
-      console.error("[Supabase] Failed to send chat message:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Failed to send chat message:", error);
+      }
     }
   }
 
@@ -268,7 +272,9 @@ export class SupabaseSignaling {
 
   private async sendSignal(signal: WebRTCSignal): Promise<void> {
     if (!this.channel) {
-      console.error("[Supabase] Not connected to a session");
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Not connected to a session");
+      }
       return;
     }
 
@@ -279,7 +285,9 @@ export class SupabaseSignaling {
         payload: signal,
       });
     } catch (error) {
-      console.error("[Supabase] Failed to send WebRTC signal:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Failed to send WebRTC signal:", error);
+      }
     }
   }
 
@@ -294,7 +302,9 @@ export class SupabaseSignaling {
       .single();
 
     if (error) {
-      console.error("[Supabase] Error fetching session:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Error fetching session:", error);
+      }
       return null;
     }
 
@@ -312,7 +322,9 @@ export class SupabaseSignaling {
       .is("left_at", null);
 
     if (error) {
-      console.error("[Supabase] Error fetching participants:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("[Supabase] Error fetching participants:", error);
+      }
       return [];
     }
 

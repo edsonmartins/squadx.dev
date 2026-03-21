@@ -14,6 +14,11 @@ from squadx_client.docker.lifecycle import (
     SandboxState,
     SandboxInfo,
 )
+from squadx_client.docker.agent_lifecycle import (
+    AgentLifecycleProtocol,
+    AgentState,
+    AgentStatus,
+)
 from squadx_client.docker.file_ops import SandboxFileOps, FileInfo
 from squadx_client.docker.metrics import ContainerMetricsCollector, ContainerMetrics
 from squadx_client.docker.network_policy import (
@@ -44,6 +49,10 @@ __all__ = [
     "SandboxLifecycleManager",
     "SandboxState",
     "SandboxInfo",
+    # Agent Lifecycle
+    "AgentLifecycleProtocol",
+    "AgentState",
+    "AgentStatus",
     # File Operations
     "SandboxFileOps",
     "FileInfo",

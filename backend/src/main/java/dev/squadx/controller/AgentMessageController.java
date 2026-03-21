@@ -3,7 +3,14 @@ package dev.squadx.controller;
 import dev.squadx.dto.agent.AgentMessageRequest;
 import dev.squadx.dto.agent.AgentMessageResponse;
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.exception.ForbiddenException;
+import dev.squadx.exception.ResourceNotFoundException;
+import dev.squadx.model.Agent;
+import dev.squadx.model.Execution;
 import dev.squadx.model.User;
+import dev.squadx.repository.AgentRepository;
+import dev.squadx.repository.ExecutionRepository;
+import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.service.AgentMessageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +30,9 @@ import java.util.List;
 public class AgentMessageController {
 
     private final AgentMessageService agentMessageService;
+    private final AgentRepository agentRepository;
+    private final ExecutionRepository executionRepository;
+    private final OrganizationMemberRepository memberRepository;
 
     @PostMapping
     @Operation(summary = "Send a message between agents")
@@ -55,8 +65,10 @@ public class AgentMessageController {
     @GetMapping("/unread")
     @Operation(summary = "Get unread messages for an agent")
     public ResponseEntity<ApiResponse<List<AgentMessageResponse>>> getUnread(
-            @RequestParam Long agentId
+            @RequestParam Long agentId,
+            @AuthenticationPrincipal User user
     ) {
+        validateAgentAccess(agentId, user);
         List<AgentMessageResponse> responses = agentMessageService.getUnread(agentId);
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
@@ -73,8 +85,10 @@ public class AgentMessageController {
     @PutMapping("/read-all")
     @Operation(summary = "Mark all messages as read for an agent")
     public ResponseEntity<ApiResponse<Void>> markAllRead(
-            @RequestParam Long agentId
+            @RequestParam Long agentId,
+            @AuthenticationPrincipal User user
     ) {
+        validateAgentAccess(agentId, user);
         agentMessageService.markAllRead(agentId);
         return ResponseEntity.ok(ApiResponse.success(null, "All messages marked as read"));
     }
@@ -82,9 +96,29 @@ public class AgentMessageController {
     @GetMapping("/execution/{executionId}")
     @Operation(summary = "Get message history for an execution")
     public ResponseEntity<ApiResponse<List<AgentMessageResponse>>> getByExecution(
-            @PathVariable Long executionId
+            @PathVariable Long executionId,
+            @AuthenticationPrincipal User user
     ) {
+        validateExecutionAccess(executionId, user);
         List<AgentMessageResponse> responses = agentMessageService.getByExecution(executionId);
         return ResponseEntity.ok(ApiResponse.success(responses));
+    }
+
+    private void validateAgentAccess(Long agentId, User user) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        Long orgId = agent.getSquad().getOrganization().getId();
+        if (!memberRepository.existsByOrganizationIdAndUserId(orgId, user.getId())) {
+            throw new ForbiddenException("User does not have access to this agent's organization");
+        }
+    }
+
+    private void validateExecutionAccess(Long executionId, User user) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
+        Long orgId = execution.getAgent().getSquad().getOrganization().getId();
+        if (!memberRepository.existsByOrganizationIdAndUserId(orgId, user.getId())) {
+            throw new ForbiddenException("User does not have access to this execution's organization");
+        }
     }
 }

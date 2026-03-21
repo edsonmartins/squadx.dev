@@ -196,11 +196,11 @@ public class AgentService {
         agentRepository.save(agent);
 
         // Reset in-progress tasks assigned to this agent back to pending
-        taskRepository.findByAgentId(agentId).stream()
+        taskRepository.findByAssignedAgentId(agentId).stream()
                 .filter(t -> "IN_PROGRESS".equals(t.getStatus().name()))
                 .forEach(t -> {
                     t.setStatus(dev.squadx.model.enums.TaskStatus.TODO);
-                    t.setAgent(null);
+                    t.setAssignedAgent(null);
                     taskRepository.save(t);
                 });
     }

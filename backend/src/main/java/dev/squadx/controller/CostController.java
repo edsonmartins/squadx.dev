@@ -3,7 +3,10 @@ package dev.squadx.controller;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.cost.CostSummaryResponse;
 import dev.squadx.dto.cost.RecordCostRequest;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.model.CostEvent;
+import dev.squadx.model.User;
+import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.service.CostTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -24,13 +28,16 @@ import java.util.Map;
 public class CostController {
 
     private final CostTrackingService costTrackingService;
+    private final OrganizationMemberRepository memberRepository;
 
     @PostMapping
     @Operation(summary = "Record a cost event")
     public ResponseEntity<ApiResponse<CostEvent>> recordCost(
             @Valid @RequestBody RecordCostRequest request,
-            @RequestParam Long orgId
+            @RequestParam Long orgId,
+            @AuthenticationPrincipal User user
     ) {
+        validateUserAccess(orgId, user);
         CostEvent event = costTrackingService.recordCost(request, orgId);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -42,8 +49,10 @@ public class CostController {
     public ResponseEntity<ApiResponse<CostSummaryResponse>> getSummary(
             @RequestParam Long orgId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @AuthenticationPrincipal User user
     ) {
+        validateUserAccess(orgId, user);
         CostSummaryResponse summary = costTrackingService.getCostSummary(orgId, from, to);
         return ResponseEntity.ok(ApiResponse.success(summary));
     }
@@ -51,8 +60,10 @@ public class CostController {
     @GetMapping("/by-agent")
     @Operation(summary = "Get cost breakdown by agent")
     public ResponseEntity<ApiResponse<CostSummaryResponse>> getByAgent(
-            @RequestParam Long orgId
+            @RequestParam Long orgId,
+            @AuthenticationPrincipal User user
     ) {
+        validateUserAccess(orgId, user);
         CostSummaryResponse breakdown = costTrackingService.getCostByAgent(orgId);
         return ResponseEntity.ok(ApiResponse.success(breakdown));
     }
@@ -60,8 +71,10 @@ public class CostController {
     @GetMapping("/by-model")
     @Operation(summary = "Get cost breakdown by model")
     public ResponseEntity<ApiResponse<CostSummaryResponse>> getByModel(
-            @RequestParam Long orgId
+            @RequestParam Long orgId,
+            @AuthenticationPrincipal User user
     ) {
+        validateUserAccess(orgId, user);
         CostSummaryResponse breakdown = costTrackingService.getCostByModel(orgId);
         return ResponseEntity.ok(ApiResponse.success(breakdown));
     }
@@ -69,9 +82,17 @@ public class CostController {
     @GetMapping("/budget-status")
     @Operation(summary = "Get budget status for an organization")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBudgetStatus(
-            @RequestParam Long orgId
+            @RequestParam Long orgId,
+            @AuthenticationPrincipal User user
     ) {
+        validateUserAccess(orgId, user);
         Map<String, Object> status = costTrackingService.getBudgetStatus(orgId);
         return ResponseEntity.ok(ApiResponse.success(status));
+    }
+
+    private void validateUserAccess(Long orgId, User user) {
+        if (!memberRepository.existsByOrganizationIdAndUserId(orgId, user.getId())) {
+            throw new ForbiddenException("User does not have access to this organization");
+        }
     }
 }

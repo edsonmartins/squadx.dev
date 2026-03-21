@@ -13,6 +13,9 @@ class AgentMailboxMessage:
     from_agent_name: str
     message_type: str
     content: str
+    to_agent_id: int = 0
+    to_agent_name: str = ""
+    execution_id: Optional[int] = None
     is_read: bool = False
     created_at: str = ""
 
@@ -75,6 +78,9 @@ class AgentMailbox:
                     from_agent_name=m.get("fromAgentName", ""),
                     message_type=m["messageType"],
                     content=m["content"],
+                    to_agent_id=m.get("toAgentId", 0),
+                    to_agent_name=m.get("toAgentName", ""),
+                    execution_id=m.get("executionId"),
                     is_read=m.get("isRead", False),
                     created_at=m.get("createdAt", ""),
                 )

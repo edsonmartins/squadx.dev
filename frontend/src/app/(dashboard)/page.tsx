@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { organizationsApi, projectsApi, executionsApi, liveViewApi } from "@/lib/api";
+import { organizationsApi, projectsApi, executionsApi, liveViewApi, ExecutionResponse, PageResponse } from "@/lib/api";
 import { useOrganizationStore } from "@/stores/organization-store";
 import { ProjectModal } from "@/components/projects/project-modal";
 
@@ -117,18 +117,18 @@ export default function DashboardPage() {
     },
   ];
 
-  const { data: executionsData, isLoading: executionsLoading } = useQuery({
+  const { data: executionsData, isLoading: executionsLoading } = useQuery<PageResponse<ExecutionResponse>>({
     queryKey: ["recent-executions", currentOrganization?.id],
     queryFn: () =>
       currentOrganization
         ? executionsApi.listByOrganization(currentOrganization.id)
-        : Promise.resolve({ content: [] }),
+        : Promise.resolve({ content: [], page_number: 0, page_size: 0, total_elements: 0, total_pages: 0, is_first: true, is_last: true }),
     enabled: !!currentOrganization,
   });
 
   const recentActivity = useMemo(() => {
     const executions = executionsData?.content || [];
-    return executions.slice(0, 8).map((exec) => {
+    return executions.slice(0, 8).map((exec: ExecutionResponse) => {
       const statusMap: Record<string, { icon: typeof CheckCircle2; iconColor: string }> = {
         COMPLETED: { icon: CheckCircle2, iconColor: "text-green-500" },
         RUNNING: { icon: Play, iconColor: "text-blue-500" },
@@ -274,7 +274,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">No recent activity</p>
                 </div>
               )}
-              {recentActivity.map((activity) => (
+              {recentActivity.map((activity: { id: number; type: string; title: string; project: string; time: string; icon: typeof CheckCircle2; iconColor: string }) => (
                 <div
                   key={activity.id}
                   className="flex items-start gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer"

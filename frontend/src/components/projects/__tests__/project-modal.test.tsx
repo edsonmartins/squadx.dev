@@ -50,11 +50,15 @@ describe('ProjectModal', () => {
     const project = {
       id: 1,
       name: 'My Project',
+      slug: 'my-project',
       description: 'A project',
       repository_url: 'https://github.com/org/repo',
       default_branch: 'main',
+      is_active: true,
       squad_id: null,
       organization_id: 1,
+      organization_name: 'Test Org',
+      tasks_count: 0,
       created_at: '2025-01-01T00:00:00Z',
     }
 

@@ -42,7 +42,9 @@ public class MeetingController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get meeting by ID")
-    public ResponseEntity<ApiResponse<MeetingResponse>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MeetingResponse>> getById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(ApiResponse.success(meetingService.getById(id)));
     }
 
@@ -50,7 +52,8 @@ public class MeetingController {
     @Operation(summary = "Get meetings by organization")
     public ResponseEntity<ApiResponse<Page<MeetingResponse>>> getByOrganization(
             @PathVariable Long orgId,
-            @PageableDefault Pageable pageable) {
+            @PageableDefault Pageable pageable,
+            @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(ApiResponse.success(meetingService.getByOrganization(orgId, pageable)));
     }
 
@@ -66,7 +69,8 @@ public class MeetingController {
     public ResponseEntity<ApiResponse<List<MeetingResponse>>> getByDateRange(
             @PathVariable Long orgId,
             @RequestParam Instant from,
-            @RequestParam Instant to) {
+            @RequestParam Instant to,
+            @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(ApiResponse.success(meetingService.getByDateRange(orgId, from, to)));
     }
 
@@ -82,7 +86,9 @@ public class MeetingController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a meeting")
-    public ResponseEntity<ApiResponse<MeetingResponse>> cancel(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MeetingResponse>> cancel(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(ApiResponse.success(meetingService.cancel(id), "Meeting cancelled"));
     }
 }

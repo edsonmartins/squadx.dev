@@ -59,7 +59,9 @@ public class ApprovalController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get approval by ID")
-    public ResponseEntity<ApiResponse<ApprovalResponse>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ApprovalResponse>> getById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user) {
         ApprovalResponse response = approvalService.getById(id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -68,7 +70,8 @@ public class ApprovalController {
     @Operation(summary = "Get approvals by task")
     public ResponseEntity<ApiResponse<Page<ApprovalResponse>>> getByTask(
             @PathVariable Long taskId,
-            @PageableDefault Pageable pageable) {
+            @PageableDefault Pageable pageable,
+            @AuthenticationPrincipal User user) {
         Page<ApprovalResponse> response = approvalService.getByTask(taskId, pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -86,7 +89,8 @@ public class ApprovalController {
     @Operation(summary = "Get approvals by status")
     public ResponseEntity<ApiResponse<Page<ApprovalResponse>>> getByStatus(
             @RequestParam(defaultValue = "PENDING") ApprovalStatus status,
-            @PageableDefault Pageable pageable) {
+            @PageableDefault Pageable pageable,
+            @AuthenticationPrincipal User user) {
         Page<ApprovalResponse> response = approvalService.getByStatus(status, pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }

@@ -48,7 +48,10 @@ describe('SquadModal', () => {
       id: 1,
       name: 'Backend Squad',
       description: 'Handles backend tasks',
+      is_active: true,
       organization_id: 1,
+      organization_name: 'Test Org',
+      agents_count: 5,
       active_agents_count: 3,
       created_at: '2025-01-01T00:00:00Z',
     }

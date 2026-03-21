@@ -114,7 +114,10 @@ public class AgentController {
 
     @PostMapping("/{id}/heartbeat")
     @Operation(summary = "Send agent heartbeat")
-    public ResponseEntity<ApiResponse<Void>> heartbeat(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> heartbeat(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
+    ) {
         agentService.heartbeat(id);
         return ResponseEntity.ok(ApiResponse.success(null, "Heartbeat received"));
     }
@@ -123,7 +126,8 @@ public class AgentController {
     @Operation(summary = "Update agent lifecycle state")
     public ResponseEntity<ApiResponse<Void>> updateLifecycle(
             @PathVariable Long id,
-            @RequestParam String state
+            @RequestParam String state,
+            @AuthenticationPrincipal User user
     ) {
         agentService.updateLifecycleState(id, state);
         return ResponseEntity.ok(ApiResponse.success(null, "Lifecycle state updated"));
@@ -132,7 +136,8 @@ public class AgentController {
     @GetMapping("/dead")
     @Operation(summary = "Detect dead agents (no heartbeat)")
     public ResponseEntity<ApiResponse<List<AgentResponse>>> detectDead(
-            @RequestParam(defaultValue = "120") int timeoutSeconds
+            @RequestParam(defaultValue = "120") int timeoutSeconds,
+            @AuthenticationPrincipal User user
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 agentService.detectDeadAgents(timeoutSeconds),

@@ -12,6 +12,7 @@ vi.mock('@/hooks/use-webrtc', () => ({
     connect: mockConnect,
     disconnect: mockDisconnect,
     stats: null,
+    reconnectAttempts: 0,
     dataChannel: null,
   })),
   parseWebRTCStats: vi.fn(() => ({
@@ -41,6 +42,7 @@ describe('StreamViewer', () => {
       connect: mockConnect,
       disconnect: mockDisconnect,
       stats: null,
+      reconnectAttempts: 0,
       dataChannel: null,
     } as ReturnType<typeof useWebRTC>)
   })
@@ -65,6 +67,7 @@ describe('StreamViewer', () => {
       connect: mockConnect,
       disconnect: mockDisconnect,
       stats: null,
+      reconnectAttempts: 0,
       dataChannel: null,
     } as ReturnType<typeof useWebRTC>)
 
@@ -81,6 +84,7 @@ describe('StreamViewer', () => {
       connect: mockConnect,
       disconnect: mockDisconnect,
       stats: null,
+      reconnectAttempts: 0,
       dataChannel: null,
     } as ReturnType<typeof useWebRTC>)
 

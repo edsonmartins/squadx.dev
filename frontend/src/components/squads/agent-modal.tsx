@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const agentSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
-  type: z.enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR"]),
+  type: z.enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"]),
   description: z.string().max(500).optional(),
   model: z.string().min(1, "Model is required"),
   system_prompt: z.string().max(4000).optional(),
@@ -46,6 +46,7 @@ const agentTypes: { value: AgentType; label: string; description: string }[] = [
   { value: "FULLSTACK", label: "Fullstack Developer", description: "End-to-end development" },
   { value: "DEVOPS", label: "DevOps Engineer", description: "CI/CD, infrastructure, deployment" },
   { value: "QA", label: "QA Engineer", description: "Testing, quality assurance" },
+  { value: "DATABASE", label: "Database Specialist", description: "Database design, optimization, migrations" },
 ];
 
 const modelOptions = [

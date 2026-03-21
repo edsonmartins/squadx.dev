@@ -32,6 +32,7 @@ const agentTypeIcons: Record<AgentType, React.ReactNode> = {
   DEVOPS: <span className="text-orange-500">DO</span>,
   QA: <span className="text-yellow-500">QA</span>,
   COORDINATOR: <span className="text-red-500">CO</span>,
+  DATABASE: <span className="text-cyan-500">DB</span>,
 };
 
 const agentTypeLabels: Record<AgentType, string> = {
@@ -41,6 +42,7 @@ const agentTypeLabels: Record<AgentType, string> = {
   DEVOPS: "DevOps Engineer",
   QA: "QA Engineer",
   COORDINATOR: "Coordinator",
+  DATABASE: "Database Specialist",
 };
 
 interface SquadDetailSheetProps {

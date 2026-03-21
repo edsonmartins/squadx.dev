@@ -619,7 +619,7 @@ directly from agent containers. Never wonder what AI is doing again.
 
 👥 Multi-Viewer Collaboration
 "Your whole team can watch and learn together"
-Up to 10 people can watch the same agent simultaneously, 
+Up to 25 people can watch the same agent simultaneously,
 discuss approach via chat, and collaborate in real-time.
 
 📹 Session Recording
@@ -703,7 +703,7 @@ is doing, in real-time. See the agent:
 • Running tests
 
 And here's the cool part - [invite them to join]
-Now you can see it too! Up to 10 people can watch 
+Now you can see it too! Up to 25 people can watch
 simultaneously."
 
 PART 4: COLLABORATION (3 min)

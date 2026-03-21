@@ -30,12 +30,13 @@ public class EventBufferService {
     public void bufferEvent(Long userId, Map<String, Object> event) {
         var queue = buffers.computeIfAbsent(userId, k -> new ConcurrentLinkedQueue<>());
 
-        // Enforce max size
-        while (queue.size() >= maxEventsPerUser) {
+        // Add first, then trim — avoids race condition between size check and add.
+        // Worst case: queue briefly exceeds max by 1, immediately trimmed.
+        queue.add(new BufferedEvent(event, Instant.now()));
+        while (queue.size() > maxEventsPerUser) {
             queue.poll();
         }
 
-        queue.add(new BufferedEvent(event, Instant.now()));
         log.debug("Buffered event for user={}, queue size={}", userId, queue.size());
     }
 

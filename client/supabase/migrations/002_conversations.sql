@@ -106,13 +106,17 @@ CREATE INDEX IF NOT EXISTS idx_conversation_participants_user
     WHERE left_at IS NULL;
 
 -- Function to auto-create conversation when a live session starts
+-- Note: organization_id is set to the task_id as a reference key since
+-- live_sessions only tracks task_id. The backend resolves the actual org.
 CREATE OR REPLACE FUNCTION create_session_conversation()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.status = 'active' AND OLD.status = 'created' THEN
-        INSERT INTO conversations (session_id, organization_id, title, type)
-        VALUES (NEW.id, 0, 'Session Chat', 'session')
-        ON CONFLICT DO NOTHING;
+        -- Check if a conversation already exists for this session
+        IF NOT EXISTS (SELECT 1 FROM conversations WHERE session_id = NEW.id) THEN
+            INSERT INTO conversations (session_id, organization_id, title, type)
+            VALUES (NEW.id, NEW.task_id, 'Session Chat', 'session');
+        END IF;
     END IF;
     RETURN NEW;
 END;

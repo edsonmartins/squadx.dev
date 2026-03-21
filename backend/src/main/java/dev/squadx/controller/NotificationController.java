@@ -3,10 +3,13 @@ package dev.squadx.controller;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.notification.NotificationConfigRequest;
 import dev.squadx.dto.notification.NotificationConfigResponse;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.model.User;
+import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +25,7 @@ import java.util.List;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final OrganizationMemberRepository memberRepository;
 
     @GetMapping
     @Operation(summary = "List notification configurations for an organization")
@@ -29,6 +33,7 @@ public class NotificationController {
             @PathVariable Long orgId,
             @AuthenticationPrincipal User user
     ) {
+        validateOrgAccess(orgId, user);
         List<NotificationConfigResponse> configs = notificationService.listByOrganization(orgId);
         return ResponseEntity.ok(ApiResponse.success(configs));
     }
@@ -37,9 +42,10 @@ public class NotificationController {
     @Operation(summary = "Create a notification configuration")
     public ResponseEntity<ApiResponse<NotificationConfigResponse>> create(
             @PathVariable Long orgId,
-            @RequestBody NotificationConfigRequest request,
+            @Valid @RequestBody NotificationConfigRequest request,
             @AuthenticationPrincipal User user
     ) {
+        validateOrgAccess(orgId, user);
         NotificationConfigResponse config = notificationService.create(orgId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(config, "Notification configuration created successfully"));
@@ -50,9 +56,10 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<NotificationConfigResponse>> update(
             @PathVariable Long orgId,
             @PathVariable Long configId,
-            @RequestBody NotificationConfigRequest request,
+            @Valid @RequestBody NotificationConfigRequest request,
             @AuthenticationPrincipal User user
     ) {
+        validateOrgAccess(orgId, user);
         NotificationConfigResponse config = notificationService.update(configId, request);
         return ResponseEntity.ok(ApiResponse.success(config, "Notification configuration updated successfully"));
     }
@@ -64,6 +71,7 @@ public class NotificationController {
             @PathVariable Long configId,
             @AuthenticationPrincipal User user
     ) {
+        validateOrgAccess(orgId, user);
         notificationService.delete(configId);
         return ResponseEntity.ok(ApiResponse.success(null, "Notification configuration deleted successfully"));
     }
@@ -74,7 +82,14 @@ public class NotificationController {
             @PathVariable Long orgId,
             @AuthenticationPrincipal User user
     ) {
+        validateOrgAccess(orgId, user);
         notificationService.notifyTaskCompleted(orgId, "Test Task", "Test Project");
         return ResponseEntity.ok(ApiResponse.success(null, "Test notification sent"));
+    }
+
+    private void validateOrgAccess(Long orgId, User user) {
+        if (!memberRepository.existsByOrganizationIdAndUserId(orgId, user.getId())) {
+            throw new ForbiddenException("User does not have access to this organization");
+        }
     }
 }

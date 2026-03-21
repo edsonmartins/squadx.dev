@@ -33,6 +33,8 @@ public class WebSocketSessionTracker {
         if (userId == null) return;
 
         String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
+        if (sessionId == null) return;
+
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(sessionId);
         log.debug("WebSocket connected: user={}, session={}", userId, sessionId);
 

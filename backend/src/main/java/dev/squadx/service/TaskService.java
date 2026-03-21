@@ -195,6 +195,9 @@ public class TaskService {
 
         taskRepository.updateOrderIndex(id, newOrderIndex);
 
+        // Refresh task from DB to get updated orderIndex
+        task = taskRepository.findById(id).orElseThrow();
+
         TaskResponse response = mapToResponse(task);
         eventPublisher.publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
@@ -355,11 +358,10 @@ public class TaskService {
     private void updateTaskStatus(Task task, TaskStatus newStatus) {
         TaskStatus oldStatus = task.getStatus();
 
-        // Validate transition (throws IllegalStateException for invalid transitions)
-        try {
-            new TaskStatusTransition(oldStatus, newStatus);
-        } catch (IllegalStateException e) {
-            throw new BadRequestException(e.getMessage());
+        // Validate transition
+        if (!TaskStatusTransition.isValid(oldStatus, newStatus)) {
+            throw new BadRequestException(
+                    "Invalid task status transition: " + oldStatus + " -> " + newStatus);
         }
 
         task.setStatus(newStatus);

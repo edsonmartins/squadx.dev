@@ -22,7 +22,7 @@ logger = structlog.get_logger()
 
 
 @lru_cache(maxsize=10)
-def get_llm(model: str | None = None) -> BaseChatModel:
+def get_llm(model: str | None = None, temperature: float | None = None) -> BaseChatModel:
     """Get an LLM instance for the specified model via LiteLLM.
 
     LiteLLM auto-detects the provider from the model name. You can also
@@ -43,7 +43,7 @@ def get_llm(model: str | None = None) -> BaseChatModel:
 
     return ChatLiteLLM(
         model=model_name,
-        temperature=0.7,
+        temperature=temperature if temperature is not None else 0.7,
     )
 
 

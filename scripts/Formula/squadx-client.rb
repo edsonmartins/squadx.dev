@@ -7,10 +7,11 @@ class SquadxClient < Formula
   desc "AI Development Squad Orchestration Client"
   homepage "https://squadx.dev"
   url "https://github.com/squadx-dev/squadx.dev/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "UPDATE_WITH_ACTUAL_SHA256"
+  # TODO: Update sha256 with actual release tarball hash before publishing
+  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
 
-  depends_on "python@3.12"
+  depends_on "python@3.11"
   depends_on "git"
 
   # Docker is a runtime dependency, not a build dependency
@@ -18,7 +19,7 @@ class SquadxClient < Formula
 
   def install
     # Create virtualenv and install
-    venv = virtualenv_create(libexec, "python3.12")
+    venv = virtualenv_create(libexec, "python3.11")
     venv.pip_install_and_link buildpath/"client"
 
     # Install wrapper script

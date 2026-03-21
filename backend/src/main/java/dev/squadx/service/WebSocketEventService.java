@@ -1,7 +1,13 @@
 package dev.squadx.service;
 
+import dev.squadx.event.ExecutionCompletedEvent;
+import dev.squadx.event.TaskCreatedEvent;
+import dev.squadx.event.TaskDeletedEvent;
+import dev.squadx.event.TaskStatusChangedEvent;
+import dev.squadx.model.enums.ExecutionStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +19,32 @@ import java.util.Map;
 public class WebSocketEventService {
 
     private final SimpMessagingTemplate messagingTemplate;
+
+    // ── Domain Event Listeners ──────────────────────────────
+
+    @EventListener
+    public void onTaskCreated(TaskCreatedEvent event) {
+        sendTaskCreated(event.projectId(), event.task());
+    }
+
+    @EventListener
+    public void onTaskStatusChanged(TaskStatusChangedEvent event) {
+        sendTaskUpdated(event.projectId(), event.taskId(), event.task());
+    }
+
+    @EventListener
+    public void onTaskDeleted(TaskDeletedEvent event) {
+        sendTaskDeleted(event.projectId(), event.taskId());
+    }
+
+    @EventListener
+    public void onExecutionCompleted(ExecutionCompletedEvent event) {
+        if (event.status() == ExecutionStatus.COMPLETED || event.status() == ExecutionStatus.FAILED) {
+            sendExecutionCompleted(event.projectId(), event.taskId(), event.executionId(), event.status().name());
+        }
+    }
+
+    // ── WebSocket Broadcast Methods ─────────────────────────
 
     public void sendTaskCreated(Long projectId, Object task) {
         log.debug("Broadcasting task_created event for project {}", projectId);

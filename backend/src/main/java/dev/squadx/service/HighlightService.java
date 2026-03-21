@@ -9,7 +9,6 @@ import dev.squadx.model.enums.HighlightType;
 import dev.squadx.repository.ExecutionLogRepository;
 import dev.squadx.repository.SessionHighlightRepository;
 import dev.squadx.repository.SessionRecordingRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,17 +18,35 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class HighlightService {
 
     private final SessionHighlightRepository highlightRepository;
     private final SessionRecordingRepository recordingRepository;
     private final ExecutionLogRepository executionLogRepository;
+    private final Optional<AiAnalysisService> aiAnalysisService;
+
+    public HighlightService(
+            SessionHighlightRepository highlightRepository,
+            SessionRecordingRepository recordingRepository,
+            ExecutionLogRepository executionLogRepository,
+            Optional<AiAnalysisService> aiAnalysisService
+    ) {
+        this.highlightRepository = highlightRepository;
+        this.recordingRepository = recordingRepository;
+        this.executionLogRepository = executionLogRepository;
+        this.aiAnalysisService = aiAnalysisService;
+        if (aiAnalysisService.isPresent()) {
+            log.info("HighlightService initialized with AI analysis support");
+        } else {
+            log.info("HighlightService initialized with regex-only analysis (AI disabled)");
+        }
+    }
 
     // Pattern definitions for log analysis
     private static final Pattern ERROR_PATTERN =

@@ -3,14 +3,19 @@ package dev.squadx.service;
 import dev.squadx.dto.common.PageResponse;
 import dev.squadx.dto.task.TaskRequest;
 import dev.squadx.dto.task.TaskResponse;
+import dev.squadx.event.TaskCreatedEvent;
+import dev.squadx.event.TaskDeletedEvent;
+import dev.squadx.event.TaskStatusChangedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.TaskStatus;
+import dev.squadx.model.vo.TaskStatusTransition;
 import dev.squadx.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,7 +35,7 @@ public class TaskService {
     private final AgentRepository agentRepository;
     private final OrganizationMemberRepository memberRepository;
     private final TaskDependencyRepository taskDependencyRepository;
-    private final WebSocketEventService webSocketEventService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public TaskResponse create(TaskRequest request, User currentUser) {
@@ -67,7 +72,8 @@ public class TaskService {
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        notifyTaskChange("created", response, project.getId());
+        eventPublisher.publishEvent(new TaskCreatedEvent(
+                task.getId(), project.getId(), project.getOrganization().getId(), response));
 
         return response;
     }
@@ -114,6 +120,8 @@ public class TaskService {
 
         validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
 
+        TaskStatus oldStatusBeforeUpdate = task.getStatus();
+
         if (request.getTitle() != null) {
             task.setTitle(request.getTitle());
         }
@@ -147,7 +155,9 @@ public class TaskService {
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        notifyTaskChange("updated", response, task.getProject().getId());
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
+                oldStatusBeforeUpdate, task.getStatus(), response));
 
         return response;
     }
@@ -159,11 +169,14 @@ public class TaskService {
 
         validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
 
+        TaskStatus oldStatus = task.getStatus();
         updateTaskStatus(task, status);
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        notifyTaskChange("status_changed", response, task.getProject().getId());
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
+                oldStatus, status, response));
 
         // When a task is completed, notify dependents that they may be unblocked
         if (status == TaskStatus.DONE) {
@@ -182,7 +195,10 @@ public class TaskService {
 
         taskRepository.updateOrderIndex(id, newOrderIndex);
 
-        notifyTaskChange("reordered", mapToResponse(task), task.getProject().getId());
+        TaskResponse response = mapToResponse(task);
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
+                task.getStatus(), task.getStatus(), response));
     }
 
     @Transactional
@@ -193,9 +209,10 @@ public class TaskService {
         validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
 
         Long projectId = task.getProject().getId();
+        Long orgId = task.getProject().getOrganization().getId();
         taskRepository.delete(task);
 
-        notifyTaskChange("deleted", TaskResponse.builder().id(id).build(), projectId);
+        eventPublisher.publishEvent(new TaskDeletedEvent(id, projectId, orgId));
     }
 
     // ---- Task Dependency Methods ----
@@ -233,7 +250,9 @@ public class TaskService {
 
         // Notify that the task was updated (dependency changed)
         TaskResponse response = mapToResponse(task);
-        notifyTaskChange("updated", response, task.getProject().getId());
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
+                task.getStatus(), task.getStatus(), response));
 
         return dependency;
     }
@@ -255,7 +274,9 @@ public class TaskService {
 
         // Notify that the task was updated (dependency changed)
         TaskResponse response = mapToResponse(task);
-        notifyTaskChange("updated", response, task.getProject().getId());
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
+                task.getStatus(), task.getStatus(), response));
     }
 
     @Transactional(readOnly = true)
@@ -323,13 +344,24 @@ public class TaskService {
                 log.info("Task {} is now unblocked after completion of task {}",
                         dependentTask.getId(), completedTask.getId());
                 TaskResponse response = mapToResponse(dependentTask);
-                notifyTaskChange("unblocked", response, dependentTask.getProject().getId());
+                eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                        dependentTask.getId(), dependentTask.getProject().getId(),
+                        dependentTask.getProject().getOrganization().getId(),
+                        dependentTask.getStatus(), dependentTask.getStatus(), response));
             }
         }
     }
 
     private void updateTaskStatus(Task task, TaskStatus newStatus) {
         TaskStatus oldStatus = task.getStatus();
+
+        // Validate transition (throws IllegalStateException for invalid transitions)
+        try {
+            new TaskStatusTransition(oldStatus, newStatus);
+        } catch (IllegalStateException e) {
+            throw new BadRequestException(e.getMessage());
+        }
+
         task.setStatus(newStatus);
 
         if (newStatus == TaskStatus.IN_PROGRESS && task.getStartedAt() == null) {
@@ -348,15 +380,6 @@ public class TaskService {
     private void validateUserAccess(Long organizationId, Long userId) {
         if (!memberRepository.existsByOrganizationIdAndUserId(organizationId, userId)) {
             throw new ForbiddenException("User does not have access to this organization");
-        }
-    }
-
-    private void notifyTaskChange(String action, TaskResponse task, Long projectId) {
-        switch (action) {
-            case "created" -> webSocketEventService.sendTaskCreated(projectId, task);
-            case "updated", "status_changed", "reordered", "unblocked" ->
-                    webSocketEventService.sendTaskUpdated(projectId, task.getId(), task);
-            case "deleted" -> webSocketEventService.sendTaskDeleted(projectId, task.getId());
         }
     }
 

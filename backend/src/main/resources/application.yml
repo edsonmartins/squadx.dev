@@ -152,6 +152,41 @@ squadx:
     available: ${SQUADX_REGIONS:us-east-1,eu-west-1,ap-southeast-1}
   routing:
     strategy: ${SQUADX_ROUTING_STRATEGY:nearest}
+  notifications:
+    slack:
+      enabled: true
+    discord:
+      enabled: true
+    teams:
+      enabled: true
+  event-buffer:
+    max-events-per-user: 100
+    ttl-minutes: 5
+  ai:
+    enabled: ${SQUADX_AI_ENABLED:false}
+
+# JobRunr (Background Job Scheduling)
+org:
+  jobrunr:
+    background-job-server:
+      enabled: true
+      worker-count: 10
+    dashboard:
+      enabled: true
+      port: 8081
+    database:
+      type: sql
+    misc:
+      allow-anonymous-data-usage: false
+
+# Spring AI (Optional)
+spring.ai:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    chat:
+      options:
+        model: gpt-4o-mini
+        temperature: 0.3
 
 # Google Calendar Integration
 google:

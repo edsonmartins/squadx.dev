@@ -2,19 +2,25 @@ package dev.squadx.service;
 
 import dev.squadx.dto.notification.NotificationConfigRequest;
 import dev.squadx.dto.notification.NotificationConfigResponse;
+import dev.squadx.event.AgentStateChangedEvent;
+import dev.squadx.event.ExecutionCompletedEvent;
+import dev.squadx.event.TaskStatusChangedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.NotificationChannel;
 import dev.squadx.model.NotificationConfig;
 import dev.squadx.model.Organization;
+import dev.squadx.model.enums.ExecutionStatus;
+import dev.squadx.model.enums.TaskStatus;
+import dev.squadx.notification.NotificationProviderRegistry;
 import dev.squadx.repository.NotificationConfigRepository;
 import dev.squadx.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
@@ -26,7 +32,36 @@ public class NotificationService {
 
     private final NotificationConfigRepository notificationConfigRepository;
     private final OrganizationRepository organizationRepository;
-    private final RestClient.Builder restClientBuilder;
+    private final NotificationProviderRegistry providerRegistry;
+
+    // ── Domain Event Listeners ──────────────────────────────
+
+    @EventListener
+    public void onTaskStatusChanged(TaskStatusChangedEvent event) {
+        if (event.newStatus() == TaskStatus.DONE) {
+            notifyTaskCompleted(event.organizationId(),
+                    event.task() != null ? event.task().getTitle() : "Task #" + event.taskId(),
+                    event.task() != null ? event.task().getProjectName() : "");
+        } else if (event.newStatus() == TaskStatus.BLOCKED) {
+            notifyTaskFailed(event.organizationId(),
+                    event.task() != null ? event.task().getTitle() : "Task #" + event.taskId(),
+                    "Task is blocked");
+        }
+    }
+
+    @EventListener
+    public void onExecutionCompleted(ExecutionCompletedEvent event) {
+        if (event.status() == ExecutionStatus.FAILED) {
+            notifyTaskFailed(event.organizationId(), "Execution #" + event.executionId(), "Execution failed");
+        }
+    }
+
+    @EventListener
+    public void onAgentStateChanged(AgentStateChangedEvent event) {
+        if ("DEAD".equals(event.newState())) {
+            notifyAgentError(event.organizationId(), "Agent #" + event.agentId(), "Agent is dead (no heartbeat)");
+        }
+    }
 
     // ── Config CRUD ─────────────────────────────────────────────
 
@@ -136,45 +171,9 @@ public class NotificationService {
     }
 
     private void sendWebhook(NotificationConfig config, String message) {
-        RestClient client = restClientBuilder.build();
-        Map<String, Object> payload = buildPayload(config.getChannel(), message);
-
-        client.post()
-                .uri(config.getWebhookUrl())
-                .header("Content-Type", "application/json")
-                .body(payload)
-                .retrieve()
-                .toBodilessEntity();
-
+        var provider = providerRegistry.getProvider(config.getChannel());
+        provider.send(message, config.getWebhookUrl());
         log.debug("Notification sent via {} to org={}", config.getChannel(), config.getOrganization().getId());
-    }
-
-    private Map<String, Object> buildPayload(NotificationChannel channel, String message) {
-        return switch (channel) {
-            case SLACK -> Map.of(
-                    "text", message,
-                    "unfurl_links", false
-            );
-            case DISCORD -> Map.of(
-                    "content", message
-            );
-            case TEAMS -> Map.of(
-                    "type", "message",
-                    "attachments", List.of(Map.of(
-                            "contentType", "application/vnd.microsoft.card.adaptive",
-                            "content", Map.of(
-                                    "$schema", "http://adaptivecards.io/schemas/adaptive-card.json",
-                                    "type", "AdaptiveCard",
-                                    "version", "1.4",
-                                    "body", List.of(Map.of(
-                                            "type", "TextBlock",
-                                            "text", message,
-                                            "wrap", true
-                                    ))
-                            )
-                    ))
-            );
-        };
     }
 
     private boolean isEventEnabled(NotificationConfig config, String eventField) {

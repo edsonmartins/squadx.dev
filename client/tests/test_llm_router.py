@@ -32,25 +32,23 @@ def _make_settings(**overrides):
 class TestGetLlmOpenAI:
     """Test get_llm with OpenAI models."""
 
-    @patch("squadx_client.llm.router.ChatOpenAI")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
-    def test_openai_model(self, mock_chat_openai):
-        mock_chat_openai.return_value = MagicMock()
+    def test_openai_model(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         llm = get_llm("gpt-4o")
-        mock_chat_openai.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="gpt-4o",
-            api_key="sk-test",
             temperature=0.7,
         )
 
-    @patch("squadx_client.llm.router.ChatOpenAI")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
-    def test_o1_model_uses_openai(self, mock_chat_openai):
-        mock_chat_openai.return_value = MagicMock()
+    def test_o1_model_uses_litellm(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_llm("o1-preview")
-        mock_chat_openai.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="o1-preview",
-            api_key="sk-test",
             temperature=0.7,
         )
 
@@ -63,14 +61,13 @@ class TestGetLlmOpenAI:
 class TestGetLlmAnthropic:
     """Test get_llm with Anthropic models."""
 
-    @patch("squadx_client.llm.router.ChatAnthropic")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(anthropic_api_key="sk-ant-test"))
-    def test_anthropic_model(self, mock_chat_anthropic):
-        mock_chat_anthropic.return_value = MagicMock()
+    def test_anthropic_model(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         llm = get_llm("claude-3-opus-20240229")
-        mock_chat_anthropic.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="claude-3-opus-20240229",
-            api_key="sk-ant-test",
             temperature=0.7,
         )
 
@@ -83,58 +80,94 @@ class TestGetLlmAnthropic:
 class TestGetLlmDefault:
     """Test get_llm with default/unknown model names."""
 
-    @patch("squadx_client.llm.router.ChatOpenAI")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
-    def test_default_model_used_when_none(self, mock_chat_openai):
-        mock_chat_openai.return_value = MagicMock()
+    def test_default_model_used_when_none(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_llm(None)
-        mock_chat_openai.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="gpt-4o",
-            api_key="sk-test",
             temperature=0.7,
         )
 
-    @patch("squadx_client.llm.router.ChatAnthropic")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch(
         "squadx_client.llm.router.settings",
         _make_settings(openai_api_key=None, anthropic_api_key="sk-ant-test"),
     )
-    def test_unknown_model_falls_back_to_anthropic(self, mock_chat_anthropic):
-        mock_chat_anthropic.return_value = MagicMock()
-        get_llm("some-custom-model")
-        mock_chat_anthropic.assert_called_once()
+    def test_unknown_model_routes_through_litellm(self, mock_chat_litellm):
+        """LiteLLM handles routing for unknown/custom model names."""
+        mock_chat_litellm.return_value = MagicMock()
+        get_llm("gemini/gemini-1.5-pro")
+        mock_chat_litellm.assert_called_once_with(
+            model="gemini/gemini-1.5-pro",
+            temperature=0.7,
+        )
 
     @patch("squadx_client.llm.router.settings", _make_settings())
-    def test_no_keys_raises(self):
-        with pytest.raises(ValueError, match="No API key configured"):
-            get_llm("some-custom-model")
+    def test_openai_no_key_raises(self):
+        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            get_llm("gpt-4o")
+
+
+class TestGetLlmProviderPrefixes:
+    """Test get_llm with explicit provider prefixes."""
+
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
+    def test_openai_prefix(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
+        get_llm("openai/gpt-4o")
+        mock_chat_litellm.assert_called_once_with(
+            model="openai/gpt-4o",
+            temperature=0.7,
+        )
+
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch("squadx_client.llm.router.settings", _make_settings(anthropic_api_key="sk-ant-test"))
+    def test_anthropic_prefix(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
+        get_llm("anthropic/claude-3-sonnet-20240229")
+        mock_chat_litellm.assert_called_once_with(
+            model="anthropic/claude-3-sonnet-20240229",
+            temperature=0.7,
+        )
+
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch("squadx_client.llm.router.settings", _make_settings())
+    def test_ollama_no_key_needed(self, mock_chat_litellm):
+        """Ollama models don't require API keys."""
+        mock_chat_litellm.return_value = MagicMock()
+        get_llm("ollama/llama3")
+        mock_chat_litellm.assert_called_once_with(
+            model="ollama/llama3",
+            temperature=0.7,
+        )
 
 
 class TestGetCodingLlm:
     """Test get_coding_llm helper."""
 
-    @patch("squadx_client.llm.router.ChatOpenAI")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
-    def test_coding_llm_prefers_openai(self, mock_chat_openai):
-        mock_chat_openai.return_value = MagicMock()
+    def test_coding_llm_prefers_openai(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_coding_llm()
-        mock_chat_openai.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="gpt-4o",
-            api_key="sk-test",
             temperature=0.7,
         )
 
-    @patch("squadx_client.llm.router.ChatAnthropic")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch(
         "squadx_client.llm.router.settings",
         _make_settings(openai_api_key=None, anthropic_api_key="sk-ant-test"),
     )
-    def test_coding_llm_falls_back_to_anthropic(self, mock_chat_anthropic):
-        mock_chat_anthropic.return_value = MagicMock()
+    def test_coding_llm_falls_back_to_anthropic(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_coding_llm()
-        mock_chat_anthropic.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="claude-3-opus-20240229",
-            api_key="sk-ant-test",
             temperature=0.7,
         )
 
@@ -147,28 +180,26 @@ class TestGetCodingLlm:
 class TestGetFastLlm:
     """Test get_fast_llm helper."""
 
-    @patch("squadx_client.llm.router.ChatOpenAI")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch("squadx_client.llm.router.settings", _make_settings(openai_api_key="sk-test"))
-    def test_fast_llm_prefers_openai_mini(self, mock_chat_openai):
-        mock_chat_openai.return_value = MagicMock()
+    def test_fast_llm_prefers_openai_mini(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_fast_llm()
-        mock_chat_openai.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="gpt-4o-mini",
-            api_key="sk-test",
             temperature=0.7,
         )
 
-    @patch("squadx_client.llm.router.ChatAnthropic")
+    @patch("squadx_client.llm.router.ChatLiteLLM")
     @patch(
         "squadx_client.llm.router.settings",
         _make_settings(openai_api_key=None, anthropic_api_key="sk-ant-test"),
     )
-    def test_fast_llm_falls_back_to_haiku(self, mock_chat_anthropic):
-        mock_chat_anthropic.return_value = MagicMock()
+    def test_fast_llm_falls_back_to_haiku(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
         get_fast_llm()
-        mock_chat_anthropic.assert_called_once_with(
+        mock_chat_litellm.assert_called_once_with(
             model="claude-3-haiku-20240307",
-            api_key="sk-ant-test",
             temperature=0.7,
         )
 

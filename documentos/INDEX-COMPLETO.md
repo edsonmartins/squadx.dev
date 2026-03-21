@@ -89,7 +89,7 @@ Contém 11 documentos adicionais:
 - **50+ endpoints** de API
 - **215+ features** mapeadas
 - **32 semanas** de roadmap
-- **5 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
+- **7 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA, Coordinator, Database)
 - **7 camadas** de segurança
 
 ---
@@ -159,7 +159,7 @@ Contém 11 documentos adicionais:
 
 ### Multi-Agent
 ✅ **LangGraph** orchestration  
-✅ **5 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
+✅ **7 tipos** de agentes especializados (Frontend, Backend, Fullstack, DevOps, QA, Coordinator, Database)
 ✅ **Parallel execution** quando possível  
 ✅ **Parallel execution** quando possível
 

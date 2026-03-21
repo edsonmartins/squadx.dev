@@ -92,7 +92,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
      ├────────────────────────────▶                       │
      │                             │                       │
      │                        2. Squad recebe             │
-     │                           5 agentes                │
+     │                           7 agentes                │
      │                        executam em paralelo        │
      │                             │                       │
      │                        3. Agentes trabalham        │
@@ -122,7 +122,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
 
 ### 1. Multi-Agent Coordination ⭐
 **Ninguém faz hoje:**
-- 5 agentes especializados (Frontend, Backend, Fullstack, DevOps, QA)
+- 7 agentes especializados (Frontend, Backend, Fullstack, DevOps, QA, Coordinator, Database)
 - Trabalham em paralelo quando possível
 - LangGraph coordena dependências
 
@@ -205,7 +205,7 @@ Web Platform (Cloud)          Client (Local)           Resultado
 ### Phase 2: Multi-Agent (8 semanas)
 **Objetivo:** 3-5 clientes beta pagos, MRR $2K
 - LangGraph orchestration
-- 5 agentes especializados
+- 7 agentes especializados
 - Task dependencies
 - Approval workflows
 

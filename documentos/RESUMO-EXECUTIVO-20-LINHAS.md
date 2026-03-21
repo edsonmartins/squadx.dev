@@ -7,12 +7,12 @@ Uma plataforma SaaS B2B onde empresas de software "contratam" squads virtuais de
 Desenvolvedores júnior, mesmo com ferramentas AI, não são produtivos. Coordenar múltiplos agentes AI manualmente é caótico, estressante e não escala. Não há visibilidade de custos nem gestão centralizada.
 
 **A solução:**
-Dashboard web onde PMs/Tech Leads criam tasks no Kanban → 5 Agentes AI especializados (Frontend, Backend, Fullstack, DevOps, QA) executam automaticamente no computador do desenvolvedor → Código commitado, PRs criados → Tudo visível em tempo real.
+Dashboard web onde PMs/Tech Leads criam tasks no Kanban → 7 Agentes AI especializados (Frontend, Backend, Fullstack, DevOps, QA, Coordinator, Database) executam automaticamente no computador do desenvolvedor → Código commitado, PRs criados → Tudo visível em tempo real.
 
 **Como funciona:**
 1. Plataforma na nuvem gerencia projetos, squads e tasks (tipo Jira)
 2. Cliente Python roda na máquina do dev (código NUNCA sai dali)
-3. LangGraph coordena 5 tipos de agentes especializados
+3. LangGraph coordena 7 tipos de agentes especializados
 4. Agentes executam em containers Docker isolados (sem internet = zero exfiltração)
 5. Humano aprova mudanças críticas (opcional mas recomendado)
 6. Dashboard mostra progresso, métricas e custos em tempo real

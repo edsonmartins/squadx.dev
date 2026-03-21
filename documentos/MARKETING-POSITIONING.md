@@ -47,11 +47,11 @@ Message 2: COLLABORATION
 ━━━━━━━━━━━━━━━━━━━━━
 "Your whole team can watch and learn"
 
-Up to 10 team members can watch the same AI agent working 
+Up to 25 team members can watch the same AI agent working
 simultaneously, discuss approach, and collaborate in real-time.
 
 Evidence:
-• Multi-viewer sessions (up to 10 people)
+• Multi-viewer sessions (up to 25 people)
 • Integrated team chat
 • Annotations & pointing
 

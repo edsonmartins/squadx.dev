@@ -44,7 +44,7 @@ Para a versão completa, consulte a documentação principal em squadx-documenta
 
 ### Multi-Agent
 ✅ LangGraph orchestration
-✅ 5 tipos de agentes (Frontend, Backend, Fullstack, DevOps, QA)
+✅ 7 tipos de agentes (Frontend, Backend, Fullstack, DevOps, QA, Coordinator, Database)
 ✅ Task breakdown automático
 ✅ Parallelização inteligente
 

@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Java](https://img.shields.io/badge/java-21+-orange.svg)](https://openjdk.org)
 [![Next.js](https://img.shields.io/badge/next.js-16+-black.svg)](https://nextjs.org)
-[![Tests](https://img.shields.io/badge/tests-680%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-772%2B-brightgreen.svg)]()
 
 ---
 
@@ -65,10 +65,14 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 
 ### Core Platform
 - **Kanban Board** com drag-and-drop para gestão de tasks
+- **Task Dependencies** com DAG e auto-unblock (blocked_by/blocks)
+- **Team Templates** pré-configurados (software-dev, code-review, full-stack, data-pipeline)
 - **7 agentes AI especializados** com agentic loop e 9 ferramentas (bash, file I/O, git, Python, dependencies)
-- **LangGraph orchestration** com state machine (analyze -> plan -> execute -> review)
+- **LangGraph orchestration** com state machine (analyze → plan → execute → review)
+- **Inter-agent messaging** com mailbox point-to-point e broadcast
 - **WebSocket real-time** via STOMP/SockJS para updates de progresso
 - **Audit logging** completo com AOP aspect
+- **Cost tracking granular** per-agent, per-model com budget monitoring
 
 ### Live View
 - **WebRTC P2P streaming** das telas dos agentes (< 500ms latência)
@@ -87,9 +91,12 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 - **3 security levels**: Development, Standard, Maximum
 - **Network Policy**: Egress filtering com domain allowlist (none, package-managers, full)
 - **Lifecycle manager**: TTL-based expiration, state machine, renewal
+- **Agent heartbeat**: Dead agent detection com auto-recovery de tasks
+- **Git worktree isolation**: Branch isolada por agente, checkpoint/merge
 - **File I/O robusto**: Tar-based binary-safe via Docker `put_archive`/`get_archive`
 - **Métricas internas**: CPU, memória, rede, PIDs, block I/O em real-time
-- **Runtime upgrades**: Docker (runc) -> gVisor (runsc) -> Firecracker (microVM)
+- **Checkpoint/restore**: Snapshot comprimido do estado da execução
+- **Runtime upgrades**: Docker (runc) → gVisor (runsc) → Firecracker (microVM)
 - **Seccomp profile** customizado para agentes de desenvolvimento
 
 ### Enterprise
@@ -264,14 +271,14 @@ SQUADX_AGENT_CPU_LIMIT=2.0
 
 ## Testes
 
-O projeto possui **680+ testes** distribuídos em 80+ arquivos:
+O projeto possui **772+ testes** distribuídos em 96 arquivos:
 
 ### Backend (Java - JUnit 5 + Mockito)
 ```bash
 cd backend
 ./mvnw test
 
-# 22 services + 20 controllers = 274 testes
+# 25 services + 23 controllers = ~365 testes
 ```
 
 ### Frontend (TypeScript - Vitest + Testing Library)
@@ -287,16 +294,16 @@ npx vitest run
 cd client
 pytest tests/ -v
 
-# 22 arquivos = 176+ testes
+# 28 arquivos = ~266 testes
 ```
 
-| Area | Arquivos | Testes | Cobertura |
+| Área | Arquivos | Testes | Cobertura |
 |------|----------|--------|-----------|
-| Backend Services | 22 | ~160 | 100% dos services |
-| Backend Controllers | 20 | ~114 | 100% dos controllers |
+| Backend Services | 25 | ~246 | 100% dos services |
+| Backend Controllers | 23 | ~119 | 100% dos controllers |
 | Frontend | 20 | 141 | ~60% componentes |
-| Python Client | 22 | ~176 | ~60% módulos |
-| **Total** | **84** | **~591** | |
+| Python Client | 28 | ~266 | ~70% módulos |
+| **Total** | **96** | **~772** | |
 
 ---
 
@@ -350,12 +357,12 @@ squadx.dev/
 ├── backend/                    # Spring Boot 3.4 API
 │   ├── src/main/java/dev/squadx/
 │   │   ├── config/             # Security, OAuth2, Region, WebSocket
-│   │   ├── controller/         # 20 REST controllers
+│   │   ├── controller/         # 23 REST controllers
 │   │   ├── dto/                # Request/Response DTOs
-│   │   ├── model/              # 20+ JPA entities
-│   │   ├── repository/         # Spring Data JPA repos
+│   │   ├── model/              # 25+ JPA entities
+│   │   ├── repository/         # 26 Spring Data JPA repos
 │   │   ├── security/           # JWT, PermissionChecker
-│   │   └── service/            # 22 business services
+│   │   └── service/            # 25 business services
 │   └── src/main/resources/
 │       └── db/migration/       # V1-V18 Flyway migrations
 ├── frontend/                   # Next.js 16 Dashboard
@@ -371,16 +378,19 @@ squadx.dev/
 ├── client/                     # Python Daemon
 │   ├── squadx_client/
 │   │   ├── agents/             # 7 agentes especializados + tools
+│   │   ├── checkpoint/         # Snapshot/restore de execuções
 │   │   ├── docker/             # Sandbox, hardening, lifecycle,
 │   │   │                       #   file_ops, metrics, network_policy
+│   │   ├── git/                # Git manager + worktree isolation
 │   │   ├── live/               # Session management
-│   │   ├── orchestrator/       # LangGraph state machine
+│   │   ├── messaging/          # Inter-agent mailbox
+│   │   ├── orchestrator/       # LangGraph state machine + waiter
 │   │   ├── streaming/          # VNC + WebRTC bridge
 │   │   └── websocket/          # STOMP client
 │   ├── docker/
 │   │   ├── agent.Dockerfile    # Multi-stage (base + live-view)
 │   │   └── seccomp/agent.json  # Seccomp profile
-│   └── tests/                  # 22 test files
+│   └── tests/                  # 28 test files
 ├── mobile/                     # Expo/React Native
 │   ├── app/                    # expo-router screens
 │   └── lib/                    # API client, auth
@@ -444,8 +454,8 @@ squadx.dev/
 | GET | `/health` | Health check |
 | WS | `/ws` | WebSocket (STOMP/SockJS) |
 
-### ClawTeam-Inspired Extensions
-| Method | Endpoint | Descricao |
+### Multi-Agent Coordination
+| Method | Endpoint | Descrição |
 |--------|----------|-----------|
 | CRUD | `/api/v1/templates` | Team templates |
 | CRUD | `/api/v1/costs` | Cost tracking |

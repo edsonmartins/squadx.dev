@@ -1,0 +1,270 @@
+# SquadX Platform - Unified Docker Compose
+# Runs all 3 projects: squadx.dev + squadx-live + brainsentry.io
+#
+# Usage:
+#   docker compose -f platform/docker-compose.yml up
+#   docker compose -f platform/docker-compose.yml --profile monitoring up  # with observability
+#
+# Prerequisites:
+#   - Copy platform/.env.example to platform/.env and fill in values
+#   - Supabase project configured (URL + keys)
+
+x-common-env: &common-env
+  SQUADX_SERVICE_SECRET: ${SQUADX_SERVICE_SECRET:?Set SQUADX_SERVICE_SECRET in .env}
+  SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in .env}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY in .env}
+  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+
+networks:
+  squadx-platform:
+    driver: bridge
+
+volumes:
+  pg_orchestrator:
+  pg_brainsentry:
+  redis_data:
+  falkordb_data:
+
+services:
+  # ═══════════════════════════════════════════════════════
+  # SHARED INFRASTRUCTURE
+  # ═══════════════════════════════════════════════════════
+
+  postgres-orchestrator:
+    image: postgres:16-alpine
+    container_name: squadx-postgres
+    environment:
+      POSTGRES_USER: squadx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-squadx_dev}
+      POSTGRES_DB: squadx
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_orchestrator:/var/lib/postgresql/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U squadx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  postgres-brainsentry:
+    image: pgvector/pgvector:pg16
+    container_name: brainsentry-postgres
+    environment:
+      POSTGRES_USER: brainsentry
+      POSTGRES_PASSWORD: ${BS_POSTGRES_PASSWORD:-brainsentry_dev}
+      POSTGRES_DB: brainsentry
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_brainsentry:/var/lib/postgresql/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brainsentry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: squadx-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: brainsentry-falkordb
+    ports:
+      - "6380:6379"
+    volumes:
+      - falkordb_data:/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: squadx-livekit
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret}"
+    networks: [squadx-platform]
+
+  # ═══════════════════════════════════════════════════════
+  # PROJECT 1: squadx.dev (Orchestrator)
+  # ═══════════════════════════════════════════════════════
+
+  squadx-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: squadx-backend
+    ports:
+      - "8080:8080"
+      - "8081:8081"  # JobRunr dashboard
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-orchestrator:5432/squadx
+      SPRING_DATASOURCE_USERNAME: squadx
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-squadx_dev}
+      SPRING_DATA_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production-min-32-chars}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3100
+      SQUADX_BRAINSENTRY_URL: http://brainsentry-api:8080
+      SQUADX_BRAINSENTRY_ENABLED: "true"
+      SQUADX_LIVE_URL: http://squadx-live-web:3000
+      SQUADX_LIVE_ENABLED: "true"
+    depends_on:
+      postgres-orchestrator: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [squadx-platform]
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+
+  squadx-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: squadx-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_URL: ws://localhost:8080/ws
+      NEXT_PUBLIC_LIVE_URL: http://localhost:3100
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on: [squadx-backend]
+    networks: [squadx-platform]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # ═══════════════════════════════════════════════════════
+  # PROJECT 2: squadx-live (Live Collaboration)
+  # ═══════════════════════════════════════════════════════
+
+  squadx-live-web:
+    build:
+      context: ../../squadx-live/apps/web
+      dockerfile: Dockerfile
+    container_name: squadx-live-web
+    ports:
+      - "3100:3000"
+    environment:
+      <<: *common-env
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      SQUADX_BACKEND_WEBHOOK_URL: http://squadx-backend:8080/api/v1/webhooks/live
+    depends_on: [livekit]
+    networks: [squadx-platform]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # ═══════════════════════════════════════════════════════
+  # PROJECT 3: brainsentry.io (Agent Memory)
+  # ═══════════════════════════════════════════════════════
+
+  brainsentry-api:
+    build:
+      context: ../../brainsentry.io/brain-sentry-go
+      dockerfile: Dockerfile
+    container_name: brainsentry-api
+    ports:
+      - "8090:8080"
+    environment:
+      <<: *common-env
+      DB_HOST: postgres-brainsentry
+      DB_PORT: "5432"
+      DB_NAME: brainsentry
+      DB_USER: brainsentry
+      DB_PASSWORD: ${BS_POSTGRES_PASSWORD:-brainsentry_dev}
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production-min-32-chars}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      SQUADX_WEBHOOK_URL: http://squadx-backend:8080/api/v1/webhooks/brainsentry
+    depends_on:
+      postgres-brainsentry: { condition: service_healthy }
+      falkordb: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [squadx-platform]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  # ═══════════════════════════════════════════════════════
+  # OBSERVABILITY (optional: --profile monitoring)
+  # ═══════════════════════════════════════════════════════
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: squadx-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../infra/prometheus:/etc/prometheus
+    networks: [squadx-platform]
+    profiles: [monitoring]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: squadx-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    networks: [squadx-platform]
+    profiles: [monitoring]

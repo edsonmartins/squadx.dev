@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     # Daily execution threshold to auto-upgrade to Firecracker
     firecracker_threshold: int = Field(default=1000, alias="SQUADX_FIRECRACKER_THRESHOLD")
 
+    # BrainSentry Integration (Agent Memory)
+    brainsentry_url: str | None = Field(default=None, alias="SQUADX_BRAINSENTRY_URL")
+    brainsentry_api_key: str | None = Field(default=None, alias="SQUADX_BRAINSENTRY_API_KEY")
+    brainsentry_tenant_id: str = Field(default="default", alias="SQUADX_BRAINSENTRY_TENANT_ID")
+
+    # SquadX Live Integration
+    squadx_live_url: str | None = Field(default=None, alias="SQUADX_LIVE_URL")
+    livekit_url: str | None = Field(default=None, alias="LIVEKIT_URL")
+    livekit_api_key: str | None = Field(default=None, alias="LIVEKIT_API_KEY")
+    livekit_api_secret: str | None = Field(default=None, alias="LIVEKIT_API_SECRET")
+
     # Supabase Configuration (Live Streaming)
     supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
     supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")

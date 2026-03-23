@@ -152,6 +152,14 @@ squadx:
     available: ${SQUADX_REGIONS:us-east-1,eu-west-1,ap-southeast-1}
   routing:
     strategy: ${SQUADX_ROUTING_STRATEGY:nearest}
+  service-secret: ${SQUADX_SERVICE_SECRET:}
+  brainsentry:
+    url: ${SQUADX_BRAINSENTRY_URL:http://localhost:8090}
+    tenant-id: ${SQUADX_BRAINSENTRY_TENANT_ID:default}
+    enabled: ${SQUADX_BRAINSENTRY_ENABLED:false}
+  live:
+    url: ${SQUADX_LIVE_URL:http://localhost:3100}
+    enabled: ${SQUADX_LIVE_ENABLED:false}
   notifications:
     slack:
       enabled: true

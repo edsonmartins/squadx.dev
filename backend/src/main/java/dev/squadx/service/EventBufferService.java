@@ -28,6 +28,8 @@ public class EventBufferService {
     public record BufferedEvent(Map<String, Object> payload, Instant createdAt) {}
 
     public void bufferEvent(Long userId, Map<String, Object> event) {
+        if (userId == null || event == null) return;
+
         var queue = buffers.computeIfAbsent(userId, k -> new ConcurrentLinkedQueue<>());
 
         // Add first, then trim — avoids race condition between size check and add.

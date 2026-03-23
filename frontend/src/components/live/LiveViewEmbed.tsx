@@ -21,7 +21,11 @@ export default function LiveViewEmbed({ sessionCode, className = '' }: LiveViewE
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Only accept messages from the live view origin
-      if (!event.origin.startsWith(liveUrl)) return
+      try {
+        if (new URL(event.origin).origin !== new URL(liveUrl).origin) return
+      } catch {
+        return
+      }
 
       const { type, data } = event.data || {}
       switch (type) {

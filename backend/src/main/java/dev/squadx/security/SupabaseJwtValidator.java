@@ -15,8 +15,7 @@ import java.util.Date;
 
 /**
  * Validates Supabase JWT tokens for SSO integration.
- * Uses the Supabase JWT secret (same as SUPABASE_SERVICE_KEY signing key)
- * to validate tokens issued by Supabase Auth.
+ * Uses the Supabase JWT secret to validate tokens issued by Supabase Auth.
  */
 @Component
 @Slf4j
@@ -26,16 +25,14 @@ public class SupabaseJwtValidator {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SupabaseJwtValidator(
-            @Value("${supabase.service-key:}") String serviceKey
+            @Value("${supabase.jwt-secret:}") String jwtSecret
     ) {
-        if (serviceKey != null && !serviceKey.isBlank()) {
-            // Supabase uses the JWT secret (not the service key directly)
-            // but for validation we use the same HMAC approach
-            this.supabaseKey = Keys.hmacShaKeyFor(serviceKey.getBytes(StandardCharsets.UTF_8));
+        if (jwtSecret != null && !jwtSecret.isBlank()) {
+            this.supabaseKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
             log.info("Supabase JWT validator initialized");
         } else {
             this.supabaseKey = null;
-            log.info("Supabase JWT validator disabled (no service key configured)");
+            log.info("Supabase JWT validator disabled (no JWT secret configured)");
         }
     }
 

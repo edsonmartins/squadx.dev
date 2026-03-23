@@ -25,6 +25,13 @@ class BrainSentryClient:
     def enabled(self) -> bool:
         return bool(self.base_url and self.api_key)
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        return False
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -38,6 +45,30 @@ class BrainSentryClient:
             )
         return self._client
 
+    async def _request_with_retry(self, method: str, url: str, **kwargs):
+        """Make HTTP request with retry on transient errors."""
+        client = await self._get_client()
+        last_error = None
+        for attempt in range(3):
+            try:
+                if method == "post":
+                    response = await client.post(url, **kwargs)
+                elif method == "get":
+                    response = await client.get(url, **kwargs)
+                else:
+                    raise ValueError(f"Unsupported method: {method}")
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError:
+                raise  # Don't retry client errors (4xx)
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    import asyncio
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    logger.debug("retrying_request", url=url, attempt=attempt + 1)
+        raise last_error
+
     async def intercept_prompt(self, prompt: str, session_id: str | None = None) -> str:
         """Send prompt to BrainSentry for context enrichment.
 
@@ -48,13 +79,11 @@ class BrainSentryClient:
             return prompt
 
         try:
-            client = await self._get_client()
             payload = {"prompt": prompt}
             if session_id:
                 payload["sessionId"] = session_id
 
-            response = await client.post("/api/v1/intercept", json=payload)
-            response.raise_for_status()
+            response = await self._request_with_retry("post", "/api/v1/intercept", json=payload)
 
             data = response.json()
             enriched = data.get("enrichedPrompt", prompt)
@@ -82,7 +111,6 @@ class BrainSentryClient:
             return None
 
         try:
-            client = await self._get_client()
             payload = {
                 "content": content,
                 "category": category,
@@ -92,8 +120,7 @@ class BrainSentryClient:
                 "metadata": metadata or {},
             }
 
-            response = await client.post("/api/v1/memories", json=payload)
-            response.raise_for_status()
+            response = await self._request_with_retry("post", "/api/v1/memories", json=payload)
             return response.json()
         except Exception as e:
             logger.warning("brainsentry_create_memory_failed", error=str(e))
@@ -105,12 +132,10 @@ class BrainSentryClient:
             return []
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/v1/memories/search",
+            response = await self._request_with_retry(
+                "post", "/api/v1/memories/search",
                 json={"query": query, "limit": limit},
             )
-            response.raise_for_status()
             data = response.json()
             return data.get("memories", [])
         except Exception as e:
@@ -123,16 +148,14 @@ class BrainSentryClient:
             return None
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/api/v1/integration/execution/start",
+            response = await self._request_with_retry(
+                "post", "/api/v1/integration/execution/start",
                 json={
                     "executionId": execution_id,
                     "taskId": task_id,
                     "agentId": agent_id,
                 },
             )
-            response.raise_for_status()
             data = response.json()
             session_id = data.get("sessionId")
             logger.info("brainsentry_session_started", session_id=session_id)
@@ -147,9 +170,8 @@ class BrainSentryClient:
             return
 
         try:
-            client = await self._get_client()
-            await client.post(
-                "/api/v1/integration/execution/end",
+            await self._request_with_retry(
+                "post", "/api/v1/integration/execution/end",
                 json={
                     "sessionId": session_id,
                     "status": status,

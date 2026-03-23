@@ -7,9 +7,9 @@ import dev.squadx.model.enums.ExecutionStatus;
 import dev.squadx.model.enums.TaskStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Listens to domain events and dispatches integration calls
@@ -23,7 +23,7 @@ public class IntegrationEventListener {
     private final BrainSentryClient brainSentryClient;
     private final SquadxLiveClient squadxLiveClient;
 
-    @EventListener
+    @TransactionalEventListener
     @Async
     public void onExecutionCompleted(ExecutionCompletedEvent event) {
         if (event.status() == ExecutionStatus.COMPLETED || event.status() == ExecutionStatus.FAILED) {
@@ -35,7 +35,7 @@ public class IntegrationEventListener {
         }
     }
 
-    @EventListener
+    @TransactionalEventListener
     @Async
     public void onTaskCompleted(TaskStatusChangedEvent event) {
         if (event.newStatus() == TaskStatus.DONE) {

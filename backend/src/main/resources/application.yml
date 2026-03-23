@@ -93,6 +93,7 @@ supabase:
   url: ${SUPABASE_URL}
   anon-key: ${SUPABASE_ANON_KEY}
   service-key: ${SUPABASE_SERVICE_KEY:}
+  jwt-secret: ${SUPABASE_JWT_SECRET:}
 
 # Email Configuration (Resend)
 resend:

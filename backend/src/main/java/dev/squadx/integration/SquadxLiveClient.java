@@ -2,7 +2,7 @@ package dev.squadx.integration;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
 import java.util.Map;
 
@@ -14,7 +14,7 @@ import java.util.Map;
 @Slf4j
 public class SquadxLiveClient {
 
-    private final WebClient webClient;
+    private final RestClient restClient;
     private final IntegrationConfig config;
     private final ServiceJwtProvider jwtProvider;
 
@@ -23,18 +23,18 @@ public class SquadxLiveClient {
         this.jwtProvider = jwtProvider;
 
         if (config.getLive().isEnabled()) {
-            this.webClient = WebClient.builder()
+            this.restClient = RestClient.builder()
                     .baseUrl(config.getLive().getUrl())
                     .build();
             log.info("SquadX Live client initialized: url={}", config.getLive().getUrl());
         } else {
-            this.webClient = null;
+            this.restClient = null;
             log.info("SquadX Live client disabled");
         }
     }
 
     public boolean isEnabled() {
-        return webClient != null && config.getLive().isEnabled();
+        return restClient != null && config.getLive().isEnabled();
     }
 
     /**
@@ -42,30 +42,36 @@ public class SquadxLiveClient {
      *
      * @return session info map with sessionId, joinCode, joinUrl or null if disabled
      */
+    @SuppressWarnings("unchecked")
     public Map<String, String> createSession(Long taskId, Long agentId, String mode) {
         if (!isEnabled()) return null;
 
         try {
-            return webClient.post()
+            Map<String, Object> response = restClient.post()
                     .uri("/api/integration/sessions")
                     .header("Authorization", "Bearer " + jwtProvider.generateToken("squadx-live"))
-                    .bodyValue(Map.of(
+                    .body(Map.of(
                             "taskId", taskId,
                             "agentId", agentId != null ? agentId : 0,
                             "mode", mode != null ? mode : "p2p"
                     ))
                     .retrieve()
-                    .bodyToMono(Map.class)
-                    .map(m -> {
-                        @SuppressWarnings("unchecked")
-                        Map<String, String> result = Map.of(
-                                "sessionId", String.valueOf(m.get("sessionId")),
-                                "joinCode", String.valueOf(m.get("joinCode")),
-                                "joinUrl", String.valueOf(m.get("joinUrl"))
-                        );
-                        return result;
-                    })
-                    .block();
+                    .body(Map.class);
+
+            if (response == null) {
+                log.warn("SquadX Live returned null response for createSession");
+                return null;
+            }
+
+            Object sessionId = response.get("sessionId");
+            Object joinCode = response.get("joinCode");
+            Object joinUrl = response.get("joinUrl");
+
+            return Map.of(
+                    "sessionId", sessionId != null ? String.valueOf(sessionId) : "",
+                    "joinCode", joinCode != null ? String.valueOf(joinCode) : "",
+                    "joinUrl", joinUrl != null ? String.valueOf(joinUrl) : ""
+            );
         } catch (Exception e) {
             log.warn("Failed to create SquadX Live session: {}", e.getMessage());
             return null;
@@ -90,15 +96,12 @@ public class SquadxLiveClient {
         if (!isEnabled()) return;
 
         try {
-            webClient.delete()
+            restClient.delete()
                     .uri("/api/integration/sessions/{sessionId}", sessionId)
                     .header("Authorization", "Bearer " + jwtProvider.generateToken("squadx-live"))
                     .retrieve()
-                    .toBodilessEntity()
-                    .subscribe(
-                            ok -> log.debug("SquadX Live session {} ended", sessionId),
-                            err -> log.warn("Failed to end SquadX Live session: {}", err.getMessage())
-                    );
+                    .toBodilessEntity();
+            log.debug("SquadX Live session {} ended", sessionId);
         } catch (Exception e) {
             log.warn("Failed to end SquadX Live session: {}", e.getMessage());
         }

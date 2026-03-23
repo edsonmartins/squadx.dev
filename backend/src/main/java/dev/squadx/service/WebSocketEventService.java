@@ -7,9 +7,9 @@ import dev.squadx.event.TaskStatusChangedEvent;
 import dev.squadx.model.enums.ExecutionStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Map;
 
@@ -22,22 +22,22 @@ public class WebSocketEventService {
 
     // ── Domain Event Listeners ──────────────────────────────
 
-    @EventListener
+    @TransactionalEventListener
     public void onTaskCreated(TaskCreatedEvent event) {
         sendTaskCreated(event.projectId(), event.task());
     }
 
-    @EventListener
+    @TransactionalEventListener
     public void onTaskStatusChanged(TaskStatusChangedEvent event) {
         sendTaskUpdated(event.projectId(), event.taskId(), event.task());
     }
 
-    @EventListener
+    @TransactionalEventListener
     public void onTaskDeleted(TaskDeletedEvent event) {
         sendTaskDeleted(event.projectId(), event.taskId());
     }
 
-    @EventListener
+    @TransactionalEventListener
     public void onExecutionCompleted(ExecutionCompletedEvent event) {
         if (event.status() == ExecutionStatus.COMPLETED || event.status() == ExecutionStatus.FAILED) {
             sendExecutionCompleted(event.projectId(), event.taskId(), event.executionId(), event.status().name());

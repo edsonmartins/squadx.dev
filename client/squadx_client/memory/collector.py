@@ -26,12 +26,17 @@ class MemoryCollector:
     execution. At the end of execution, all are flushed to BrainSentry.
     """
 
+    MAX_ENTRIES = 1000
+
     def __init__(self, client: BrainSentryClient):
         self.client = client
         self._entries: list[MemoryEntry] = []
 
     def record_decision(self, description: str, tags: list[str] | None = None) -> None:
         """Record a decision made during execution."""
+        if len(self._entries) >= self.MAX_ENTRIES:
+            logger.warning("memory_collector_full", max=self.MAX_ENTRIES)
+            return
         self._entries.append(MemoryEntry(
             content=description,
             category="DECISION",
@@ -42,6 +47,9 @@ class MemoryCollector:
 
     def record_pattern(self, description: str, tags: list[str] | None = None) -> None:
         """Record a code pattern discovered during execution."""
+        if len(self._entries) >= self.MAX_ENTRIES:
+            logger.warning("memory_collector_full", max=self.MAX_ENTRIES)
+            return
         self._entries.append(MemoryEntry(
             content=description,
             category="PATTERN",
@@ -52,6 +60,9 @@ class MemoryCollector:
 
     def record_bug(self, description: str, tags: list[str] | None = None) -> None:
         """Record a bug found during execution."""
+        if len(self._entries) >= self.MAX_ENTRIES:
+            logger.warning("memory_collector_full", max=self.MAX_ENTRIES)
+            return
         self._entries.append(MemoryEntry(
             content=description,
             category="BUG",
@@ -62,6 +73,9 @@ class MemoryCollector:
 
     def record_antipattern(self, description: str, tags: list[str] | None = None) -> None:
         """Record an antipattern to avoid in future executions."""
+        if len(self._entries) >= self.MAX_ENTRIES:
+            logger.warning("memory_collector_full", max=self.MAX_ENTRIES)
+            return
         self._entries.append(MemoryEntry(
             content=description,
             category="ANTIPATTERN",
@@ -72,6 +86,9 @@ class MemoryCollector:
 
     def record_learning(self, description: str, tags: list[str] | None = None) -> None:
         """Record a general learning from execution."""
+        if len(self._entries) >= self.MAX_ENTRIES:
+            logger.warning("memory_collector_full", max=self.MAX_ENTRIES)
+            return
         self._entries.append(MemoryEntry(
             content=description,
             category="INSIGHT",
@@ -85,9 +102,10 @@ class MemoryCollector:
 
         Returns the number of successfully stored memories.
         """
-        if not self.client.enabled or not self._entries:
-            count = len(self._entries)
-            self._entries.clear()
+        if not self._entries:
+            return 0
+        if not self.client.enabled:
+            logger.warning("brainsentry_disabled_entries_pending", pending=len(self._entries))
             return 0
 
         stored = 0

@@ -2,7 +2,7 @@ package dev.squadx.integration;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
 import java.util.Map;
 
@@ -14,7 +14,7 @@ import java.util.Map;
 @Slf4j
 public class BrainSentryClient {
 
-    private final WebClient webClient;
+    private final RestClient restClient;
     private final IntegrationConfig config;
     private final ServiceJwtProvider jwtProvider;
 
@@ -23,18 +23,18 @@ public class BrainSentryClient {
         this.jwtProvider = jwtProvider;
 
         if (config.getBrainsentry().isEnabled()) {
-            this.webClient = WebClient.builder()
+            this.restClient = RestClient.builder()
                     .baseUrl(config.getBrainsentry().getUrl())
                     .build();
             log.info("BrainSentry client initialized: url={}", config.getBrainsentry().getUrl());
         } else {
-            this.webClient = null;
+            this.restClient = null;
             log.info("BrainSentry client disabled");
         }
     }
 
     public boolean isEnabled() {
-        return webClient != null && config.getBrainsentry().isEnabled();
+        return restClient != null && config.getBrainsentry().isEnabled();
     }
 
     /**
@@ -44,21 +44,18 @@ public class BrainSentryClient {
         if (!isEnabled()) return;
 
         try {
-            webClient.post()
+            restClient.post()
                     .uri("/api/v1/integration/execution/start")
                     .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
                     .header("X-Tenant-ID", config.getBrainsentry().getTenantId())
-                    .bodyValue(Map.of(
+                    .body(Map.of(
                             "executionId", executionId.toString(),
                             "taskId", taskId.toString(),
                             "agentId", agentId != null ? agentId.toString() : ""
                     ))
                     .retrieve()
-                    .toBodilessEntity()
-                    .subscribe(
-                            ok -> log.debug("BrainSentry notified: execution {} started", executionId),
-                            err -> log.warn("Failed to notify BrainSentry: {}", err.getMessage())
-                    );
+                    .toBodilessEntity();
+            log.debug("BrainSentry notified: execution {} started", executionId);
         } catch (Exception e) {
             log.warn("BrainSentry notification failed: {}", e.getMessage());
         }
@@ -71,21 +68,18 @@ public class BrainSentryClient {
         if (!isEnabled()) return;
 
         try {
-            webClient.post()
+            restClient.post()
                     .uri("/api/v1/integration/execution/end")
                     .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
                     .header("X-Tenant-ID", config.getBrainsentry().getTenantId())
-                    .bodyValue(Map.of(
+                    .body(Map.of(
                             "executionId", executionId.toString(),
                             "status", status,
                             "summary", summary != null ? summary : ""
                     ))
                     .retrieve()
-                    .toBodilessEntity()
-                    .subscribe(
-                            ok -> log.debug("BrainSentry notified: execution {} {}", executionId, status),
-                            err -> log.warn("Failed to notify BrainSentry: {}", err.getMessage())
-                    );
+                    .toBodilessEntity();
+            log.debug("BrainSentry notified: execution {} {}", executionId, status);
         } catch (Exception e) {
             log.warn("BrainSentry notification failed: {}", e.getMessage());
         }

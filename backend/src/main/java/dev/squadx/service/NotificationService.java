@@ -17,7 +17,7 @@ import dev.squadx.repository.NotificationConfigRepository;
 import dev.squadx.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +36,7 @@ public class NotificationService {
 
     // ── Domain Event Listeners ──────────────────────────────
 
-    @EventListener
+    @TransactionalEventListener
     public void onTaskStatusChanged(TaskStatusChangedEvent event) {
         if (event.newStatus() == TaskStatus.DONE) {
             notifyTaskCompleted(event.organizationId(),
@@ -49,14 +49,14 @@ public class NotificationService {
         }
     }
 
-    @EventListener
+    @TransactionalEventListener
     public void onExecutionCompleted(ExecutionCompletedEvent event) {
         if (event.status() == ExecutionStatus.FAILED) {
             notifyTaskFailed(event.organizationId(), "Execution #" + event.executionId(), "Execution failed");
         }
     }
 
-    @EventListener
+    @TransactionalEventListener
     public void onAgentStateChanged(AgentStateChangedEvent event) {
         if ("DEAD".equals(event.newState())) {
             notifyAgentError(event.organizationId(), "Agent #" + event.agentId(), "Agent is dead (no heartbeat)");

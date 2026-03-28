@@ -35,8 +35,8 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
-    private final CustomOidcUserService customOidcUserService;
-    private final AuthenticationSuccessHandler oauth2SuccessHandler;
+    private final org.springframework.beans.factory.ObjectProvider<CustomOidcUserService> customOidcUserService;
+    private final org.springframework.beans.factory.ObjectProvider<AuthenticationSuccessHandler> oauth2SuccessHandler;
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
@@ -67,16 +67,21 @@ public class SecurityConfig {
                 .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
                 // All other requests (including /ws/**) require authentication
                 .anyRequest().authenticated()
-            )
-            // OAuth2/OIDC login (SSO) - session-based for the OAuth2 flow redirect,
-            // but the success handler issues a JWT and redirects to the SPA
-            .oauth2Login(oauth2 -> oauth2
+            );
+
+        // OAuth2/OIDC login (SSO) - only if providers are configured
+        CustomOidcUserService oidcService = customOidcUserService.getIfAvailable();
+        AuthenticationSuccessHandler successHandler = oauth2SuccessHandler.getIfAvailable();
+        if (oidcService != null && successHandler != null) {
+            http.oauth2Login(oauth2 -> oauth2
                 .userInfoEndpoint(userInfo -> userInfo
-                    .oidcUserService(customOidcUserService)
+                    .oidcUserService(oidcService)
                 )
-                .successHandler(oauth2SuccessHandler)
-            )
-            .sessionManagement(session -> session
+                .successHandler(successHandler)
+            );
+        }
+
+        http.sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())

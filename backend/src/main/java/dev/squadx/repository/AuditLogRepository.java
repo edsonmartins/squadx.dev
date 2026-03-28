@@ -28,4 +28,6 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             "ORDER BY a.createdAt DESC")
     Page<AuditLog> findWithFilters(Long userId, String action, String resourceType,
                                    Instant from, Instant to, Pageable pageable);
+
+    int deleteByCreatedAtBefore(Instant threshold);
 }

@@ -414,7 +414,8 @@ export function useVoiceVideo({
         const peers: VoiceParticipant[] = [];
         for (const [, presences] of Object.entries(state)) {
           const presenceList = Array.isArray(presences) ? presences : [];
-          for (const p of presenceList) {
+          for (const rawP of presenceList) {
+            const p = rawP as Record<string, unknown>;
             if (
               p &&
               typeof p === "object" &&
@@ -422,7 +423,13 @@ export function useVoiceVideo({
               "userId" in p &&
               "userName" in p
             ) {
-              const presence = p as VoicePresence;
+              const presence: VoicePresence = {
+                peerId: p.peerId as string,
+                userId: p.userId as string,
+                userName: p.userName as string,
+                isAudioEnabled: !!p.isAudioEnabled,
+                isVideoEnabled: !!p.isVideoEnabled,
+              };
               if (presence.peerId !== peerIdRef.current) {
                 peers.push({
                   peerId: presence.peerId,

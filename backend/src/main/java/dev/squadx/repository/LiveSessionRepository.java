@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,4 +34,6 @@ public interface LiveSessionRepository extends JpaRepository<LiveSession, Long> 
 
     @Query("SELECT s FROM LiveSession s WHERE s.task.project.organization.id = :organizationId AND s.status = 'ACTIVE'")
     List<LiveSession> findActiveByOrganizationId(Long organizationId);
+
+    int deleteByEndedAtBefore(Instant threshold);
 }

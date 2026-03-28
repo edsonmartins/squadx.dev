@@ -30,8 +30,8 @@ export default function MemoryPanel({ taskId, className = '' }: MemoryPanelProps
   useEffect(() => {
     const fetchMemories = async () => {
       try {
-        const response = await api.get(`/api/v1/integration/memories?taskId=${taskId}`)
-        setMemories(response.data?.data || [])
+        const response = await api.get<{ data: Memory[] }>(`/api/v1/integration/memories?taskId=${taskId}`)
+        setMemories(response?.data || [])
       } catch {
         // BrainSentry may not be configured - fail silently
         setMemories([])

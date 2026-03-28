@@ -24,6 +24,9 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@org.springframework.boot.autoconfigure.condition.ConditionalOnBean(
+    org.springframework.security.oauth2.client.registration.ClientRegistrationRepository.class
+)
 public class OAuth2Config {
 
     private final CustomOidcUserService customOidcUserService;

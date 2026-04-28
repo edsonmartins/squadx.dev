@@ -7,6 +7,7 @@ import dev.squadx.dto.liveview.ParticipantResponse;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
+import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.LiveSessionStatus;
 import dev.squadx.repository.LiveSessionParticipantRepository;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -33,6 +35,7 @@ public class LiveViewService {
     private final TaskRepository taskRepository;
     private final OrganizationMemberRepository orgMemberRepository;
     private final WebSocketEventService webSocketEventService;
+    private final SquadxLiveClient squadxLiveClient;
 
     @Value("${squadx.live.base-url:https://live.squadx.dev}")
     private String liveBaseUrl;
@@ -172,6 +175,7 @@ public class LiveViewService {
             throw new BadRequestException("Session is not in pending status");
         }
 
+        hydrateExternalSession(session);
         session.setStatus(LiveSessionStatus.ACTIVE);
         session = liveSessionRepository.save(session);
 
@@ -190,6 +194,10 @@ public class LiveViewService {
 
         if (!session.getHostUser().getId().equals(user.getId())) {
             throw new ForbiddenException("Only the host can end the session");
+        }
+
+        if (session.getExternalSessionId() != null && !session.getExternalSessionId().isBlank()) {
+            squadxLiveClient.endSession(session.getExternalSessionId());
         }
 
         session.setStatus(LiveSessionStatus.ENDED);
@@ -256,6 +264,7 @@ public class LiveViewService {
         return mapToResponse(session);
     }
 
+    @Transactional(readOnly = true)
     public LiveSessionResponse getByCode(String code, User user) {
         LiveSession session = liveSessionRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
@@ -268,6 +277,7 @@ public class LiveViewService {
         return mapToResponse(session);
     }
 
+    @Transactional(readOnly = true)
     public LiveSessionResponse getByTaskId(Long taskId, User user) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
@@ -283,6 +293,7 @@ public class LiveViewService {
         return mapToResponse(session);
     }
 
+    @Transactional(readOnly = true)
     public List<LiveSessionResponse> getActiveSessionsByOrganization(Long organizationId, User user) {
         if (!hasOrganizationAccess(user, organizationId)) {
             throw new ForbiddenException("You don't have access to this organization");
@@ -322,6 +333,26 @@ public class LiveViewService {
         return liveBaseUrl + "/host/" + code;
     }
 
+    private void hydrateExternalSession(LiveSession session) {
+        if (session.getExternalSessionId() != null && !session.getExternalSessionId().isBlank()) {
+            return;
+        }
+
+        Long taskId = session.getTask() != null ? session.getTask().getId() : null;
+        Long agentId = session.getTask() != null && session.getTask().getAssignedAgent() != null
+                ? session.getTask().getAssignedAgent().getId()
+                : null;
+
+        Map<String, String> externalSession = squadxLiveClient.createSession(taskId, agentId, "p2p");
+        if (externalSession == null || externalSession.isEmpty()) {
+            return;
+        }
+
+        session.setExternalSessionId(blankToNull(externalSession.get("sessionId")));
+        session.setExternalJoinCode(blankToNull(externalSession.get("joinCode")));
+        session.setExternalJoinUrl(blankToNull(externalSession.get("joinUrl")));
+    }
+
     private LiveSessionResponse mapToResponse(LiveSession session) {
         List<ParticipantResponse> participants = participantRepository
                 .findBySessionIdAndLeftAtIsNull(session.getId())
@@ -343,12 +374,33 @@ public class LiveViewService {
                 .maxViewers(session.getMaxViewers())
                 .currentViewers((int) currentViewers)
                 .resolution(session.getResolution())
-                .viewerUrl(getViewerUrl(session.getCode()))
-                .hostUrl(getHostUrl(session.getCode()))
+                .viewerUrl(resolveViewerUrl(session))
+                .hostUrl(resolveHostUrl(session))
+                .externalSessionId(session.getExternalSessionId())
+                .externalJoinCode(session.getExternalJoinCode())
+                .externalJoinUrl(session.getExternalJoinUrl())
                 .participants(participants)
                 .createdAt(session.getCreatedAt())
                 .endedAt(session.getEndedAt())
                 .build();
+    }
+
+    private String resolveViewerUrl(LiveSession session) {
+        if (session.getExternalJoinUrl() != null && !session.getExternalJoinUrl().isBlank()) {
+            return session.getExternalJoinUrl();
+        }
+        return getViewerUrl(session.getCode());
+    }
+
+    private String resolveHostUrl(LiveSession session) {
+        if (session.getExternalJoinUrl() != null && !session.getExternalJoinUrl().isBlank()) {
+            return session.getExternalJoinUrl();
+        }
+        return getHostUrl(session.getCode());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private ParticipantResponse mapParticipant(LiveSessionParticipant participant) {

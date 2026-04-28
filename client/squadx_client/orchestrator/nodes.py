@@ -12,12 +12,96 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from squadx_client.config import settings
 from squadx_client.llm.router import get_llm
+from squadx_client.memory import BrainSentryClient, PromptInterceptor
+from squadx_client.memory.policy import MemoryScopeContext
 from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
 from squadx_client.agents.factory import create_agent
 from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 
 logger = structlog.get_logger()
+
+
+async def _intercept_prompt(prompt: str, state: OrchestratorState) -> str:
+    """Enrich a prompt with BrainSentry context when a session is available."""
+    if not state.brainsentry_session_id:
+        return prompt
+
+    client = BrainSentryClient()
+    interceptor = PromptInterceptor(client)
+    interceptor.set_session(state.brainsentry_session_id)
+    interceptor.set_user(_resolve_memory_user_id(state))
+    interceptor.set_scope(_resolve_memory_scope(state))
+    try:
+        return await interceptor.intercept(prompt)
+    finally:
+        await client.close()
+
+
+async def _record_prompt_interaction(
+    state: OrchestratorState,
+    prompt: str,
+    response: str,
+    stage: str,
+) -> None:
+    """Push an orchestrator-level interaction into BrainSentry session cache."""
+    if not state.brainsentry_session_id:
+        return
+
+    client = BrainSentryClient()
+    scope = _resolve_memory_scope(state)
+    try:
+        await client.push_session_interaction(
+            state.brainsentry_session_id,
+            query=_truncate_for_memory(prompt, 4000),
+            response=_truncate_for_memory(response, 4000),
+            metadata={
+                "stage": stage,
+                "taskId": str(state.task_id),
+                "executionId": str(state.execution_id or state.task_id),
+                **scope.to_metadata(),
+            },
+        )
+    finally:
+        await client.close()
+
+
+def _truncate_for_memory(text: str | None, limit: int) -> str:
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _resolve_memory_user_id(state: OrchestratorState) -> str | None:
+    task = state.task or {}
+    agent_id = task.get("assigned_agent_id") or task.get("agent_id")
+    if agent_id:
+        return str(agent_id)
+
+    if state.execution_id:
+        return f"execution-{state.execution_id}"
+
+    return None
+
+
+def _resolve_memory_scope(state: OrchestratorState) -> MemoryScopeContext:
+    task = state.task or {}
+    return MemoryScopeContext(
+        organization_id=_as_scope_value(task.get("organization_id") or task.get("organizationId")),
+        project_id=_as_scope_value(task.get("project_id") or task.get("projectId")),
+        task_id=_as_scope_value(task.get("id") or state.task_id),
+        agent_id=_resolve_memory_user_id(state),
+        execution_id=_as_scope_value(state.execution_id),
+    )
+
+
+def _as_scope_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 async def analyze_task(state: OrchestratorState) -> dict[str, Any]:
@@ -49,14 +133,17 @@ Respond in JSON format:
     "estimated_time": "in minutes"
 }"""
 
+    task_prompt = f"Task: {task.get('title')}\n\nDescription: {task.get('description', 'No description')}"
+    enriched_prompt = await _intercept_prompt(task_prompt, state)
+
     response = await llm.ainvoke(
         [
             SystemMessage(content=system_prompt),
-            HumanMessage(
-                content=f"Task: {task.get('title')}\n\nDescription: {task.get('description', 'No description')}"
-            ),
+            HumanMessage(content=enriched_prompt),
         ]
     )
+
+    await _record_prompt_interaction(state, task_prompt, response.content, "analyze_task")
 
     # Parse the analysis
     try:
@@ -102,20 +189,23 @@ Respond in JSON format:
     "parallel_groups": [["uuid1", "uuid2"], ["uuid3"]]
 }"""
 
-    response = await llm.ainvoke(
-        [
-            SystemMessage(content=system_prompt),
-            HumanMessage(
-                content=f"""Task: {task.get('title')}
+    plan_prompt = f"""Task: {task.get('title')}
 
 Description: {task.get('description', 'No description')}
 
 Previous analysis: {state.messages[-1].content if state.messages else 'None'}
 
 Create an execution plan."""
-            ),
+    enriched_prompt = await _intercept_prompt(plan_prompt, state)
+
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=enriched_prompt),
         ]
     )
+
+    await _record_prompt_interaction(state, plan_prompt, response.content, "create_plan")
 
     try:
         plan_data = json.loads(response.content)
@@ -219,7 +309,11 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 sandbox = None  # Fall back to simple execution
 
         # Create the appropriate agent with sandbox (if available)
-        agent = create_agent(subtask.agent_type, sandbox=sandbox)
+        agent = create_agent(
+            subtask.agent_type,
+            sandbox=sandbox,
+            brainsentry_session_id=state.brainsentry_session_id,
+        )
 
         # Execute the subtask
         result = await agent.execute(
@@ -227,6 +321,7 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             task_description=subtask.description,
             context={
                 "main_task": state.task,
+                "execution_id": state.execution_id or state.task_id,
                 "completed_subtasks": [
                     st for st in state.plan.subtasks if st.id in state.completed_subtasks
                 ],
@@ -343,12 +438,16 @@ Completed subtasks ({len(completed)}):
 Failed subtasks ({len(failed)}):
 {chr(10).join(f"- {st.title}: {st.error}" for st in failed)}"""
 
+    enriched_prompt = await _intercept_prompt(summary_content, state)
+
     response = await llm.ainvoke(
         [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=summary_content),
+            HumanMessage(content=enriched_prompt),
         ]
     )
+
+    await _record_prompt_interaction(state, summary_content, response.content, "review_results")
 
     logger.info("results_reviewed")
 

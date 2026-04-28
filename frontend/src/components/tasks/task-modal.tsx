@@ -41,7 +41,7 @@ const taskSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
   story_points: z.number().min(0).max(100).optional().nullable(),
   estimated_hours: z.number().min(0).max(1000).optional().nullable(),
-  due_date: z.string().optional().nullable(),
+  due_date: z.string().optional().nullable().or(z.literal("")),
   assigned_agent_id: z.number().optional().nullable(),
   tags: z.string().optional(),
 });
@@ -233,7 +233,7 @@ export function TaskModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" data-testid="task-modal">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Task" : "Create Task"}</DialogTitle>
           <DialogDescription>
@@ -249,6 +249,7 @@ export function TaskModal({
               <Input
                 id="title"
                 placeholder="Implement user authentication"
+                data-testid="task-title-input"
                 {...register("title")}
               />
               {errors.title && (
@@ -262,6 +263,7 @@ export function TaskModal({
                 id="description"
                 placeholder="Add detailed description of the task..."
                 rows={4}
+                data-testid="task-description-input"
                 {...register("description")}
               />
             </div>
@@ -384,7 +386,7 @@ export function TaskModal({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} data-testid="task-submit-button">
               {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Task"}
             </Button>
           </DialogFooter>

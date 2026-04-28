@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int UNAUTHENTICATED_LIMIT = 20;
     private static final int AUTHENTICATED_LIMIT = 100;
 
+    @Nullable
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -101,6 +103,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * Returns true if the request should be blocked.
      */
     private boolean isRateLimited(String key, int limit) {
+        if (stringRedisTemplate == null) {
+            return false;
+        }
         try {
             Long count = stringRedisTemplate.opsForValue().increment(key);
             if (count == null) {

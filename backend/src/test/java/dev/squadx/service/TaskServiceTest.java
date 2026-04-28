@@ -54,6 +54,9 @@ class TaskServiceTest {
     private TaskDependencyRepository taskDependencyRepository;
 
     @Mock
+    private ExecutionRepository executionRepository;
+
+    @Mock
     private WebSocketEventService webSocketEventService;
 
     @InjectMocks
@@ -103,6 +106,7 @@ class TaskServiceTest {
         // Default stubs for dependency repository (used by mapToResponse)
         lenient().when(taskDependencyRepository.findByTaskId(anyLong())).thenReturn(Collections.emptyList());
         lenient().when(taskDependencyRepository.findByDependsOnId(anyLong())).thenReturn(Collections.emptyList());
+        lenient().when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(anyLong())).thenReturn(Optional.empty());
     }
 
     @Nested
@@ -143,6 +147,39 @@ class TaskServiceTest {
 
             verify(taskRepository).save(any(Task.class));
             verify(webSocketEventService).sendTaskCreated(eq(100L), any(TaskResponse.class));
+        }
+
+        @Test
+        @DisplayName("should include latest execution context when available")
+        void shouldIncludeLatestExecutionContext() {
+            TaskRequest request = TaskRequest.builder()
+                    .title("New Task")
+                    .projectId(100L)
+                    .build();
+
+            Execution execution = Execution.builder()
+                    .task(task)
+                    .agent(Agent.builder().name("Builder").build())
+                    .brainSentrySessionId("bs-session-123")
+                    .build();
+            execution.setId(900L);
+
+            when(projectRepository.findById(100L)).thenReturn(Optional.of(project));
+            when(memberRepository.existsByOrganizationIdAndUserId(10L, 1L)).thenReturn(true);
+            when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
+                Task saved = invocation.getArgument(0);
+                saved.setId(1001L);
+                saved.setCreatedAt(Instant.now());
+                saved.setUpdatedAt(Instant.now());
+                return saved;
+            });
+            when(taskRepository.countSubtasksByParentTaskId(anyLong())).thenReturn(0L);
+            when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(1001L)).thenReturn(Optional.of(execution));
+
+            TaskResponse response = taskService.create(request, currentUser);
+
+            assertThat(response.getExecutionId()).isEqualTo(900L);
+            assertThat(response.getBrainSentrySessionId()).isEqualTo("bs-session-123");
         }
 
         @Test

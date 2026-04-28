@@ -49,7 +49,6 @@ class CustomOidcUserServiceTest {
             // the user-creation branch. Since super.loadUser() calls an external
             // OIDC provider, we verify the repository interactions instead.
 
-            when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
                 User u = inv.getArgument(0);
                 u.setId(1L);
@@ -98,7 +97,6 @@ class CustomOidcUserServiceTest {
                     .build();
             existingUser.setId(5L);
 
-            when(userRepository.findByEmail("existing@example.com")).thenReturn(Optional.of(existingUser));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Simulate what loadUser does for an existing user
@@ -133,7 +131,6 @@ class CustomOidcUserServiceTest {
                     .build();
             existingUser.setId(5L);
 
-            when(userRepository.findByEmail("existing@example.com")).thenReturn(Optional.of(existingUser));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // Simulate what loadUser does when fullName is blank
@@ -172,7 +169,6 @@ class CustomOidcUserServiceTest {
         @Test
         @DisplayName("should use email as fullName when fullName is null during JIT provisioning")
         void shouldUseEmailAsFallbackName() {
-            when(userRepository.findByEmail("noname@example.com")).thenReturn(Optional.empty());
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
                 User u = inv.getArgument(0);
                 u.setId(2L);

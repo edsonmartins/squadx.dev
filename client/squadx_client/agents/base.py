@@ -7,6 +7,9 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 from squadx_client.llm.router import get_coding_llm
+from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
+from squadx_client.memory.policy import MemoryScopeContext
+from squadx_client.memory.procedural import ProceduralMemoryManager
 
 if TYPE_CHECKING:
     from squadx_client.docker.sandbox import AgentSandbox
@@ -20,11 +23,17 @@ class BaseAgent(ABC):
     agent_type: str = "base"
     system_prompt: str = "You are a helpful AI assistant."
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
         self.llm = get_coding_llm()
         self.sandbox = sandbox
         self.tools = []
         self.logger = structlog.get_logger().bind(agent_type=self.agent_type)
+        self.brainsentry_session_id = brainsentry_session_id
+        self.memory_client = BrainSentryClient()
+        self.prompt_interceptor = PromptInterceptor(self.memory_client)
+        self.prompt_interceptor.set_session(brainsentry_session_id)
+        self.memory_collector = MemoryCollector(self.memory_client)
+        self.procedural_memory = ProceduralMemoryManager(self.memory_client)
 
         # If sandbox provided, create tools
         if sandbox:
@@ -60,12 +69,19 @@ class BaseAgent(ABC):
             - cost: Estimated cost
         """
         self.logger.info("executing_task", title=task_title)
+        self.prompt_interceptor.set_user(self._resolve_memory_user_id(context))
+        self.prompt_interceptor.set_scope(MemoryScopeContext.from_context(context, self.agent_type))
 
-        # Use tool-based execution if sandbox is available
-        if self.sandbox:
-            return await self._execute_with_tools(task_title, task_description, context)
-        else:
+        try:
+            # Use tool-based execution if sandbox is available
+            if self.sandbox:
+                return await self._execute_with_tools(task_title, task_description, context)
             return await self._execute_simple(task_title, task_description, context)
+        except Exception as exc:
+            await self._record_failure(task_title, task_description, str(exc), context)
+            raise
+        finally:
+            await self.memory_client.close()
 
     async def _execute_with_tools(
         self,
@@ -92,6 +108,9 @@ You have access to a sandbox environment where you can:
 - Use git commands
 
 Complete this task by using the available tools. After completing the task, provide a summary of what was done."""
+
+        original_user_message = user_message
+        user_message = await self.prompt_interceptor.intercept(user_message)
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -160,6 +179,8 @@ Complete this task by using the available tools. After completing the task, prov
             iterations=iteration + 1,
             tool_calls=total_tool_calls,
         )
+
+        await self._record_success(task_title, original_user_message, final_output, context, files_modified)
 
         return {
             "output": final_output,
@@ -239,6 +260,9 @@ Format your response as:
 ## Summary
 [Brief summary of what was done]"""
 
+        original_user_message = user_message
+        user_message = await self.prompt_interceptor.intercept(user_message)
+
         response = await self.llm.ainvoke(
             [
                 SystemMessage(content=system_prompt),
@@ -260,6 +284,8 @@ Format your response as:
             files_modified=len(files_modified),
             output_length=len(output),
         )
+
+        await self._record_success(task_title, original_user_message, output, context, files_modified)
 
         return {
             "output": output,
@@ -339,3 +365,137 @@ Format your response as:
         input_cost = input_tokens * 0.00001  # $10 per 1M tokens
         output_cost = output_tokens * 0.00003  # $30 per 1M tokens
         return input_cost + output_cost
+
+    async def _record_success(
+        self,
+        task_title: str,
+        prompt: str,
+        output: str,
+        context: dict[str, Any] | None,
+        files_modified: list[str],
+    ) -> None:
+        """Persist successful execution artifacts into BrainSentry."""
+        if not self.memory_client.enabled:
+            return
+
+        main_task = context.get("main_task", {}) if context else {}
+        task_id = main_task.get("task_id") or main_task.get("id")
+        execution_id = context.get("execution_id") if context else None
+
+        summary = self._truncate_for_memory(output, 800)
+        scope = MemoryScopeContext.from_context(context, self.agent_type)
+        self.memory_collector.record_learning(
+            f"{self.agent_type} agent completed '{task_title}'. Summary: {summary}",
+            tags=[
+                "agent-execution",
+                self.agent_type,
+                *( [f"task:{task_id}"] if task_id else []),
+                *( [f"execution:{execution_id}"] if execution_id else []),
+                *scope.to_tags(),
+            ],
+        )
+
+        if files_modified:
+            self.memory_collector.record_pattern(
+                f"{self.agent_type} agent modified files for '{task_title}': {', '.join(files_modified[:20])}",
+                tags=["agent-execution", self.agent_type, "files-modified", *scope.to_tags()],
+            )
+
+        await self.procedural_memory.record_procedure(
+            title=f"{self.agent_type}::{task_title}",
+            summary=summary,
+            scope=scope,
+            steps=[
+                f"Execute task '{task_title}' with agent type {self.agent_type}",
+                f"Apply implementation based on current task context and completed subtasks",
+                "Validate output and persist execution learnings",
+            ],
+            files_modified=files_modified,
+        )
+
+        await self.memory_client.push_session_interaction(
+            self.brainsentry_session_id or "",
+            query=self._truncate_for_memory(prompt, 4000),
+            response=self._truncate_for_memory(output, 4000),
+            metadata={
+                "agentType": self.agent_type,
+                "taskTitle": task_title,
+                **scope.to_metadata(),
+            },
+        )
+        await self.memory_collector.flush()
+
+    async def _record_failure(
+        self,
+        task_title: str,
+        task_description: str,
+        error: str,
+        context: dict[str, Any] | None,
+    ) -> None:
+        """Persist failure artifacts into BrainSentry."""
+        if not self.memory_client.enabled:
+            return
+
+        main_task = context.get("main_task", {}) if context else {}
+        task_id = main_task.get("task_id") or main_task.get("id")
+        execution_id = context.get("execution_id") if context else None
+
+        self.memory_collector.record_bug(
+            f"{self.agent_type} agent failed on '{task_title}'. Error: {self._truncate_for_memory(error, 1000)}",
+            tags=[
+                "agent-execution",
+                self.agent_type,
+                *( [f"task:{task_id}"] if task_id else []),
+                *( [f"execution:{execution_id}"] if execution_id else []),
+                *MemoryScopeContext.from_context(context, self.agent_type).to_tags(),
+            ],
+        )
+
+        self.memory_collector.record_antipattern(
+            f"Avoid repeating failure while executing '{task_title}': {self._truncate_for_memory(error, 500)}",
+            tags=[
+                "agent-execution",
+                self.agent_type,
+                "failure",
+                *( [f"task:{task_id}"] if task_id else []),
+                *( [f"execution:{execution_id}"] if execution_id else []),
+                *MemoryScopeContext.from_context(context, self.agent_type).to_tags(),
+            ],
+        )
+
+        await self.memory_client.push_session_interaction(
+            self.brainsentry_session_id or "",
+            query=self._truncate_for_memory(task_description, 4000),
+            response=f"ERROR: {self._truncate_for_memory(error, 4000)}",
+            metadata={
+                "agentType": self.agent_type,
+                "taskTitle": task_title,
+                "status": "failed",
+                **MemoryScopeContext.from_context(context, self.agent_type).to_metadata(),
+            },
+        )
+        await self.memory_collector.flush()
+
+    @staticmethod
+    def _truncate_for_memory(text: str | None, limit: int) -> str:
+        """Bound large payloads before sending them to memory services."""
+        if not text:
+            return ""
+        if len(text) <= limit:
+            return text
+        return text[: limit - 3] + "..."
+
+    @staticmethod
+    def _resolve_memory_user_id(context: dict[str, Any] | None) -> str | None:
+        if not context:
+            return None
+
+        agent_id = context.get("assigned_agent_id") or context.get("agent_id")
+        if agent_id:
+            return str(agent_id)
+
+        execution_id = context.get("execution_id")
+        if execution_id:
+            return f"execution-{execution_id}"
+
+        return None

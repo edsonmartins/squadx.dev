@@ -278,7 +278,7 @@ export interface ProjectResponse {
   is_active: boolean;
   organization_id: number;
   organization_name: string;
-  squad_id?: number;
+  squad_id?: number | null;
   squad_name?: string;
   tasks_count: number;
   created_at: string;
@@ -291,7 +291,7 @@ export interface CreateProjectRequest {
   repository_url?: string;
   default_branch?: string;
   organization_id: number;
-  squad_id?: number;
+  squad_id?: number | null;
 }
 
 export interface UpdateProjectRequest {
@@ -299,7 +299,7 @@ export interface UpdateProjectRequest {
   description?: string;
   repository_url?: string;
   default_branch?: string;
-  squad_id?: number;
+  squad_id?: number | null;
 }
 
 export type TaskStatus =
@@ -329,6 +329,8 @@ export interface TaskResponse {
   project_name: string;
   assigned_agent_id?: number;
   assigned_agent_name?: string;
+  execution_id?: number;
+  brain_sentry_session_id?: string;
   parent_task_id?: number;
   subtasks_count: number;
   created_by_id?: number;

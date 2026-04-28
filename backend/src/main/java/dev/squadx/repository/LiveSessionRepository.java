@@ -21,10 +21,15 @@ public interface LiveSessionRepository extends JpaRepository<LiveSession, Long> 
 
     Optional<LiveSession> findByTaskIdAndStatus(Long taskId, LiveSessionStatus status);
 
+    Optional<LiveSession> findByExternalSessionId(String externalSessionId);
+
     boolean existsByCode(String code);
 
     @Query("SELECT s FROM LiveSession s WHERE s.task.id = :taskId AND s.status = 'ACTIVE'")
     Optional<LiveSession> findActiveByTaskId(Long taskId);
+
+    @Query("SELECT s FROM LiveSession s WHERE s.task.id = :taskId ORDER BY s.createdAt DESC")
+    List<LiveSession> findByTaskIdOrderByCreatedAtDesc(Long taskId);
 
     @Query("SELECT s FROM LiveSession s WHERE s.hostUser.id = :userId")
     Page<LiveSession> findByHostUserId(Long userId, Pageable pageable);

@@ -89,8 +89,9 @@ export default function LiveViewPage() {
               onChange={(e) => setJoinCode(e.target.value.toLowerCase())}
               maxLength={8}
               className="max-w-[220px] font-mono text-lg tracking-wider"
+              data-testid="join-session-input"
             />
-            <Button onClick={handleJoinSession} disabled={joinCode.length < 6 || joinCode.length > 8}>
+            <Button onClick={handleJoinSession} disabled={joinCode.length < 6 || joinCode.length > 8} data-testid="join-session-button">
               <Play className="mr-2 h-4 w-4" />
               Join Session
             </Button>
@@ -128,7 +129,7 @@ export default function LiveViewPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeSessions?.map((session) => (
-              <Card key={session.id} className="group hover:shadow-md transition-shadow">
+              <Card key={session.id} className="group hover:shadow-md transition-shadow" data-testid={`live-session-card-${session.id}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

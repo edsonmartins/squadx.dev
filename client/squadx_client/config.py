@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     brainsentry_url: str | None = Field(default=None, alias="SQUADX_BRAINSENTRY_URL")
     brainsentry_api_key: str | None = Field(default=None, alias="SQUADX_BRAINSENTRY_API_KEY")
     brainsentry_tenant_id: str = Field(default="default", alias="SQUADX_BRAINSENTRY_TENANT_ID")
+    brainsentry_memory_scope: str = Field(default="adaptive", alias="SQUADX_BRAINSENTRY_MEMORY_SCOPE")
+    brainsentry_enable_procedural_memory: bool = Field(default=True, alias="SQUADX_BRAINSENTRY_ENABLE_PROCEDURAL_MEMORY")
+    brainsentry_procedural_limit: int = Field(default=5, alias="SQUADX_BRAINSENTRY_PROCEDURAL_LIMIT")
 
     # SquadX Live Integration
     squadx_live_url: str | None = Field(default=None, alias="SQUADX_LIVE_URL")

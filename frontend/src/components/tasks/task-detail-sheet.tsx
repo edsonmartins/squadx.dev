@@ -130,7 +130,7 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
 
   return (
     <Sheet open={!!task} onOpenChange={handleClose}>
-      <SheetContent className="sm:max-w-lg overflow-y-auto">
+      <SheetContent className="sm:max-w-lg overflow-y-auto" data-testid="task-detail-sheet">
         <SheetHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -312,6 +312,7 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
                 className="w-full"
                 onClick={() => startExecutionMutation.mutate()}
                 disabled={startExecutionMutation.isPending}
+                data-testid="start-execution-button"
               >
                 <Play className="mr-2 h-4 w-4" />
                 {startExecutionMutation.isPending ? "Starting..." : "Start Execution"}

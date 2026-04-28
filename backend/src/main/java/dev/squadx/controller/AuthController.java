@@ -2,6 +2,7 @@ package dev.squadx.controller;
 
 import dev.squadx.dto.auth.*;
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.model.User;
 import dev.squadx.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -46,8 +48,11 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "Get current user info")
-    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(@AuthenticationPrincipal User user) {
-        UserResponse response = authService.getCurrentUser(user.getEmail());
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request) {
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        UserResponse response = authService.getCurrentUser(currentUser.getEmail());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -55,8 +60,10 @@ public class AuthController {
     @Operation(summary = "Update current user profile")
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @AuthenticationPrincipal User user,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody UpdateProfileRequest request) {
-        UserResponse response = authService.updateProfile(user.getEmail(), request);
+        User currentUser = AuthenticatedUserResolver.resolve(user, httpRequest);
+        UserResponse response = authService.updateProfile(currentUser.getEmail(), request);
         return ResponseEntity.ok(ApiResponse.success(response, "Profile updated"));
     }
 
@@ -64,8 +71,10 @@ public class AuthController {
     @Operation(summary = "Change current user password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @AuthenticationPrincipal User user,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody ChangePasswordRequest request) {
-        authService.changePassword(user.getEmail(), request);
+        User currentUser = AuthenticatedUserResolver.resolve(user, httpRequest);
+        authService.changePassword(currentUser.getEmail(), request);
         return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
     }
 }

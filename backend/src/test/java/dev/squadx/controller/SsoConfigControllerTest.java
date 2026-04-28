@@ -17,9 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,11 +32,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SsoConfigController.class)
+@WebMvcTest(
+        value = SsoConfigController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class SsoConfigControllerTest {
@@ -104,7 +109,7 @@ class SsoConfigControllerTest {
             mockMvc.perform(post("/api/v1/organizations/10/sso")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("SSO configuration saved successfully"))
@@ -122,7 +127,7 @@ class SsoConfigControllerTest {
             when(ssoConfigService.getByOrganization(10L)).thenReturn(List.of(sampleSsoConfig));
 
             mockMvc.perform(get("/api/v1/organizations/10/sso")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data[0].provider").value("okta"))
@@ -141,7 +146,7 @@ class SsoConfigControllerTest {
                     .thenReturn(sampleSsoConfig);
 
             mockMvc.perform(get("/api/v1/organizations/10/sso/okta")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.provider").value("okta"))
@@ -159,7 +164,7 @@ class SsoConfigControllerTest {
             doNothing().when(ssoConfigService).delete(10L, "okta");
 
             mockMvc.perform(delete("/api/v1/organizations/10/sso/okta")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("SSO configuration deleted successfully"));
@@ -186,7 +191,7 @@ class SsoConfigControllerTest {
             mockMvc.perform(patch("/api/v1/organizations/10/sso/okta/toggle")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(Map.of("enabled", false)))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("SSO configuration updated successfully"))

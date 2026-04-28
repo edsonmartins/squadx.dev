@@ -1,0 +1,2 @@
+ALTER TABLE live_sessions
+    ALTER COLUMN code TYPE VARCHAR(8);

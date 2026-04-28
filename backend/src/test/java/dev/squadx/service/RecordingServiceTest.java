@@ -161,6 +161,30 @@ class RecordingServiceTest {
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("Recording is not in RECORDING status");
         }
+
+        @Test
+        @DisplayName("should complete latest active recording for a session")
+        void shouldCompleteLatestRecordingForSession() {
+            SessionRecording recording = SessionRecording.builder()
+                    .session(liveSession)
+                    .s3Key("recordings/session-10/uuid.webm")
+                    .s3Bucket("my-bucket")
+                    .status(RecordingStatus.RECORDING)
+                    .startedAt(Instant.now())
+                    .createdAt(Instant.now())
+                    .build();
+            recording.setId(2L);
+
+            when(recordingRepository.findFirstBySessionIdAndStatusOrderByStartedAtDesc(10L, RecordingStatus.RECORDING))
+                    .thenReturn(Optional.of(recording));
+            when(recordingRepository.save(any(SessionRecording.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            RecordingResponse response = recordingService.completeLatestRecordingForSession(10L, 1_000L, 45);
+
+            assertThat(response.getId()).isEqualTo(2L);
+            assertThat(response.getStatus()).isEqualTo(RecordingStatus.COMPLETED);
+            assertThat(response.getDurationSeconds()).isEqualTo(45);
+        }
     }
 
     @Nested

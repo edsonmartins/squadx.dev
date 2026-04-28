@@ -2,6 +2,7 @@ package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.common.PageResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.dto.project.ProjectRequest;
 import dev.squadx.dto.project.ProjectResponse;
 import dev.squadx.model.User;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/projects")
@@ -31,7 +33,8 @@ public class ProjectController {
             @Valid @RequestBody ProjectRequest request,
             @AuthenticationPrincipal User user
     ) {
-        ProjectResponse response = projectService.create(request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ProjectResponse response = projectService.create(request, currentUser);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Project created successfully"));
@@ -43,7 +46,8 @@ public class ProjectController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        ProjectResponse response = projectService.getById(id, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ProjectResponse response = projectService.getById(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -53,7 +57,8 @@ public class ProjectController {
             @PathVariable String slug,
             @AuthenticationPrincipal User user
     ) {
-        ProjectResponse response = projectService.getBySlug(slug, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ProjectResponse response = projectService.getBySlug(slug, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -64,7 +69,8 @@ public class ProjectController {
             @PageableDefault(size = 20) Pageable pageable,
             @AuthenticationPrincipal User user
     ) {
-        PageResponse<ProjectResponse> response = projectService.getByOrganizationId(organizationId, pageable, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        PageResponse<ProjectResponse> response = projectService.getByOrganizationId(organizationId, pageable, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -72,9 +78,11 @@ public class ProjectController {
     @Operation(summary = "Get current user's projects")
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getMyProjects(
             @PageableDefault(size = 20) Pageable pageable,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        PageResponse<ProjectResponse> response = projectService.getByUserId(user.getId(), pageable);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        PageResponse<ProjectResponse> response = projectService.getByUserId(currentUser.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -85,7 +93,8 @@ public class ProjectController {
             @Valid @RequestBody ProjectRequest request,
             @AuthenticationPrincipal User user
     ) {
-        ProjectResponse response = projectService.update(id, request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ProjectResponse response = projectService.update(id, request, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response, "Project updated successfully"));
     }
 
@@ -95,7 +104,8 @@ public class ProjectController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        projectService.delete(id, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        projectService.delete(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(null, "Project deleted successfully"));
     }
 }

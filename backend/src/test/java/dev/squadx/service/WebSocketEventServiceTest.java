@@ -26,6 +26,32 @@ class WebSocketEventServiceTest {
     private WebSocketEventService webSocketEventService;
 
     @Nested
+    @DisplayName("sendTaskAssignedToUser()")
+    class SendTaskAssignedToUser {
+
+        @Test
+        @DisplayName("should send task assignment to the authenticated user queue")
+        @SuppressWarnings("unchecked")
+        void shouldSendTaskAssignmentToUserQueue() {
+            Object taskData = Map.of("task_id", 1L, "title", "Assigned Task");
+
+            webSocketEventService.sendTaskAssignedToUser("user@example.com", 1L, (Map<String, Object>) taskData);
+
+            ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+            verify(messagingTemplate).convertAndSendToUser(
+                    eq("user@example.com"),
+                    eq("/queue/tasks"),
+                    captor.capture()
+            );
+
+            Map<String, Object> payload = captor.getValue();
+            assertThat(payload.get("type")).isEqualTo("task_assigned");
+            assertThat(payload.get("task_id")).isEqualTo(1L);
+            assertThat(payload.get("task")).isEqualTo(taskData);
+        }
+    }
+
+    @Nested
     @DisplayName("sendTaskCreated()")
     class SendTaskCreated {
 

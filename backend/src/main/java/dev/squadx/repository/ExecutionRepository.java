@@ -18,6 +18,8 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
     List<Execution> findByTaskIdAndStatus(Long taskId, ExecutionStatus status);
 
+    Optional<Execution> findTopByTaskIdOrderByCreatedAtDesc(Long taskId);
+
     Optional<Execution> findByContainerId(String containerId);
 
     @Query("SELECT e FROM Execution e WHERE e.task.project.id = :projectId")

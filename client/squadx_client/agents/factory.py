@@ -13,8 +13,8 @@ class FrontendAgent(BaseAgent):
 
     agent_type = "frontend"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert frontend developer specializing in:
@@ -41,8 +41,8 @@ class BackendAgent(BaseAgent):
 
     agent_type = "backend"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert backend developer specializing in:
@@ -71,8 +71,8 @@ class FullstackAgent(BaseAgent):
 
     agent_type = "fullstack"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert full-stack developer with broad knowledge across:
@@ -97,8 +97,8 @@ class DevOpsAgent(BaseAgent):
 
     agent_type = "devops"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert DevOps engineer specializing in:
@@ -125,8 +125,8 @@ class QAAgent(BaseAgent):
 
     agent_type = "qa"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert QA engineer specializing in:
@@ -158,8 +158,8 @@ class CoordinatorAgent(BaseAgent):
 
     agent_type = "coordinator"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are a senior software architect and project coordinator. Your role is to:
@@ -205,8 +205,8 @@ class DatabaseAgent(BaseAgent):
 
     agent_type = "database"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None):
-        super().__init__(sandbox)
+    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+        super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
         return """You are an expert database engineer specializing in:
@@ -232,6 +232,7 @@ Always provide complete SQL or migration scripts."""
 def create_agent(
     agent_type: str,
     sandbox: Optional["AgentSandbox"] = None,
+    brainsentry_session_id: str | None = None,
 ) -> BaseAgent:
     """Create an agent of the specified type.
 
@@ -256,4 +257,4 @@ def create_agent(
     if not agent_class:
         raise ValueError(f"Unknown agent type: {agent_type}")
 
-    return agent_class(sandbox=sandbox)
+    return agent_class(sandbox=sandbox, brainsentry_session_id=brainsentry_session_id)

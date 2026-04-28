@@ -24,6 +24,9 @@ public class LiveSessionResponse {
     private String resolution;
     private String viewerUrl;
     private String hostUrl;
+    private String externalSessionId;
+    private String externalJoinCode;
+    private String externalJoinUrl;
     private List<ParticipantResponse> participants;
     private Instant createdAt;
     private LocalDateTime endedAt;

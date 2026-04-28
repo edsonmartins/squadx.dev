@@ -10,6 +10,7 @@ from typing import Any, Optional
 import structlog
 
 from squadx_client.config import settings
+from squadx_client.memory import BrainSentryClient
 from squadx_client.orchestrator.graph import create_orchestrator
 from squadx_client.websocket import StompClientManager, MessageType
 from squadx_client.websocket.handlers import TaskMessageHandler
@@ -210,24 +211,54 @@ class SquadXDaemon:
             logger.info("task_execution_started", task_id=task_id)
             await self._send_task_status(task_id, "running", progress=0)
 
+            brainsentry_client = BrainSentryClient()
+            execution_id = task_data.get("execution_id") or task_data.get("executionId") or task_id
+            brainsentry_session_id = (
+                task_data.get("brain_sentry_session_id")
+                or task_data.get("brainSentrySessionId")
+            )
+            if not brainsentry_session_id:
+                brainsentry_session_id = await brainsentry_client.start_session(
+                    str(execution_id),
+                    task_id=str(task_id),
+                    agent_id=str(task_data.get("assigned_agent_id") or task_data.get("agent_id") or ""),
+                )
+
             # Run the orchestrator
             result = await self.orchestrator.ainvoke(
                 {
                     "task_id": task_id,
                     "task": task_data,
+                    "execution_id": execution_id,
+                    "brainsentry_session_id": brainsentry_session_id,
                     "project_path": task_data.get("project_path", settings.workspace_path),
                     "messages": [],
                 }
             )
 
             logger.info("task_execution_completed", task_id=task_id)
+            await brainsentry_client.end_session(
+                brainsentry_session_id or "",
+                status="completed",
+                summary=result.get("final_result", ""),
+            )
             await self._send_task_completed(task_id, result)
 
         except Exception as e:
             logger.error("task_execution_failed", task_id=task_id, error=str(e))
+            try:
+                await brainsentry_client.end_session(
+                    brainsentry_session_id or "",
+                    status="failed",
+                    summary=str(e),
+                )
+            except Exception:
+                logger.warning("brainsentry_session_end_failed", task_id=task_id)
             await self._send_task_failed(task_id, str(e))
 
         finally:
+            if "brainsentry_client" in locals():
+                await brainsentry_client.close()
             self.current_tasks.pop(task_id, None)
 
     async def _handle_task_cancelled(self, data: dict[str, Any]) -> None:

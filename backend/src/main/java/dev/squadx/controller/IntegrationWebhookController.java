@@ -2,6 +2,7 @@ package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.integration.ServiceJwtProvider;
+import dev.squadx.service.IntegrationWebhookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.Map;
 public class IntegrationWebhookController {
 
     private final ServiceJwtProvider serviceJwtProvider;
+    private final IntegrationWebhookService integrationWebhookService;
 
     @PostMapping("/brainsentry")
     @Operation(summary = "Receive webhook from BrainSentry")
@@ -36,14 +38,7 @@ public class IntegrationWebhookController {
 
         String eventType = (String) payload.getOrDefault("event", "unknown");
         log.info("Received BrainSentry webhook: event={}", eventType);
-
-        // Process based on event type
-        switch (eventType) {
-            case "memory.flagged" -> log.info("Memory flagged: {}", payload.get("memoryId"));
-            case "knowledge.conflict" -> log.warn("Knowledge conflict detected: {}", payload.get("details"));
-            case "pattern.detected" -> log.info("New pattern detected: {}", payload.get("pattern"));
-            default -> log.debug("Unhandled BrainSentry event: {}", eventType);
-        }
+        integrationWebhookService.handleBrainSentryWebhook(payload);
 
         return ResponseEntity.ok(ApiResponse.success(null, "Webhook received"));
     }
@@ -60,13 +55,7 @@ public class IntegrationWebhookController {
 
         String eventType = (String) payload.getOrDefault("event", "unknown");
         log.info("Received SquadX Live webhook: event={}", eventType);
-
-        switch (eventType) {
-            case "session.ended" -> log.info("Live session ended: {}", payload.get("sessionId"));
-            case "recording.ready" -> log.info("Recording ready: {}", payload.get("recordingUrl"));
-            case "participant.joined" -> log.debug("Participant joined: {}", payload.get("userId"));
-            default -> log.debug("Unhandled Live event: {}", eventType);
-        }
+        integrationWebhookService.handleLiveWebhook(payload);
 
         return ResponseEntity.ok(ApiResponse.success(null, "Webhook received"));
     }

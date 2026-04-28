@@ -192,6 +192,8 @@ class TestOrchestratorState:
     def test_minimal_creation(self):
         state = OrchestratorState(task_id=1, task={"title": "Test"})
         assert state.task_id == 1
+        assert state.execution_id is None
+        assert state.brainsentry_session_id is None
         assert state.plan is None
         assert state.current_subtask_id is None
         assert state.completed_subtasks == []
@@ -211,12 +213,16 @@ class TestOrchestratorState:
 
     def test_state_mutation(self):
         state = OrchestratorState(task_id=1, task={"title": "App"})
+        state.execution_id = 99
+        state.brainsentry_session_id = "bs-session-1"
         state.current_subtask_id = "s1"
         state.completed_subtasks.append("s1")
         state.current_subtask_id = "s2"
         state.failed_subtasks.append("s2")
         state.should_end = True
         state.error = "Subtask s2 failed"
+        assert state.execution_id == 99
+        assert state.brainsentry_session_id == "bs-session-1"
 
         assert len(state.completed_subtasks) == 1
         assert len(state.failed_subtasks) == 1

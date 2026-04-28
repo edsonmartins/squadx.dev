@@ -16,7 +16,7 @@ public record TaskStatusTransition(TaskStatus from, TaskStatus to) {
             TaskStatus.IN_PROGRESS, Set.of(TaskStatus.IN_REVIEW, TaskStatus.BLOCKED, TaskStatus.DONE, TaskStatus.CANCELLED),
             TaskStatus.IN_REVIEW, Set.of(TaskStatus.DONE, TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED),
             TaskStatus.BLOCKED, Set.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED),
-            TaskStatus.DONE, Set.of(),
+            TaskStatus.DONE, Set.of(TaskStatus.IN_PROGRESS),
             TaskStatus.CANCELLED, Set.of(TaskStatus.TODO)
     );
 

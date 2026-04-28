@@ -142,9 +142,10 @@ export default function RecordingsPage() {
             value={sessionIdInput}
             onChange={(e) => setSessionIdInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            data-testid="recording-session-id-input"
           />
         </div>
-        <Button onClick={handleSearch} variant="outline">
+        <Button onClick={handleSearch} variant="outline" data-testid="recording-search-button">
           Search
         </Button>
         {searchSessionId && (
@@ -180,7 +181,7 @@ export default function RecordingsPage() {
       ) : (
         <div className="grid gap-4">
           {displayRecordings.map((recording) => (
-            <Card key={recording.id}>
+            <Card key={recording.id} data-testid={`recording-card-${recording.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-base">

@@ -1,5 +1,7 @@
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { useAuth } from "@/lib/auth";
+import { liveViewApi, projectsApi, tasksApi, type TaskResponse } from "@/lib/api";
 
 function StatCard({
   label,
@@ -20,6 +22,44 @@ function StatCard({
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [liveSessions, setLiveSessions] = useState(0);
+
+  const loadOverview = useCallback(async () => {
+    try {
+      const [projects, sessions] = await Promise.all([
+        projectsApi.list(),
+        liveViewApi.getActive(),
+      ]);
+
+      const pages = await Promise.all(
+        projects.content.map((project) => tasksApi.listByProject(project.id))
+      );
+
+      const mergedTasks = pages.flatMap((page) => page.content);
+      mergedTasks.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      setTasks(mergedTasks);
+      setLiveSessions(sessions.length);
+    } catch {
+      setTasks([]);
+      setLiveSessions(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  const activeTasks = tasks.filter((task) =>
+    ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED"].includes(task.status)
+  ).length;
+  const inReview = tasks.filter((task) => task.status === "IN_REVIEW").length;
+  const completed = tasks.filter((task) => task.status === "DONE").length;
+  const recentTasks = tasks.slice(0, 5);
 
   return (
     <ScrollView style={styles.container}>
@@ -29,17 +69,28 @@ export default function DashboardScreen() {
       <Text style={styles.subGreeting}>Here is your overview</Text>
 
       <View style={styles.grid}>
-        <StatCard label="Active Tasks" value="--" color="#3b82f6" />
-        <StatCard label="In Review" value="--" color="#f59e0b" />
-        <StatCard label="Completed" value="--" color="#22c55e" />
-        <StatCard label="Live Sessions" value="--" color="#ef4444" />
+        <StatCard label="Active Tasks" value={String(activeTasks)} color="#3b82f6" />
+        <StatCard label="In Review" value={String(inReview)} color="#f59e0b" />
+        <StatCard label="Completed" value={String(completed)} color="#22c55e" />
+        <StatCard label="Live Sessions" value={String(liveSessions)} color="#ef4444" />
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No recent activity</Text>
-        </View>
+        {recentTasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No recent activity</Text>
+          </View>
+        ) : (
+          recentTasks.map((task) => (
+            <View key={task.id} style={styles.activityCard}>
+              <Text style={styles.activityTitle}>{task.title}</Text>
+              <Text style={styles.activityMeta}>
+                {task.project_name} · {task.status.replace(/_/g, " ")}
+              </Text>
+            </View>
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -103,5 +154,21 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#64748b",
     fontSize: 14,
+  },
+  activityCard: {
+    backgroundColor: "#1e293b",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  activityTitle: {
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  activityMeta: {
+    color: "#94a3b8",
+    fontSize: 13,
+    marginTop: 4,
   },
 });

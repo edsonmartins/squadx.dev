@@ -19,9 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,13 +31,18 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(OrganizationController.class)
+@WebMvcTest(
+        value = OrganizationController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class OrganizationControllerTest {
@@ -98,13 +104,13 @@ class OrganizationControllerTest {
                     .description("A test organization")
                     .build();
 
-            when(organizationService.create(any(OrganizationRequest.class), any(User.class)))
+            when(organizationService.create(any(OrganizationRequest.class), nullable(User.class)))
                     .thenReturn(sampleOrganization);
 
             mockMvc.perform(post("/api/v1/organizations")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -120,11 +126,11 @@ class OrganizationControllerTest {
         @Test
         @DisplayName("should return organization by id with 200")
         void shouldReturnOrganizationById() throws Exception {
-            when(organizationService.getById(eq(1L), any(User.class)))
+            when(organizationService.getById(eq(1L), nullable(User.class)))
                     .thenReturn(sampleOrganization);
 
             mockMvc.perform(get("/api/v1/organizations/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -134,11 +140,11 @@ class OrganizationControllerTest {
         @Test
         @DisplayName("should return 404 when organization not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(organizationService.getById(eq(999L), any(User.class)))
+            when(organizationService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Organization not found"));
 
             mockMvc.perform(get("/api/v1/organizations/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Organization not found"));
@@ -152,11 +158,11 @@ class OrganizationControllerTest {
         @Test
         @DisplayName("should return organization by slug with 200")
         void shouldReturnOrganizationBySlug() throws Exception {
-            when(organizationService.getBySlug(eq("test-organization"), any(User.class)))
+            when(organizationService.getBySlug(eq("test-organization"), nullable(User.class)))
                     .thenReturn(sampleOrganization);
 
             mockMvc.perform(get("/api/v1/organizations/slug/test-organization")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -185,7 +191,7 @@ class OrganizationControllerTest {
                     .thenReturn(pageResponse);
 
             mockMvc.perform(get("/api/v1/organizations/my")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1))
@@ -211,13 +217,13 @@ class OrganizationControllerTest {
                     .description("Updated description")
                     .build();
 
-            when(organizationService.update(eq(1L), any(OrganizationRequest.class), any(User.class)))
+            when(organizationService.update(eq(1L), any(OrganizationRequest.class), nullable(User.class)))
                     .thenReturn(updatedOrg);
 
             mockMvc.perform(put("/api/v1/organizations/1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -232,13 +238,13 @@ class OrganizationControllerTest {
                     .name("Updated Organization")
                     .build();
 
-            when(organizationService.update(eq(1L), any(OrganizationRequest.class), any(User.class)))
+            when(organizationService.update(eq(1L), any(OrganizationRequest.class), nullable(User.class)))
                     .thenThrow(new ForbiddenException("You don't have permission to update this organization"));
 
             mockMvc.perform(put("/api/v1/organizations/1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("You don't have permission to update this organization"));
@@ -252,10 +258,10 @@ class OrganizationControllerTest {
         @Test
         @DisplayName("should delete organization successfully and return 200")
         void shouldDeleteOrganizationSuccessfully() throws Exception {
-            doNothing().when(organizationService).delete(eq(1L), any(User.class));
+            doNothing().when(organizationService).delete(eq(1L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/organizations/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Organization deleted successfully"));

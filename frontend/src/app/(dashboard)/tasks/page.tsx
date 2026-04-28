@@ -140,7 +140,7 @@ export default function TasksPage() {
             <Filter className="mr-2 h-4 w-4" />
             Filter
           </Button>
-          <Button onClick={handleCreateTask}>
+          <Button onClick={handleCreateTask} data-testid="new-task-button">
             <Plus className="mr-2 h-4 w-4" />
             New Task
           </Button>
@@ -155,6 +155,7 @@ export default function TasksPage() {
             variant={selectedProjectId === project.id ? "default" : "outline"}
             size="sm"
             onClick={() => setSelectedProjectId(project.id)}
+            data-testid={`project-filter-${project.id}`}
           >
             {project.name}
             <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">

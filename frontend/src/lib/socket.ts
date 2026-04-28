@@ -3,6 +3,7 @@ import SockJS from "sockjs-client";
 import { api } from "./api";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080/ws";
+const WS_DISABLED = process.env.NEXT_PUBLIC_DISABLE_REALTIME === "true";
 
 type MessageCallback = (data: unknown) => void;
 
@@ -15,6 +16,10 @@ class StompClient {
   private maxReconnectAttempts = 5;
 
   connect() {
+    if (WS_DISABLED) {
+      return;
+    }
+
     if (this.client?.connected || this.isConnecting) {
       return;
     }

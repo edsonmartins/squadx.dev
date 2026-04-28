@@ -19,9 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,12 +31,16 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(RecordingController.class)
+@WebMvcTest(
+        value = RecordingController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class RecordingControllerTest {
@@ -98,7 +103,7 @@ class RecordingControllerTest {
             mockMvc.perform(post("/api/v1/recordings/start")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -132,7 +137,7 @@ class RecordingControllerTest {
             mockMvc.perform(post("/api/v1/recordings/1/complete")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Recording completed"));
@@ -155,7 +160,7 @@ class RecordingControllerTest {
             when(recordingService.getRecordingUrl(1L)).thenReturn(withUrl);
 
             mockMvc.perform(get("/api/v1/recordings/1/url")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.playback_url").value("https://s3.amazonaws.com/playback-url"));
@@ -168,7 +173,7 @@ class RecordingControllerTest {
                     .thenThrow(new ResourceNotFoundException("Recording not found"));
 
             mockMvc.perform(get("/api/v1/recordings/999/url")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Recording not found"));
@@ -186,7 +191,7 @@ class RecordingControllerTest {
                     .thenReturn(List.of(sampleRecording));
 
             mockMvc.perform(get("/api/v1/recordings/session/10")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data[0].id").value(1))

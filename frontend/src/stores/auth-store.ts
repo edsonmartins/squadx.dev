@@ -46,6 +46,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         api.setToken(null);
+        clearPersistedAuthState();
         set({
           user: null,
           accessToken: null,
@@ -101,8 +102,10 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "squadx-auth",
       partialize: (state) => ({
+        user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )
@@ -113,10 +116,38 @@ function handleAuthResponse(
   set: (state: Partial<AuthState>) => void
 ) {
   api.setToken(response.access_token);
+  persistAuthState(response);
   set({
     user: response.user,
     accessToken: response.access_token,
     refreshToken: response.refresh_token,
     isAuthenticated: true,
   });
+}
+
+function persistAuthState(response: AuthResponse) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    "squadx-auth",
+    JSON.stringify({
+      state: {
+        user: response.user,
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
+        isAuthenticated: true,
+      },
+      version: 0,
+    })
+  );
+}
+
+function clearPersistedAuthState() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem("squadx-auth");
 }

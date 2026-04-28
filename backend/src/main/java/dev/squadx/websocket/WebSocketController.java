@@ -1,6 +1,8 @@
 package dev.squadx.websocket;
 
 import dev.squadx.model.User;
+import dev.squadx.service.AgentService;
+import dev.squadx.service.ExecutionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -18,6 +20,28 @@ import java.util.Map;
 public class WebSocketController {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final ExecutionService executionService;
+    private final AgentService agentService;
+
+    @MessageMapping("/client/register")
+    public void registerClient(
+            @Payload Map<String, Object> payload,
+            @AuthenticationPrincipal User user
+    ) {
+        log.info("Client registered over WebSocket for user {} with payload keys {}", user.getEmail(), payload.keySet());
+    }
+
+    @MessageMapping("/client/heartbeat")
+    public void heartbeat(
+            @Payload Map<String, Object> payload,
+            @AuthenticationPrincipal User user
+    ) {
+        Object agentId = payload.get("agent_id");
+        if (agentId instanceof Number number) {
+            agentService.heartbeat(number.longValue());
+        }
+        log.debug("Client heartbeat received from user {}", user.getEmail());
+    }
 
     @MessageMapping("/tasks/{projectId}/subscribe")
     public void subscribeToProject(
@@ -34,8 +58,7 @@ public class WebSocketController {
             @AuthenticationPrincipal User user
     ) {
         log.info("User {} updating task {} status", user.getEmail(), taskId);
-        // The actual update is handled by the REST API
-        // This is for real-time broadcasting
+        executionService.handleDaemonTaskUpdate(taskId, payload);
     }
 
     @MessageMapping("/live/{sessionCode}/join")

@@ -19,9 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,14 +32,19 @@ import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AgentController.class)
+@WebMvcTest(
+        value = AgentController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class AgentControllerTest {
@@ -103,13 +109,13 @@ class AgentControllerTest {
                     .squadId(10L)
                     .build();
 
-            when(agentService.create(any(AgentRequest.class), any(User.class)))
+            when(agentService.create(any(AgentRequest.class), nullable(User.class)))
                     .thenReturn(sampleAgent);
 
             mockMvc.perform(post("/api/v1/agents")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -127,7 +133,7 @@ class AgentControllerTest {
             mockMvc.perform(post("/api/v1/agents")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isBadRequest());
         }
     }
@@ -139,11 +145,11 @@ class AgentControllerTest {
         @Test
         @DisplayName("should return agent by id with 200")
         void shouldReturnAgentById() throws Exception {
-            when(agentService.getById(eq(1L), any(User.class)))
+            when(agentService.getById(eq(1L), nullable(User.class)))
                     .thenReturn(sampleAgent);
 
             mockMvc.perform(get("/api/v1/agents/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -153,11 +159,11 @@ class AgentControllerTest {
         @Test
         @DisplayName("should return 404 when agent not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(agentService.getById(eq(999L), any(User.class)))
+            when(agentService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Agent not found"));
 
             mockMvc.perform(get("/api/v1/agents/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Agent not found"));
@@ -181,11 +187,11 @@ class AgentControllerTest {
                     .isLast(true)
                     .build();
 
-            when(agentService.getBySquadId(eq(10L), any(), any(User.class)))
+            when(agentService.getBySquadId(eq(10L), any(), nullable(User.class)))
                     .thenReturn(pageResponse);
 
             mockMvc.perform(get("/api/v1/agents/squad/10")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1))
@@ -200,10 +206,10 @@ class AgentControllerTest {
         @Test
         @DisplayName("should delete agent successfully and return 200")
         void shouldDeleteAgentSuccessfully() throws Exception {
-            doNothing().when(agentService).delete(eq(1L), any(User.class));
+            doNothing().when(agentService).delete(eq(1L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/agents/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Agent deleted successfully"));
@@ -213,10 +219,10 @@ class AgentControllerTest {
         @DisplayName("should return 404 when deleting non-existent agent")
         void shouldReturn404WhenDeletingNonExistent() throws Exception {
             doThrow(new ResourceNotFoundException("Agent not found"))
-                    .when(agentService).delete(eq(999L), any(User.class));
+                    .when(agentService).delete(eq(999L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/agents/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Agent not found"));

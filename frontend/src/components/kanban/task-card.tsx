@@ -54,6 +54,7 @@ export function TaskCardContent({
         liveSessionCode && "ring-1 ring-red-500/50"
       )}
       onClick={onClick}
+      data-testid={`task-card-${task.id}`}
     >
       {/* Priority Badge + Live Indicator */}
       <div className="flex items-center justify-between mb-2">

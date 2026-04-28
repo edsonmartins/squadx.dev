@@ -17,7 +17,7 @@ import java.util.Set;
 @Builder
 public class LiveSession extends BaseEntity {
 
-    @Column(unique = true, nullable = false, length = 6)
+    @Column(unique = true, nullable = false, length = 8)
     private String code;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -53,6 +53,15 @@ public class LiveSession extends BaseEntity {
 
     @Column(name = "webrtc_offer", columnDefinition = "TEXT")
     private String webrtcOffer;
+
+    @Column(name = "external_session_id")
+    private String externalSessionId;
+
+    @Column(name = "external_join_code")
+    private String externalJoinCode;
+
+    @Column(name = "external_join_url")
+    private String externalJoinUrl;
 
     @Column(name = "ended_at")
     private LocalDateTime endedAt;

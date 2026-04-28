@@ -1,6 +1,7 @@
 package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.dto.meeting.CreateMeetingRequest;
 import dev.squadx.dto.meeting.MeetingResponse;
 import dev.squadx.model.User;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,7 +36,8 @@ public class MeetingController {
     public ResponseEntity<ApiResponse<MeetingResponse>> create(
             @Valid @RequestBody CreateMeetingRequest request,
             @AuthenticationPrincipal User user) {
-        MeetingResponse response = meetingService.create(request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        MeetingResponse response = meetingService.create(request, currentUser);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Meeting scheduled"));
@@ -60,8 +63,10 @@ public class MeetingController {
     @GetMapping("/upcoming")
     @Operation(summary = "Get upcoming meetings for current user")
     public ResponseEntity<ApiResponse<List<MeetingResponse>>> getUpcoming(
-            @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(ApiResponse.success(meetingService.getUpcomingForUser(user.getId())));
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request) {
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        return ResponseEntity.ok(ApiResponse.success(meetingService.getUpcomingForUser(currentUser.getId())));
     }
 
     @GetMapping("/organization/{orgId}/range")
@@ -80,8 +85,9 @@ public class MeetingController {
             @PathVariable Long id,
             @RequestParam RsvpStatus status,
             @AuthenticationPrincipal User user) {
+        User currentUser = AuthenticatedUserResolver.resolve(user);
         return ResponseEntity.ok(ApiResponse.success(
-                meetingService.updateRsvp(id, user, status), "RSVP updated"));
+                meetingService.updateRsvp(id, currentUser, status), "RSVP updated"));
     }
 
     @PostMapping("/{id}/cancel")

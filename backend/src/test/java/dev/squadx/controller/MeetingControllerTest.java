@@ -18,12 +18,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -32,13 +33,18 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(MeetingController.class)
+@WebMvcTest(
+        value = MeetingController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class MeetingControllerTest {
@@ -101,13 +107,13 @@ class MeetingControllerTest {
             request.setScheduledAt(Instant.now().plusSeconds(3600));
             request.setDurationMinutes(60);
 
-            when(meetingService.create(any(CreateMeetingRequest.class), any(User.class)))
+            when(meetingService.create(any(CreateMeetingRequest.class), nullable(User.class)))
                     .thenReturn(sampleMeeting);
 
             mockMvc.perform(post("/api/v1/meetings")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -175,7 +181,7 @@ class MeetingControllerTest {
                     .thenReturn(List.of(sampleMeeting));
 
             mockMvc.perform(get("/api/v1/meetings/upcoming")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data[0].id").value(1))
@@ -190,12 +196,12 @@ class MeetingControllerTest {
         @Test
         @DisplayName("should update RSVP and return 200")
         void shouldUpdateRsvpSuccessfully() throws Exception {
-            when(meetingService.updateRsvp(eq(1L), any(User.class), any()))
+            when(meetingService.updateRsvp(eq(1L), nullable(User.class), any()))
                     .thenReturn(sampleMeeting);
 
             mockMvc.perform(post("/api/v1/meetings/1/rsvp")
                             .param("status", "ACCEPTED")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("RSVP updated"));

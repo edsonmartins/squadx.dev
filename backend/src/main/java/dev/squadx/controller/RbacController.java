@@ -1,6 +1,7 @@
 package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.dto.rbac.*;
 import dev.squadx.model.User;
 import dev.squadx.service.RbacService;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ public class RbacController {
             @Valid @RequestBody CustomRoleRequest request,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         CustomRoleResponse response = rbacService.createRole(orgId, request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -48,6 +51,7 @@ public class RbacController {
             @PathVariable Long orgId,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         List<CustomRoleResponse> roles = rbacService.getRolesByOrganization(orgId);
         return ResponseEntity.ok(ApiResponse.success(roles));
     }
@@ -60,6 +64,7 @@ public class RbacController {
             @PathVariable Long roleId,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         CustomRoleResponse role = rbacService.getRoleById(orgId, roleId);
         return ResponseEntity.ok(ApiResponse.success(role));
     }
@@ -73,6 +78,7 @@ public class RbacController {
             @Valid @RequestBody CustomRoleRequest request,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         CustomRoleResponse response = rbacService.updateRole(orgId, roleId, request);
         return ResponseEntity.ok(ApiResponse.success(response, "Custom role updated successfully"));
     }
@@ -85,6 +91,7 @@ public class RbacController {
             @PathVariable Long roleId,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         rbacService.deleteRole(orgId, roleId);
         return ResponseEntity.ok(ApiResponse.success(null, "Custom role deleted successfully"));
     }
@@ -100,6 +107,7 @@ public class RbacController {
             @Valid @RequestBody AssignRoleRequest request,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         rbacService.assignRoleToUser(orgId, request.getUserId(), roleId);
         return ResponseEntity.ok(ApiResponse.success(null, "Role assigned successfully"));
     }
@@ -113,6 +121,7 @@ public class RbacController {
             @PathVariable Long userId,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         rbacService.removeRoleFromUser(orgId, userId, roleId);
         return ResponseEntity.ok(ApiResponse.success(null, "Role removed successfully"));
     }
@@ -125,6 +134,7 @@ public class RbacController {
             @PathVariable Long userId,
             @AuthenticationPrincipal User user
     ) {
+        AuthenticatedUserResolver.resolve(user);
         List<CustomRoleResponse> roles = rbacService.getUserRoles(orgId, userId);
         return ResponseEntity.ok(ApiResponse.success(roles));
     }
@@ -137,10 +147,12 @@ public class RbacController {
             @PathVariable Long orgId,
             @RequestParam String resource,
             @RequestParam String action,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
         boolean hasPermission = rbacService.hasPermission(
-                user.getId(), orgId,
+                currentUser.getId(), orgId,
                 dev.squadx.model.enums.PermissionResource.valueOf(resource.toUpperCase()),
                 dev.squadx.model.enums.PermissionAction.valueOf(action.toUpperCase())
         );

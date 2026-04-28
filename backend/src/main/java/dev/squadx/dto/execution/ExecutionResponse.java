@@ -47,6 +47,9 @@ public class ExecutionResponse {
     @JsonProperty("container_id")
     private String containerId;
 
+    @JsonProperty("brain_sentry_session_id")
+    private String brainSentrySessionId;
+
     @JsonProperty("input_tokens")
     private Long inputTokens;
 

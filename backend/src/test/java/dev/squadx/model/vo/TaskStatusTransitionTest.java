@@ -30,6 +30,7 @@ class TaskStatusTransitionTest {
                 "BLOCKED, TODO",
                 "BLOCKED, IN_PROGRESS",
                 "BLOCKED, CANCELLED",
+                "DONE, IN_PROGRESS",
                 "CANCELLED, TODO"
         })
         @DisplayName("should allow valid transition: {0} -> {1}")
@@ -49,7 +50,6 @@ class TaskStatusTransitionTest {
                 "TODO, DONE",
                 "TODO, IN_REVIEW",
                 "TODO, BLOCKED",
-                "DONE, IN_PROGRESS",
                 "DONE, TODO",
                 "DONE, CANCELLED",
                 "CANCELLED, IN_PROGRESS",

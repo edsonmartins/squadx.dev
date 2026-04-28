@@ -41,7 +41,7 @@ class MemoryCollector:
             content=description,
             category="DECISION",
             importance="IMPORTANT",
-            memory_type="episodic",
+            memory_type="EPISODIC",
             tags=tags or ["execution", "decision"],
         ))
 
@@ -54,7 +54,7 @@ class MemoryCollector:
             content=description,
             category="PATTERN",
             importance="IMPORTANT",
-            memory_type="procedural",
+            memory_type="PROCEDURAL",
             tags=tags or ["execution", "pattern"],
         ))
 
@@ -67,7 +67,7 @@ class MemoryCollector:
             content=description,
             category="BUG",
             importance="CRITICAL",
-            memory_type="episodic",
+            memory_type="EPISODIC",
             tags=tags or ["execution", "bug"],
         ))
 
@@ -80,7 +80,7 @@ class MemoryCollector:
             content=description,
             category="ANTIPATTERN",
             importance="IMPORTANT",
-            memory_type="procedural",
+            memory_type="PROCEDURAL",
             tags=tags or ["execution", "antipattern"],
         ))
 
@@ -93,7 +93,7 @@ class MemoryCollector:
             content=description,
             category="INSIGHT",
             importance="MINOR",
-            memory_type="semantic",
+            memory_type="SEMANTIC",
             tags=tags or ["execution", "learning"],
         ))
 

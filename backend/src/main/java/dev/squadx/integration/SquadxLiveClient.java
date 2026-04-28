@@ -1,9 +1,12 @@
 package dev.squadx.integration;
 
+import dev.squadx.model.LiveSession;
+import dev.squadx.repository.LiveSessionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,10 +20,13 @@ public class SquadxLiveClient {
     private final RestClient restClient;
     private final IntegrationConfig config;
     private final ServiceJwtProvider jwtProvider;
+    private final LiveSessionRepository liveSessionRepository;
 
-    public SquadxLiveClient(IntegrationConfig config, ServiceJwtProvider jwtProvider) {
+    public SquadxLiveClient(IntegrationConfig config, ServiceJwtProvider jwtProvider,
+                            LiveSessionRepository liveSessionRepository) {
         this.config = config;
         this.jwtProvider = jwtProvider;
+        this.liveSessionRepository = liveSessionRepository;
 
         if (config.getLive().isEnabled()) {
             this.restClient = RestClient.builder()
@@ -35,6 +41,34 @@ public class SquadxLiveClient {
 
     public boolean isEnabled() {
         return restClient != null && config.getLive().isEnabled();
+    }
+
+    public Map<String, Object> healthCheck() {
+        Map<String, Object> status = new java.util.LinkedHashMap<>();
+        status.put("enabled", config.getLive().isEnabled());
+        status.put("configured", config.getLive().getUrl() != null && !config.getLive().getUrl().isBlank());
+        status.put("url", config.getLive().getUrl());
+
+        if (!isEnabled()) {
+            status.put("reachable", false);
+            status.put("status", "DISABLED");
+            return status;
+        }
+
+        try {
+            restClient.get()
+                    .uri("/health")
+                    .retrieve()
+                    .toBodilessEntity();
+            status.put("reachable", true);
+            status.put("status", "UP");
+        } catch (Exception e) {
+            status.put("reachable", false);
+            status.put("status", "DOWN");
+            status.put("error", e.getMessage());
+        }
+
+        return status;
     }
 
     /**
@@ -84,9 +118,17 @@ public class SquadxLiveClient {
     public void endSessionForTask(Long taskId) {
         if (!isEnabled()) return;
 
-        log.info("Ending SquadX Live session for task {}", taskId);
-        // In a full implementation, we'd look up the sessionId by taskId
-        // For now, this is a placeholder for the webhook-based approach
+        List<LiveSession> sessions = liveSessionRepository.findByTaskIdOrderByCreatedAtDesc(taskId);
+        for (LiveSession session : sessions) {
+            String externalSessionId = session.getExternalSessionId();
+            if (externalSessionId != null && !externalSessionId.isBlank()) {
+                log.info("Ending SquadX Live session {} for task {}", externalSessionId, taskId);
+                endSession(externalSessionId);
+                return;
+            }
+        }
+
+        log.debug("No external SquadX Live session found for task {}", taskId);
     }
 
     /**

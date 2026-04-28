@@ -20,9 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,11 +35,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(RbacController.class)
+@WebMvcTest(
+        value = RbacController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class RbacControllerTest {
@@ -104,7 +109,7 @@ class RbacControllerTest {
             mockMvc.perform(post("/api/v1/organizations/10/rbac/roles")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Custom role created successfully"))
@@ -122,7 +127,7 @@ class RbacControllerTest {
             when(rbacService.getRolesByOrganization(10L)).thenReturn(List.of(sampleRole));
 
             mockMvc.perform(get("/api/v1/organizations/10/rbac/roles")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data[0].name").value("Reviewer"));
@@ -139,7 +144,7 @@ class RbacControllerTest {
             when(rbacService.getRoleById(10L, 1L)).thenReturn(sampleRole);
 
             mockMvc.perform(get("/api/v1/organizations/10/rbac/roles/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -173,7 +178,7 @@ class RbacControllerTest {
             mockMvc.perform(put("/api/v1/organizations/10/rbac/roles/1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Custom role updated successfully"))
@@ -191,7 +196,7 @@ class RbacControllerTest {
             doNothing().when(rbacService).deleteRole(10L, 1L);
 
             mockMvc.perform(delete("/api/v1/organizations/10/rbac/roles/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Custom role deleted successfully"));
@@ -215,7 +220,7 @@ class RbacControllerTest {
             mockMvc.perform(post("/api/v1/organizations/10/rbac/roles/1/assign")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Role assigned successfully"));
@@ -232,7 +237,7 @@ class RbacControllerTest {
             when(rbacService.getUserRoles(10L, 5L)).thenReturn(List.of(sampleRole));
 
             mockMvc.perform(get("/api/v1/organizations/10/rbac/users/5/roles")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data[0].name").value("Reviewer"));
@@ -253,7 +258,7 @@ class RbacControllerTest {
             mockMvc.perform(get("/api/v1/organizations/10/rbac/check")
                             .param("resource", "TASKS")
                             .param("action", "READ")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.allowed").value(true));

@@ -40,8 +40,8 @@ public class HighlightService {
         this.highlightRepository = highlightRepository;
         this.recordingRepository = recordingRepository;
         this.executionLogRepository = executionLogRepository;
-        this.aiAnalysisService = aiAnalysisService;
-        if (aiAnalysisService.isPresent()) {
+        this.aiAnalysisService = aiAnalysisService != null ? aiAnalysisService : Optional.empty();
+        if (this.aiAnalysisService.isPresent()) {
             log.info("HighlightService initialized with AI analysis support");
         } else {
             log.info("HighlightService initialized with regex-only analysis (AI disabled)");

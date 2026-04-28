@@ -89,6 +89,19 @@ public class WebSocketEventService {
         );
     }
 
+    public void sendTaskAssignedToUser(String username, Long taskId, Map<String, Object> taskPayload) {
+        log.debug("Sending task_assigned event for task {} to user {}", taskId, username);
+        messagingTemplate.convertAndSendToUser(
+                username,
+                "/queue/tasks",
+                Map.of(
+                        "type", "task_assigned",
+                        "task_id", taskId,
+                        "task", taskPayload
+                )
+        );
+    }
+
     public void sendExecutionStarted(Long projectId, Long taskId, Long executionId) {
         log.debug("Broadcasting execution_started event for execution {}", executionId);
         messagingTemplate.convertAndSend(

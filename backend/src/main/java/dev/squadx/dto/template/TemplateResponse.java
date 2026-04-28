@@ -1,5 +1,6 @@
 package dev.squadx.dto.template;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +21,7 @@ public class TemplateResponse {
     private List<TemplateAgent> agents;
 
     @JsonProperty("default_tasks")
+    @JsonAlias("defaultTasks")
     private List<TemplateTask> defaultTasks;
 
     @Data
@@ -40,6 +42,7 @@ public class TemplateResponse {
         private String subject;
 
         @JsonProperty("assign_to")
+        @JsonAlias("assignTo")
         private String assignTo;
 
         private String priority;

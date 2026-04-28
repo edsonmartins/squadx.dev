@@ -20,9 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,14 +32,19 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(LiveViewController.class)
+@WebMvcTest(
+        value = LiveViewController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class LiveViewControllerTest {
@@ -103,13 +109,13 @@ class LiveViewControllerTest {
             request.setTaskId(10L);
             request.setMaxViewers(5);
 
-            when(liveViewService.createSession(any(LiveSessionRequest.class), any(User.class)))
+            when(liveViewService.createSession(any(LiveSessionRequest.class), nullable(User.class)))
                     .thenReturn(sampleSession);
 
             mockMvc.perform(post("/api/v1/live-view/sessions")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -128,13 +134,13 @@ class LiveViewControllerTest {
             JoinSessionRequest request = new JoinSessionRequest();
             request.setCode("ABC123");
 
-            when(liveViewService.joinSession(any(JoinSessionRequest.class), any(User.class)))
+            when(liveViewService.joinSession(any(JoinSessionRequest.class), nullable(User.class)))
                     .thenReturn(sampleSession);
 
             mockMvc.perform(post("/api/v1/live-view/sessions/join")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Joined live session"));
@@ -153,11 +159,11 @@ class LiveViewControllerTest {
                     .status(LiveSessionStatus.ENDED)
                     .build();
 
-            when(liveViewService.endSession(eq(1L), any(User.class)))
+            when(liveViewService.endSession(eq(1L), nullable(User.class)))
                     .thenReturn(endedSession);
 
             mockMvc.perform(post("/api/v1/live-view/sessions/1/end")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Live session ended"));
@@ -171,11 +177,11 @@ class LiveViewControllerTest {
         @Test
         @DisplayName("should return session by code with 200")
         void shouldReturnSessionByCode() throws Exception {
-            when(liveViewService.getByCode(eq("ABC123"), any(User.class)))
+            when(liveViewService.getByCode(eq("ABC123"), nullable(User.class)))
                     .thenReturn(sampleSession);
 
             mockMvc.perform(get("/api/v1/live-view/sessions/code/ABC123")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.code").value("ABC123"));
@@ -184,11 +190,11 @@ class LiveViewControllerTest {
         @Test
         @DisplayName("should return 404 when session code not found")
         void shouldReturn404WhenCodeNotFound() throws Exception {
-            when(liveViewService.getByCode(eq("XXXXXX"), any(User.class)))
+            when(liveViewService.getByCode(eq("XXXXXX"), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Session not found"));
 
             mockMvc.perform(get("/api/v1/live-view/sessions/code/XXXXXX")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Session not found"));

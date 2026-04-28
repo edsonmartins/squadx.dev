@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
   FlatList,
-  Alert,
-  Dimensions,
+  ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
+import { liveViewApi, type LiveSessionResponse } from "@/lib/api";
 
 interface ChatMessage {
   id: string;
@@ -21,11 +20,36 @@ interface ChatMessage {
 
 export default function LiveSessionScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
-  const router = useRouter();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [connected, setConnected] = useState(false);
+  const [session, setSession] = useState<LiveSessionResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const joinSession = async () => {
+      if (!code) return;
+
+      try {
+        const sessionResponse = await liveViewApi.joinSession(code);
+        setSession(sessionResponse);
+        setConnected(true);
+      } catch {
+        try {
+          const sessionResponse = await liveViewApi.getByCode(code);
+          setSession(sessionResponse);
+          setConnected(true);
+        } catch {
+          setConnected(false);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void joinSession();
+  }, [code]);
 
   const handleSend = useCallback(() => {
     if (!newMessage.trim()) return;
@@ -42,13 +66,28 @@ export default function LiveSessionScreen() {
 
   return (
     <View style={styles.container}>
+      {loading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Joining live session...</Text>
+        </View>
+      ) : null}
+
       {/* Video area */}
       <View style={styles.videoArea}>
         <View style={styles.videoPlaceholder}>
           <Text style={styles.videoPlaceholderText}>
-            {connected ? "WebRTC Stream" : "Connecting..."}
+            {connected ? "Live session connected" : "Unable to connect"}
           </Text>
           <Text style={styles.sessionCodeLabel}>Session: {code}</Text>
+          {session ? (
+            <>
+              <Text style={styles.sessionMeta}>{session.task_title}</Text>
+              <Text style={styles.sessionMeta}>
+                Host: {session.host_user_name}
+              </Text>
+            </>
+          ) : null}
         </View>
       </View>
 
@@ -102,12 +141,23 @@ export default function LiveSessionScreen() {
   );
 }
 
-const { width } = Dimensions.get("window");
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0f172a",
+  },
+  loadingState: {
+    position: "absolute",
+    top: 24,
+    left: 24,
+    right: 24,
+    zIndex: 10,
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingText: {
+    color: "#94a3b8",
+    fontSize: 14,
   },
   videoArea: {
     width: "100%",
@@ -129,6 +179,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     fontFamily: "monospace",
+  },
+  sessionMeta: {
+    color: "#94a3b8",
+    fontSize: 14,
+    marginTop: 6,
   },
   statusBar: {
     flexDirection: "row",

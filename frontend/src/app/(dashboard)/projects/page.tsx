@@ -95,7 +95,7 @@ export default function ProjectsPage() {
             Manage your software projects and assign squads.
           </p>
         </div>
-        <Button onClick={handleCreate}>
+        <Button onClick={handleCreate} data-testid="new-project-button">
           <Plus className="mr-2 h-4 w-4" />
           New Project
         </Button>
@@ -173,7 +173,7 @@ interface ProjectCardProps {
 
 function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
   return (
-    <Card className="group hover:shadow-md transition-shadow">
+    <Card className="group hover:shadow-md transition-shadow" data-testid={`project-card-${project.id}`}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle className="text-lg">
@@ -194,12 +194,13 @@ function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
               variant="ghost"
               size="icon"
               className="h-8 w-8 opacity-0 group-hover:opacity-100"
+              data-testid={`project-menu-trigger-${project.id}`}
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>
+            <DropdownMenuItem onClick={onEdit} data-testid={`project-edit-${project.id}`}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
@@ -219,6 +220,7 @@ function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
             <DropdownMenuItem
               onClick={onDelete}
               className="text-destructive focus:text-destructive"
+              data-testid={`project-delete-${project.id}`}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete

@@ -19,9 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,12 +32,17 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ExecutionController.class)
+@WebMvcTest(
+        value = ExecutionController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class ExecutionControllerTest {
@@ -96,13 +102,13 @@ class ExecutionControllerTest {
                     .agentId(5L)
                     .build();
 
-            when(executionService.startExecution(any(ExecutionRequest.class), any(User.class)))
+            when(executionService.startExecution(any(ExecutionRequest.class), nullable(User.class)))
                     .thenReturn(sampleExecution);
 
             mockMvc.perform(post("/api/v1/executions")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -118,11 +124,11 @@ class ExecutionControllerTest {
         @Test
         @DisplayName("should return execution by id with 200")
         void shouldReturnExecutionById() throws Exception {
-            when(executionService.getById(eq(1L), any(User.class)))
+            when(executionService.getById(eq(1L), nullable(User.class)))
                     .thenReturn(sampleExecution);
 
             mockMvc.perform(get("/api/v1/executions/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -147,11 +153,11 @@ class ExecutionControllerTest {
                     .isLast(true)
                     .build();
 
-            when(executionService.getByTaskId(eq(10L), any(), any(User.class)))
+            when(executionService.getByTaskId(eq(10L), any(), nullable(User.class)))
                     .thenReturn(pageResponse);
 
             mockMvc.perform(get("/api/v1/executions/task/10")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1))
@@ -172,12 +178,12 @@ class ExecutionControllerTest {
                     .status(ExecutionStatus.COMPLETED)
                     .build();
 
-            when(executionService.updateStatus(eq(1L), eq(ExecutionStatus.COMPLETED), any(User.class)))
+            when(executionService.updateStatus(eq(1L), eq(ExecutionStatus.COMPLETED), nullable(User.class)))
                     .thenReturn(completedExecution);
 
             mockMvc.perform(patch("/api/v1/executions/1/status")
                             .param("status", "COMPLETED")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.status").value("COMPLETED"))
@@ -198,11 +204,11 @@ class ExecutionControllerTest {
                     .status(ExecutionStatus.CANCELLED)
                     .build();
 
-            when(executionService.cancel(eq(1L), any(User.class)))
+            when(executionService.cancel(eq(1L), nullable(User.class)))
                     .thenReturn(cancelledExecution);
 
             mockMvc.perform(post("/api/v1/executions/1/cancel")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.status").value("CANCELLED"))
@@ -212,11 +218,11 @@ class ExecutionControllerTest {
         @Test
         @DisplayName("should return 400 when cancelling already finished execution")
         void shouldReturn400WhenCancellingFinishedExecution() throws Exception {
-            when(executionService.cancel(eq(1L), any(User.class)))
+            when(executionService.cancel(eq(1L), nullable(User.class)))
                     .thenThrow(new BadRequestException("Cannot cancel a completed execution"));
 
             mockMvc.perform(post("/api/v1/executions/1/cancel")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Cannot cancel a completed execution"));
@@ -236,11 +242,11 @@ class ExecutionControllerTest {
                     "failed_executions", 15
             );
 
-            when(executionService.getOrganizationMetrics(eq(10L), any(User.class)))
+            when(executionService.getOrganizationMetrics(eq(10L), nullable(User.class)))
                     .thenReturn(metrics);
 
             mockMvc.perform(get("/api/v1/executions/organization/10/metrics")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.total_executions").value(100))

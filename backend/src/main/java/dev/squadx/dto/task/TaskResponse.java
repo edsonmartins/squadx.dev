@@ -57,6 +57,12 @@ public class TaskResponse {
     @JsonProperty("assigned_agent_name")
     private String assignedAgentName;
 
+    @JsonProperty("execution_id")
+    private Long executionId;
+
+    @JsonProperty("brain_sentry_session_id")
+    private String brainSentrySessionId;
+
     @JsonProperty("parent_task_id")
     private Long parentTaskId;
 

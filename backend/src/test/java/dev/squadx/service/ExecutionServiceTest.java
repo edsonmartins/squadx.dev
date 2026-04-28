@@ -2,12 +2,15 @@ package dev.squadx.service;
 
 import dev.squadx.dto.execution.ExecutionRequest;
 import dev.squadx.dto.execution.ExecutionResponse;
+import dev.squadx.event.ExecutionCompletedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
+import dev.squadx.integration.BrainSentryClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.*;
 import dev.squadx.repository.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +50,12 @@ class ExecutionServiceTest {
 
     @Mock
     private WebSocketEventService webSocketEventService;
+
+    @Mock
+    private BrainSentryClient brainSentryClient;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ExecutionService executionService;
@@ -102,6 +112,8 @@ class ExecutionServiceTest {
                 .logs(new ArrayList<>())
                 .build();
         testExecution.setId(1L);
+
+        lenient().when(brainSentryClient.isEnabled()).thenReturn(false);
     }
 
     @Nested
@@ -138,6 +150,7 @@ class ExecutionServiceTest {
             verify(executionRepository).save(any(Execution.class));
             verify(taskRepository).save(any(Task.class));
             verify(webSocketEventService).sendExecutionStarted(eq(1L), eq(1L), any());
+            verify(webSocketEventService).sendTaskAssignedToUser(eq("test@example.com"), eq(1L), anyMap());
         }
 
         @Test
@@ -260,6 +273,36 @@ class ExecutionServiceTest {
 
             verify(taskRepository).save(argThat(task -> task.getStatus() == TaskStatus.IN_PROGRESS));
         }
+
+        @Test
+        @DisplayName("should continue execution start when BrainSentry session creation fails")
+        void shouldContinueWhenBrainSentryStartFails() {
+            ExecutionRequest request = ExecutionRequest.builder()
+                    .taskId(1L)
+                    .agentId(1L)
+                    .build();
+
+            when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
+                    .thenReturn(Collections.emptyList());
+            when(agentRepository.findById(1L)).thenReturn(Optional.of(testAgent));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
+                Execution saved = invocation.getArgument(0);
+                saved.setId(1L);
+                return saved;
+            });
+            when(taskRepository.save(any(Task.class))).thenReturn(testTask);
+            when(brainSentryClient.isEnabled()).thenReturn(true);
+            when(brainSentryClient.startExecutionSession(any(), any(), any(), any(), any()))
+                    .thenThrow(new RuntimeException("brainsentry down"));
+
+            ExecutionResponse response = executionService.startExecution(request, testUser);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getBrainSentrySessionId()).isNull();
+            verify(webSocketEventService).sendTaskAssignedToUser(eq("test@example.com"), eq(1L), anyMap());
+        }
     }
 
     @Nested
@@ -300,6 +343,27 @@ class ExecutionServiceTest {
         }
 
         @Test
+        @DisplayName("should continue completion when BrainSentry completion fails")
+        void shouldContinueWhenBrainSentryCompletionFails() {
+            testExecution.setStartedAt(Instant.now());
+            testExecution.setBrainSentrySessionId("bs-session-1");
+
+            when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(taskRepository.save(any(Task.class))).thenReturn(testTask);
+            doThrow(new RuntimeException("brainsentry down")).when(brainSentryClient)
+                    .completeExecutionSession(any(), any(), any(), any(), any(), any(), any(), any());
+
+            ExecutionResponse response = executionService.updateStatus(1L, ExecutionStatus.COMPLETED, testUser);
+
+            assertThat(response).isNotNull();
+            assertThat(testExecution.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+            verify(taskRepository).save(argThat(task -> task.getStatus() == TaskStatus.IN_REVIEW));
+            verify(eventPublisher).publishEvent(any(ExecutionCompletedEvent.class));
+        }
+
+        @Test
         @DisplayName("should set task to BLOCKED when execution fails")
         void shouldSetTaskToBlockedWhenFailed() {
             testExecution.setStartedAt(Instant.now());
@@ -325,8 +389,8 @@ class ExecutionServiceTest {
         }
 
         @Test
-        @DisplayName("should notify via WebSocket on status change")
-        void shouldNotifyViaWebSocket() {
+        @DisplayName("should publish completion event on status change")
+        void shouldPublishCompletionEventOnStatusChange() {
             testExecution.setStartedAt(Instant.now());
 
             when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
@@ -336,7 +400,72 @@ class ExecutionServiceTest {
 
             executionService.updateStatus(1L, ExecutionStatus.COMPLETED, testUser);
 
-            verify(webSocketEventService).sendExecutionCompleted(eq(1L), eq(1L), eq(1L), eq("COMPLETED"));
+            verify(eventPublisher).publishEvent(any(ExecutionCompletedEvent.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("handleDaemonTaskUpdate()")
+    class HandleDaemonTaskUpdate {
+
+        @Test
+        @DisplayName("should mark execution running on task_status running")
+        void shouldMarkExecutionRunning() {
+            when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(testExecution));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            executionService.handleDaemonTaskUpdate(1L, Map.of(
+                    "type", "task_status",
+                    "status", "running"
+            ));
+
+            assertThat(testExecution.getStatus()).isEqualTo(ExecutionStatus.RUNNING);
+            assertThat(testExecution.getStartedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("should complete execution from daemon payload")
+        void shouldCompleteExecutionFromDaemonPayload() {
+            when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(testExecution));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(taskRepository.save(any(Task.class))).thenReturn(testTask);
+
+            executionService.handleDaemonTaskUpdate(1L, Map.of(
+                    "type", "task_completed",
+                    "result", Map.of(
+                            "final_result", "done",
+                            "git_branch", "feat/test",
+                            "git_commit", "abc123",
+                            "total_input_tokens", 12,
+                            "total_output_tokens", 34,
+                            "total_cost", 0.56
+                    )
+            ));
+
+            assertThat(testExecution.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+            assertThat(testExecution.getResult()).isEqualTo("done");
+            assertThat(testExecution.getGitBranch()).isEqualTo("feat/test");
+            assertThat(testExecution.getGitCommit()).isEqualTo("abc123");
+            verify(taskRepository).save(argThat(task -> task.getStatus() == TaskStatus.IN_REVIEW));
+            verify(eventPublisher).publishEvent(any(ExecutionCompletedEvent.class));
+        }
+
+        @Test
+        @DisplayName("should reset task to TODO when daemon rejects task")
+        void shouldResetTaskToTodoWhenRejected() {
+            when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(testExecution));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(taskRepository.save(any(Task.class))).thenReturn(testTask);
+
+            executionService.handleDaemonTaskUpdate(1L, Map.of(
+                    "type", "task_rejected",
+                    "reason", "Max concurrent tasks reached"
+            ));
+
+            assertThat(testExecution.getStatus()).isEqualTo(ExecutionStatus.FAILED);
+            assertThat(testExecution.getErrorMessage()).isEqualTo("Max concurrent tasks reached");
+            verify(taskRepository).save(argThat(task -> task.getStatus() == TaskStatus.TODO));
+            verify(eventPublisher).publishEvent(any(ExecutionCompletedEvent.class));
         }
     }
 

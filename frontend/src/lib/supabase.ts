@@ -7,11 +7,37 @@ import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const REALTIME_DISABLED = process.env.NEXT_PUBLIC_DISABLE_REALTIME === "true";
 
 // Lazy singleton — only throws when actually used (safe during SSR/build)
 let _supabaseInstance: ReturnType<typeof createClient> | null = null;
 
+function createDisabledChannel() {
+  const channel = {
+    on: () => channel,
+    subscribe: async (callback?: (status: string) => void) => {
+      callback?.("SUBSCRIBED");
+      return channel;
+    },
+    send: async () => "ok",
+    track: async () => {},
+    untrack: async () => {},
+    presenceState: () => ({}),
+  };
+
+  return channel as unknown as RealtimeChannel;
+}
+
+const disabledSupabaseClient = {
+  channel: () => createDisabledChannel(),
+  removeChannel: async () => {},
+};
+
 function getSupabaseClient() {
+  if (REALTIME_DISABLED) {
+    return disabledSupabaseClient as unknown as ReturnType<typeof createClient>;
+  }
+
   if (!_supabaseInstance) {
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error(
@@ -295,6 +321,10 @@ export class SupabaseSignaling {
    * Get session by join code.
    */
   async getSessionByCode(code: string): Promise<LiveSession | null> {
+    if (REALTIME_DISABLED) {
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("live_sessions")
       .select("*")
@@ -315,6 +345,10 @@ export class SupabaseSignaling {
    * Get participants for a session.
    */
   async getParticipants(sessionId: string): Promise<LiveParticipant[]> {
+    if (REALTIME_DISABLED) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from("live_participants")
       .select("*")

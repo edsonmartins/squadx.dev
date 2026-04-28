@@ -76,6 +76,32 @@ public class RecordingService {
         SessionRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
 
+        recording = completeRecordingEntity(recording, fileSizeBytes, durationSeconds);
+
+        log.info("Completed recording: {}, size: {} bytes, duration: {}s",
+                recordingId, fileSizeBytes, durationSeconds);
+
+        return mapToResponse(recording, null, null);
+    }
+
+    /**
+     * Complete the latest active recording for a session from an external webhook.
+     */
+    @Transactional
+    public RecordingResponse completeLatestRecordingForSession(Long sessionId, Long fileSizeBytes, Integer durationSeconds) {
+        SessionRecording recording = recordingRepository
+                .findFirstBySessionIdAndStatusOrderByStartedAtDesc(sessionId, RecordingStatus.RECORDING)
+                .orElseThrow(() -> new ResourceNotFoundException("No active recording found for session id: " + sessionId));
+
+        recording = completeRecordingEntity(recording, fileSizeBytes, durationSeconds);
+
+        log.info("Completed latest recording for session: {}, recordingId: {}, size: {} bytes, duration: {}s",
+                sessionId, recording.getId(), fileSizeBytes, durationSeconds);
+
+        return mapToResponse(recording, null, null);
+    }
+
+    private SessionRecording completeRecordingEntity(SessionRecording recording, Long fileSizeBytes, Integer durationSeconds) {
         if (recording.getStatus() != RecordingStatus.RECORDING) {
             throw new BadRequestException("Recording is not in RECORDING status");
         }
@@ -85,12 +111,7 @@ public class RecordingService {
         recording.setDurationSeconds(durationSeconds);
         recording.setCompletedAt(Instant.now());
 
-        recording = recordingRepository.save(recording);
-
-        log.info("Completed recording: {}, size: {} bytes, duration: {}s",
-                recordingId, fileSizeBytes, durationSeconds);
-
-        return mapToResponse(recording, null, null);
+        return recordingRepository.save(recording);
     }
 
     /**

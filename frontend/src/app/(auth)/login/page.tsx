@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -28,7 +28,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, initialize, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -42,6 +42,16 @@ export default function LoginPage() {
       password: "",
     },
   });
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated) {
+      router.replace("/dashboard");
+    }
+  }, [isAuthLoading, isAuthenticated, router]);
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
@@ -80,7 +90,7 @@ export default function LoginPage() {
             Enter your email and password to access your account
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)} data-testid="login-form">
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
@@ -90,6 +100,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 placeholder="you@example.com"
+                data-testid="login-email"
                 {...register("email")}
               />
               {errors.email && (
@@ -106,6 +117,7 @@ export default function LoginPage() {
                 id="password"
                 type="password"
                 placeholder="••••••••"
+                data-testid="login-password"
                 {...register("password")}
               />
               {errors.password && (
@@ -116,7 +128,7 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading} data-testid="login-submit">
               {isLoading ? "Signing in..." : "Sign in"}
             </Button>
             <p className="text-sm text-muted-foreground text-center">

@@ -1,6 +1,7 @@
 package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.model.CalendarIntegration;
 import dev.squadx.model.User;
 import dev.squadx.service.GoogleCalendarService;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Map;
 
@@ -25,9 +27,11 @@ public class CalendarSyncController {
     @Operation(summary = "Get Google OAuth2 authorization URL")
     public ResponseEntity<ApiResponse<Map<String, String>>> getAuthUrl(
             @RequestParam Long organizationId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        String url = googleCalendarService.getAuthorizationUrl(user.getId(), organizationId);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        String url = googleCalendarService.getAuthorizationUrl(currentUser.getId(), organizationId);
         return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
@@ -57,10 +61,12 @@ public class CalendarSyncController {
     @PostMapping("/sync")
     @Operation(summary = "Trigger full calendar sync (push and pull)")
     public ResponseEntity<ApiResponse<String>> sync(
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        googleCalendarService.syncMeetingsToGoogle(user.getId());
-        googleCalendarService.syncMeetingsFromGoogle(user.getId());
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        googleCalendarService.syncMeetingsToGoogle(currentUser.getId());
+        googleCalendarService.syncMeetingsFromGoogle(currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Sync initiated", "Calendar sync started in background"));
     }
 
@@ -68,9 +74,11 @@ public class CalendarSyncController {
     @Operation(summary = "Disconnect Google Calendar integration")
     public ResponseEntity<ApiResponse<Void>> disconnect(
             @RequestParam Long organizationId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        googleCalendarService.disconnect(user.getId(), organizationId);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        googleCalendarService.disconnect(currentUser.getId(), organizationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Google Calendar disconnected"));
     }
 
@@ -78,9 +86,11 @@ public class CalendarSyncController {
     @Operation(summary = "Check Google Calendar integration status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStatus(
             @RequestParam Long organizationId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        CalendarIntegration integration = googleCalendarService.getIntegrationStatus(user.getId(), organizationId);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        CalendarIntegration integration = googleCalendarService.getIntegrationStatus(currentUser.getId(), organizationId);
 
         if (integration == null) {
             return ResponseEntity.ok(ApiResponse.success(

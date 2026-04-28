@@ -39,6 +39,9 @@ public class Execution extends BaseEntity {
     @Column(name = "container_id")
     private String containerId;
 
+    @Column(name = "brain_sentry_session_id")
+    private String brainSentrySessionId;
+
     @Column(name = "input_tokens")
     @Builder.Default
     private Long inputTokens = 0L;

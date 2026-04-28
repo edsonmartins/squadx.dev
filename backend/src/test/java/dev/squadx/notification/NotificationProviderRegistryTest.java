@@ -6,15 +6,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class NotificationProviderRegistryTest {
 
     @Mock
@@ -27,8 +32,10 @@ class NotificationProviderRegistryTest {
 
     @BeforeEach
     void setUp() {
-        when(slackProvider.supports(NotificationChannel.SLACK)).thenReturn(true);
-        when(discordProvider.supports(NotificationChannel.DISCORD)).thenReturn(true);
+        lenient().when(slackProvider.supports(any())).thenReturn(false);
+        lenient().when(discordProvider.supports(any())).thenReturn(false);
+        lenient().when(slackProvider.supports(NotificationChannel.SLACK)).thenReturn(true);
+        lenient().when(discordProvider.supports(NotificationChannel.DISCORD)).thenReturn(true);
         registry = new NotificationProviderRegistry(List.of(slackProvider, discordProvider));
     }
 

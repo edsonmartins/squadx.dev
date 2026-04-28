@@ -20,12 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,13 +35,18 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ApprovalController.class)
+@WebMvcTest(
+        value = ApprovalController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class ApprovalControllerTest {
@@ -102,13 +108,13 @@ class ApprovalControllerTest {
             request.setTitle("Approve commit");
             request.setApprovalType(ApprovalType.COMMIT);
 
-            when(approvalService.create(any(CreateApprovalRequest.class), any(User.class)))
+            when(approvalService.create(any(CreateApprovalRequest.class), nullable(User.class)))
                     .thenReturn(sampleApproval);
 
             mockMvc.perform(post("/api/v1/approvals")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -135,13 +141,13 @@ class ApprovalControllerTest {
                     .reviewedAt(Instant.now())
                     .build();
 
-            when(approvalService.review(eq(1L), any(ReviewApprovalRequest.class), any(User.class)))
+            when(approvalService.review(eq(1L), any(ReviewApprovalRequest.class), nullable(User.class)))
                     .thenReturn(reviewed);
 
             mockMvc.perform(post("/api/v1/approvals/1/review")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Approval reviewed"));
@@ -160,11 +166,11 @@ class ApprovalControllerTest {
                     .status(ApprovalStatus.CANCELLED)
                     .build();
 
-            when(approvalService.cancel(eq(1L), any(User.class)))
+            when(approvalService.cancel(eq(1L), nullable(User.class)))
                     .thenReturn(cancelled);
 
             mockMvc.perform(post("/api/v1/approvals/1/cancel")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Approval cancelled"));
@@ -213,7 +219,7 @@ class ApprovalControllerTest {
                     .thenReturn(page);
 
             mockMvc.perform(get("/api/v1/approvals/pending")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1));

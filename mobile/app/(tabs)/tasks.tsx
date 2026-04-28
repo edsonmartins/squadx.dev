@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import type { TaskResponse, TaskStatus } from "@/lib/api";
+import { projectsApi, tasksApi, type TaskResponse, type TaskStatus } from "@/lib/api";
 
 const STATUS_FILTERS: { label: string; value: TaskStatus | "ALL" }[] = [
   { label: "All", value: "ALL" },
@@ -68,9 +68,34 @@ function TaskItem({ task }: { task: TaskResponse }) {
 
 export default function TasksScreen() {
   const [activeFilter, setActiveFilter] = useState<TaskStatus | "ALL">("ALL");
-  const [tasks] = useState<TaskResponse[]>([]);
-  const [loading] = useState(false);
+  const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const projects = await projectsApi.list();
+      const pages = await Promise.all(
+        projects.content.map((project) => tasksApi.listByProject(project.id))
+      );
+
+      const mergedTasks = pages.flatMap((page) => page.content);
+      mergedTasks.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setTasks(mergedTasks);
+    } catch {
+      setTasks([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTasks();
+  }, [loadTasks]);
 
   const filteredTasks =
     activeFilter === "ALL"
@@ -79,9 +104,8 @@ export default function TasksScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // TODO: fetch tasks from API
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    void loadTasks();
+  }, [loadTasks]);
 
   return (
     <View style={styles.container}>

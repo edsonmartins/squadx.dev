@@ -21,8 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -38,7 +41,7 @@ public class TeamTemplateService {
         List<TemplateResponse> templates = new ArrayList<>();
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            Resource[] resources = resolver.getResources("classpath:templates/*.json");
+            Resource[] resources = resolver.getResources("classpath*:templates/*.json");
             for (Resource resource : resources) {
                 try (InputStream is = resource.getInputStream()) {
                     TemplateResponse template = objectMapper.readValue(is, TemplateResponse.class);
@@ -52,18 +55,58 @@ public class TeamTemplateService {
     }
 
     public TemplateResponse getTemplate(String name) {
-        try {
-            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            Resource resource = resolver.getResource("classpath:templates/" + name + ".json");
-            if (!resource.exists()) {
-                throw new ResourceNotFoundException("Template not found: " + name);
-            }
-            try (InputStream is = resource.getInputStream()) {
-                return objectMapper.readValue(is, TemplateResponse.class);
-            }
+        try (InputStream is = openTemplateStream(name)) {
+            return objectMapper.readValue(is, TemplateResponse.class);
         } catch (IOException e) {
             throw new ResourceNotFoundException("Template not found: " + name);
         }
+    }
+
+    private InputStream openTemplateStream(String name) throws IOException {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        InputStream classpathStream = classLoader.getResourceAsStream("templates/" + name + ".json");
+        if (classpathStream != null) {
+            return classpathStream;
+        }
+
+        Optional<InputStream> resolverStream = openTemplateStreamFromResolver(name);
+        if (resolverStream.isPresent()) {
+            return resolverStream.get();
+        }
+
+        for (Path fallbackPath : fallbackTemplatePaths(name)) {
+            if (Files.exists(fallbackPath)) {
+                return Files.newInputStream(fallbackPath);
+            }
+        }
+
+        throw new ResourceNotFoundException("Template not found: " + name);
+    }
+
+    private Optional<InputStream> openTemplateStreamFromResolver(String name) throws IOException {
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        Resource[] resources = resolver.getResources("classpath*:templates/*.json");
+        String expectedFilename = name + ".json";
+
+        for (Resource resource : resources) {
+            if (expectedFilename.equals(resource.getFilename())) {
+                return Optional.of(resource.getInputStream());
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private List<Path> fallbackTemplatePaths(String name) {
+        String templateFile = name + ".json";
+        String userDir = System.getProperty("user.dir");
+
+        return List.of(
+                Path.of("src/main/resources/templates", templateFile),
+                Path.of("backend/src/main/resources/templates", templateFile),
+                Path.of(userDir, "src/main/resources/templates", templateFile),
+                Path.of(userDir, "backend/src/main/resources/templates", templateFile)
+        );
     }
 
     @Transactional

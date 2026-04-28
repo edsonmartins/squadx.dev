@@ -3,6 +3,7 @@ package dev.squadx.controller;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.notification.NotificationConfigRequest;
 import dev.squadx.dto.notification.NotificationConfigResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.model.User;
 import dev.squadx.repository.OrganizationMemberRepository;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 
@@ -31,9 +33,11 @@ public class NotificationController {
     @Operation(summary = "List notification configurations for an organization")
     public ResponseEntity<ApiResponse<List<NotificationConfigResponse>>> list(
             @PathVariable Long orgId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        validateOrgAccess(orgId, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        validateOrgAccess(orgId, currentUser);
         List<NotificationConfigResponse> configs = notificationService.listByOrganization(orgId);
         return ResponseEntity.ok(ApiResponse.success(configs));
     }
@@ -43,9 +47,11 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<NotificationConfigResponse>> create(
             @PathVariable Long orgId,
             @Valid @RequestBody NotificationConfigRequest request,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest httpRequest
     ) {
-        validateOrgAccess(orgId, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user, httpRequest);
+        validateOrgAccess(orgId, currentUser);
         NotificationConfigResponse config = notificationService.create(orgId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(config, "Notification configuration created successfully"));
@@ -57,9 +63,11 @@ public class NotificationController {
             @PathVariable Long orgId,
             @PathVariable Long configId,
             @Valid @RequestBody NotificationConfigRequest request,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest httpRequest
     ) {
-        validateOrgAccess(orgId, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user, httpRequest);
+        validateOrgAccess(orgId, currentUser);
         NotificationConfigResponse config = notificationService.update(configId, request);
         return ResponseEntity.ok(ApiResponse.success(config, "Notification configuration updated successfully"));
     }
@@ -69,9 +77,11 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long orgId,
             @PathVariable Long configId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        validateOrgAccess(orgId, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        validateOrgAccess(orgId, currentUser);
         notificationService.delete(configId);
         return ResponseEntity.ok(ApiResponse.success(null, "Notification configuration deleted successfully"));
     }
@@ -80,9 +90,11 @@ public class NotificationController {
     @Operation(summary = "Send a test notification to all enabled channels")
     public ResponseEntity<ApiResponse<Void>> sendTest(
             @PathVariable Long orgId,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        validateOrgAccess(orgId, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        validateOrgAccess(orgId, currentUser);
         notificationService.notifyTaskCompleted(orgId, "Test Task", "Test Project");
         return ResponseEntity.ok(ApiResponse.success(null, "Test notification sent"));
     }

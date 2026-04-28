@@ -118,6 +118,8 @@ class OrchestratorState(BaseModel):
     # Input
     task_id: int
     task: dict[str, Any]
+    execution_id: int | None = None
+    brainsentry_session_id: str | None = None
 
     # Conversation
     messages: list[BaseMessage] = Field(default_factory=list)

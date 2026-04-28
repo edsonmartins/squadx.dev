@@ -18,9 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,14 +30,19 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SquadController.class)
+@WebMvcTest(
+        value = SquadController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class SquadControllerTest {
@@ -99,13 +105,13 @@ class SquadControllerTest {
                     .organizationId(10L)
                     .build();
 
-            when(squadService.create(any(SquadRequest.class), any(User.class)))
+            when(squadService.create(any(SquadRequest.class), nullable(User.class)))
                     .thenReturn(sampleSquad);
 
             mockMvc.perform(post("/api/v1/squads")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -123,7 +129,7 @@ class SquadControllerTest {
             mockMvc.perform(post("/api/v1/squads")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isBadRequest());
         }
     }
@@ -135,11 +141,11 @@ class SquadControllerTest {
         @Test
         @DisplayName("should return squad by id with 200")
         void shouldReturnSquadById() throws Exception {
-            when(squadService.getById(eq(1L), any(User.class)))
+            when(squadService.getById(eq(1L), nullable(User.class)))
                     .thenReturn(sampleSquad);
 
             mockMvc.perform(get("/api/v1/squads/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -149,11 +155,11 @@ class SquadControllerTest {
         @Test
         @DisplayName("should return 404 when squad not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(squadService.getById(eq(999L), any(User.class)))
+            when(squadService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Squad not found"));
 
             mockMvc.perform(get("/api/v1/squads/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Squad not found"));
@@ -177,11 +183,11 @@ class SquadControllerTest {
                     .isLast(true)
                     .build();
 
-            when(squadService.getByOrganizationId(eq(10L), any(), any(User.class)))
+            when(squadService.getByOrganizationId(eq(10L), any(), nullable(User.class)))
                     .thenReturn(pageResponse);
 
             mockMvc.perform(get("/api/v1/squads/organization/10")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1))
@@ -196,10 +202,10 @@ class SquadControllerTest {
         @Test
         @DisplayName("should delete squad successfully and return 200")
         void shouldDeleteSquadSuccessfully() throws Exception {
-            doNothing().when(squadService).delete(eq(1L), any(User.class));
+            doNothing().when(squadService).delete(eq(1L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/squads/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Squad deleted successfully"));
@@ -209,10 +215,10 @@ class SquadControllerTest {
         @DisplayName("should return 404 when deleting non-existent squad")
         void shouldReturn404WhenDeletingNonExistent() throws Exception {
             doThrow(new ResourceNotFoundException("Squad not found"))
-                    .when(squadService).delete(eq(999L), any(User.class));
+                    .when(squadService).delete(eq(999L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/squads/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Squad not found"));

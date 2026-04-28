@@ -4,6 +4,7 @@ import dev.squadx.dto.approval.ApprovalResponse;
 import dev.squadx.dto.approval.CreateApprovalRequest;
 import dev.squadx.dto.approval.ReviewApprovalRequest;
 import dev.squadx.dto.common.ApiResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.model.User;
 import dev.squadx.model.enums.ApprovalStatus;
 import dev.squadx.service.ApprovalService;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/approvals")
@@ -32,7 +34,8 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<ApprovalResponse>> create(
             @Valid @RequestBody CreateApprovalRequest request,
             @AuthenticationPrincipal User user) {
-        ApprovalResponse response = approvalService.create(request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ApprovalResponse response = approvalService.create(request, currentUser);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Approval request created"));
@@ -44,7 +47,8 @@ public class ApprovalController {
             @PathVariable Long id,
             @Valid @RequestBody ReviewApprovalRequest request,
             @AuthenticationPrincipal User user) {
-        ApprovalResponse response = approvalService.review(id, request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ApprovalResponse response = approvalService.review(id, request, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response, "Approval reviewed"));
     }
 
@@ -53,7 +57,8 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<ApprovalResponse>> cancel(
             @PathVariable Long id,
             @AuthenticationPrincipal User user) {
-        ApprovalResponse response = approvalService.cancel(id, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ApprovalResponse response = approvalService.cancel(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response, "Approval cancelled"));
     }
 
@@ -80,8 +85,10 @@ public class ApprovalController {
     @Operation(summary = "Get pending approvals for current user")
     public ResponseEntity<ApiResponse<Page<ApprovalResponse>>> getPending(
             @AuthenticationPrincipal User user,
+            HttpServletRequest request,
             @PageableDefault Pageable pageable) {
-        Page<ApprovalResponse> response = approvalService.getPendingForUser(user.getId(), pageable);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        Page<ApprovalResponse> response = approvalService.getPendingForUser(currentUser.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

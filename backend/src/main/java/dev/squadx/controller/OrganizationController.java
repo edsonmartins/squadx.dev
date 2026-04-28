@@ -2,6 +2,7 @@ package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.common.PageResponse;
+import dev.squadx.controller.support.AuthenticatedUserResolver;
 import dev.squadx.dto.organization.OrganizationRequest;
 import dev.squadx.dto.organization.OrganizationResponse;
 import dev.squadx.model.User;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/organizations")
@@ -31,7 +33,8 @@ public class OrganizationController {
             @Valid @RequestBody OrganizationRequest request,
             @AuthenticationPrincipal User user
     ) {
-        OrganizationResponse response = organizationService.create(request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        OrganizationResponse response = organizationService.create(request, currentUser);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Organization created successfully"));
@@ -43,7 +46,8 @@ public class OrganizationController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        OrganizationResponse response = organizationService.getById(id, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        OrganizationResponse response = organizationService.getById(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -53,7 +57,8 @@ public class OrganizationController {
             @PathVariable String slug,
             @AuthenticationPrincipal User user
     ) {
-        OrganizationResponse response = organizationService.getBySlug(slug, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        OrganizationResponse response = organizationService.getBySlug(slug, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -61,9 +66,11 @@ public class OrganizationController {
     @Operation(summary = "Get current user's organizations")
     public ResponseEntity<ApiResponse<PageResponse<OrganizationResponse>>> getMyOrganizations(
             @PageableDefault(size = 20) Pageable pageable,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request
     ) {
-        PageResponse<OrganizationResponse> response = organizationService.getByUserId(user.getId(), pageable);
+        User currentUser = AuthenticatedUserResolver.resolve(user, request);
+        PageResponse<OrganizationResponse> response = organizationService.getByUserId(currentUser.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -74,7 +81,8 @@ public class OrganizationController {
             @Valid @RequestBody OrganizationRequest request,
             @AuthenticationPrincipal User user
     ) {
-        OrganizationResponse response = organizationService.update(id, request, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        OrganizationResponse response = organizationService.update(id, request, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response, "Organization updated successfully"));
     }
 
@@ -84,7 +92,8 @@ public class OrganizationController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        organizationService.delete(id, user);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        organizationService.delete(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(null, "Organization deleted successfully"));
     }
 }

@@ -35,7 +35,9 @@ public class TaskService {
     private final AgentRepository agentRepository;
     private final OrganizationMemberRepository memberRepository;
     private final TaskDependencyRepository taskDependencyRepository;
+    private final ExecutionRepository executionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final WebSocketEventService webSocketEventService;
 
     @Transactional
     public TaskResponse create(TaskRequest request, User currentUser) {
@@ -72,7 +74,8 @@ public class TaskService {
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskCreatedEvent(
+        sendTaskCreated(project.getId(), response);
+        publishEvent(new TaskCreatedEvent(
                 task.getId(), project.getId(), project.getOrganization().getId(), response));
 
         return response;
@@ -155,7 +158,8 @@ public class TaskService {
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+        sendTaskUpdated(task.getProject().getId(), task.getId(), response);
+        publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
                 oldStatusBeforeUpdate, task.getStatus(), response));
 
@@ -174,7 +178,8 @@ public class TaskService {
         task = taskRepository.save(task);
 
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+        sendTaskUpdated(task.getProject().getId(), task.getId(), response);
+        publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
                 oldStatus, status, response));
 
@@ -199,7 +204,8 @@ public class TaskService {
         task = taskRepository.findById(id).orElseThrow();
 
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+        sendTaskUpdated(task.getProject().getId(), task.getId(), response);
+        publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
                 task.getStatus(), task.getStatus(), response));
     }
@@ -215,7 +221,7 @@ public class TaskService {
         Long orgId = task.getProject().getOrganization().getId();
         taskRepository.delete(task);
 
-        eventPublisher.publishEvent(new TaskDeletedEvent(id, projectId, orgId));
+        publishEvent(new TaskDeletedEvent(id, projectId, orgId));
     }
 
     // ---- Task Dependency Methods ----
@@ -253,7 +259,8 @@ public class TaskService {
 
         // Notify that the task was updated (dependency changed)
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+        sendTaskUpdated(task.getProject().getId(), task.getId(), response);
+        publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
                 task.getStatus(), task.getStatus(), response));
 
@@ -277,7 +284,8 @@ public class TaskService {
 
         // Notify that the task was updated (dependency changed)
         TaskResponse response = mapToResponse(task);
-        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+        sendTaskUpdated(task.getProject().getId(), task.getId(), response);
+        publishEvent(new TaskStatusChangedEvent(
                 task.getId(), task.getProject().getId(), task.getProject().getOrganization().getId(),
                 task.getStatus(), task.getStatus(), response));
     }
@@ -347,11 +355,30 @@ public class TaskService {
                 log.info("Task {} is now unblocked after completion of task {}",
                         dependentTask.getId(), completedTask.getId());
                 TaskResponse response = mapToResponse(dependentTask);
-                eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                sendTaskUpdated(dependentTask.getProject().getId(), dependentTask.getId(), response);
+                publishEvent(new TaskStatusChangedEvent(
                         dependentTask.getId(), dependentTask.getProject().getId(),
                         dependentTask.getProject().getOrganization().getId(),
                         dependentTask.getStatus(), dependentTask.getStatus(), response));
             }
+        }
+    }
+
+    private void publishEvent(Object event) {
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(event);
+        }
+    }
+
+    private void sendTaskCreated(Long projectId, TaskResponse response) {
+        if (webSocketEventService != null) {
+            webSocketEventService.sendTaskCreated(projectId, response);
+        }
+    }
+
+    private void sendTaskUpdated(Long projectId, Long taskId, TaskResponse response) {
+        if (webSocketEventService != null) {
+            webSocketEventService.sendTaskUpdated(projectId, taskId, response);
         }
     }
 
@@ -386,6 +413,8 @@ public class TaskService {
     }
 
     private TaskResponse mapToResponse(Task task) {
+        Execution latestExecution = executionRepository.findTopByTaskIdOrderByCreatedAtDesc(task.getId())
+                .orElse(null);
         List<TaskDependency> dependencies = taskDependencyRepository.findByTaskId(task.getId());
         List<TaskDependency> dependents = taskDependencyRepository.findByDependsOnId(task.getId());
 
@@ -417,6 +446,8 @@ public class TaskService {
                 .projectName(task.getProject().getName())
                 .assignedAgentId(task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null)
                 .assignedAgentName(task.getAssignedAgent() != null ? task.getAssignedAgent().getName() : null)
+                .executionId(latestExecution != null ? latestExecution.getId() : null)
+                .brainSentrySessionId(latestExecution != null ? latestExecution.getBrainSentrySessionId() : null)
                 .parentTaskId(task.getParentTask() != null ? task.getParentTask().getId() : null)
                 .subtasksCount((int) taskRepository.countSubtasksByParentTaskId(task.getId()))
                 .createdById(task.getCreatedBy() != null ? task.getCreatedBy().getId() : null)

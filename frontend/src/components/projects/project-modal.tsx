@@ -163,7 +163,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" data-testid="project-modal">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Project" : "Create Project"}</DialogTitle>
           <DialogDescription>
@@ -179,6 +179,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
               <Input
                 id="name"
                 placeholder="My Awesome Project"
+                data-testid="project-name-input"
                 {...register("name")}
               />
               {errors.name && (
@@ -192,6 +193,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
                 id="description"
                 placeholder="A brief description of your project..."
                 rows={3}
+                data-testid="project-description-input"
                 {...register("description")}
               />
               {errors.description && (
@@ -204,6 +206,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
               <Input
                 id="repository_url"
                 placeholder="https://github.com/org/repo"
+                data-testid="project-repository-input"
                 {...register("repository_url")}
               />
               {errors.repository_url && (
@@ -216,6 +219,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
               <Input
                 id="default_branch"
                 placeholder="main"
+                data-testid="project-default-branch-input"
                 {...register("default_branch")}
               />
               {errors.default_branch && (
@@ -250,7 +254,7 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} data-testid="project-submit-button">
               {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Project"}
             </Button>
           </DialogFooter>

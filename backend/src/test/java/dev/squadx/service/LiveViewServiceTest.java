@@ -6,6 +6,7 @@ import dev.squadx.dto.liveview.LiveSessionResponse;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
+import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.LiveSessionStatus;
 import dev.squadx.model.enums.UserRole;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +50,9 @@ class LiveViewServiceTest {
 
     @Mock
     private WebSocketEventService webSocketEventService;
+
+    @Mock
+    private SquadxLiveClient squadxLiveClient;
 
     @InjectMocks
     private LiveViewService liveViewService;
@@ -197,6 +202,7 @@ class LiveViewServiceTest {
             participant.setSession(activeSession);
             participant.setUser(viewerUser);
             participant.setIsHost(false);
+            activeSession.setExternalSessionId("live-session-1");
 
             when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
             when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -208,6 +214,7 @@ class LiveViewServiceTest {
             LiveSessionResponse response = liveViewService.endSession(20L, hostUser);
 
             assertThat(response.getStatus()).isEqualTo(LiveSessionStatus.ENDED);
+            verify(squadxLiveClient).endSession("live-session-1");
             verify(webSocketEventService).sendLiveSessionEnded("ABCD1234", 20L);
             verify(participantRepository).save(participant);
         }
@@ -226,6 +233,47 @@ class LiveViewServiceTest {
     @Nested
     @DisplayName("startSession()")
     class StartSession {
+
+        @Test
+        @DisplayName("should create external live session when starting a pending session")
+        void shouldCreateExternalSessionWhenStarting() {
+            activeSession.setStatus(LiveSessionStatus.PENDING);
+
+            when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
+            when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(participantRepository.findBySessionIdAndLeftAtIsNull(20L)).thenReturn(List.of());
+            when(squadxLiveClient.createSession(5L, null, "p2p")).thenReturn(Map.of(
+                    "sessionId", "live-session-1",
+                    "joinCode", "JOIN1234",
+                    "joinUrl", "https://live.example/join/JOIN1234"
+            ));
+
+            LiveSessionResponse response = liveViewService.startSession(20L, hostUser);
+
+            assertThat(response.getStatus()).isEqualTo(LiveSessionStatus.ACTIVE);
+            assertThat(response.getExternalSessionId()).isEqualTo("live-session-1");
+            assertThat(response.getExternalJoinCode()).isEqualTo("JOIN1234");
+            assertThat(response.getViewerUrl()).isEqualTo("https://live.example/join/JOIN1234");
+            verify(squadxLiveClient).createSession(5L, null, "p2p");
+            verify(webSocketEventService).sendLiveSessionStarted("ABCD1234", 20L);
+        }
+
+        @Test
+        @DisplayName("should keep local session active when external live creation fails")
+        void shouldKeepSessionActiveWhenExternalCreationFails() {
+            activeSession.setStatus(LiveSessionStatus.PENDING);
+
+            when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
+            when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(participantRepository.findBySessionIdAndLeftAtIsNull(20L)).thenReturn(List.of());
+            when(squadxLiveClient.createSession(5L, null, "p2p")).thenReturn(null);
+
+            LiveSessionResponse response = liveViewService.startSession(20L, hostUser);
+
+            assertThat(response.getStatus()).isEqualTo(LiveSessionStatus.ACTIVE);
+            assertThat(response.getExternalSessionId()).isNull();
+            verify(webSocketEventService).sendLiveSessionStarted("ABCD1234", 20L);
+        }
 
         @Test
         @DisplayName("should throw BadRequestException when session is not pending")

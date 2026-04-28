@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
-import type { LiveSessionResponse } from "@/lib/api";
+import { liveViewApi, type LiveSessionResponse } from "@/lib/api";
 
 function SessionCard({
   session,
@@ -63,8 +63,23 @@ function SessionCard({
 export default function LiveScreen() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
-  const [sessions] = useState<LiveSessionResponse[]>([]);
+  const [sessions, setSessions] = useState<LiveSessionResponse[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  const loadSessions = useCallback(async () => {
+    try {
+      const activeSessions = await liveViewApi.getActive();
+      setSessions(activeSessions);
+    } catch {
+      setSessions([]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
 
   const handleJoin = useCallback(() => {
     const trimmed = joinCode.trim();
@@ -77,9 +92,8 @@ export default function LiveScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // TODO: fetch active sessions from API
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    void loadSessions();
+  }, [loadSessions]);
 
   return (
     <View style={styles.container}>

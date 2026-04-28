@@ -20,9 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,13 +32,18 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(TaskController.class)
+@WebMvcTest(
+        value = TaskController.class,
+        excludeAutoConfiguration = org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 class TaskControllerTest {
@@ -103,13 +109,13 @@ class TaskControllerTest {
                     .priority(TaskPriority.MEDIUM)
                     .build();
 
-            when(taskService.create(any(TaskRequest.class), any(User.class)))
+            when(taskService.create(any(TaskRequest.class), nullable(User.class)))
                     .thenReturn(sampleTask);
 
             mockMvc.perform(post("/api/v1/tasks")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -128,7 +134,7 @@ class TaskControllerTest {
             mockMvc.perform(post("/api/v1/tasks")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isBadRequest());
         }
     }
@@ -140,11 +146,11 @@ class TaskControllerTest {
         @Test
         @DisplayName("should return task by id with 200")
         void shouldReturnTaskById() throws Exception {
-            when(taskService.getById(eq(1L), any(User.class)))
+            when(taskService.getById(eq(1L), nullable(User.class)))
                     .thenReturn(sampleTask);
 
             mockMvc.perform(get("/api/v1/tasks/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -154,11 +160,11 @@ class TaskControllerTest {
         @Test
         @DisplayName("should return 404 when task not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(taskService.getById(eq(999L), any(User.class)))
+            when(taskService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Task not found"));
 
             mockMvc.perform(get("/api/v1/tasks/999")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Task not found"));
@@ -182,11 +188,11 @@ class TaskControllerTest {
                     .isLast(true)
                     .build();
 
-            when(taskService.getByProjectId(eq(10L), any(), any(User.class)))
+            when(taskService.getByProjectId(eq(10L), any(), nullable(User.class)))
                     .thenReturn(pageResponse);
 
             mockMvc.perform(get("/api/v1/tasks/project/10")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.content[0].id").value(1))
@@ -216,13 +222,13 @@ class TaskControllerTest {
                     .projectId(10L)
                     .build();
 
-            when(taskService.update(eq(1L), any(TaskRequest.class), any(User.class)))
+            when(taskService.update(eq(1L), any(TaskRequest.class), nullable(User.class)))
                     .thenReturn(updatedTask);
 
             mockMvc.perform(put("/api/v1/tasks/1")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request))
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -245,12 +251,12 @@ class TaskControllerTest {
                     .projectId(10L)
                     .build();
 
-            when(taskService.updateStatus(eq(1L), eq(TaskStatus.IN_PROGRESS), any(User.class)))
+            when(taskService.updateStatus(eq(1L), eq(TaskStatus.IN_PROGRESS), nullable(User.class)))
                     .thenReturn(updatedTask);
 
             mockMvc.perform(patch("/api/v1/tasks/1/status")
                             .param("status", "IN_PROGRESS")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
@@ -265,10 +271,10 @@ class TaskControllerTest {
         @Test
         @DisplayName("should delete task successfully and return 200")
         void shouldDeleteTaskSuccessfully() throws Exception {
-            doNothing().when(taskService).delete(eq(1L), any(User.class));
+            doNothing().when(taskService).delete(eq(1L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/tasks/1")
-                            .with(user(testUser)))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Task deleted successfully"));

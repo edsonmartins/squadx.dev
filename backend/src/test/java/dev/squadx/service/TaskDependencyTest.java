@@ -49,6 +49,9 @@ class TaskDependencyTest {
     private TaskDependencyRepository taskDependencyRepository;
 
     @Mock
+    private ExecutionRepository executionRepository;
+
+    @Mock
     private WebSocketEventService webSocketEventService;
 
     @InjectMocks
@@ -122,6 +125,8 @@ class TaskDependencyTest {
         taskC.setId(3L);
         taskC.setCreatedAt(Instant.now());
         taskC.setUpdatedAt(Instant.now());
+
+        lenient().when(executionRepository.findTopByTaskIdOrderByCreatedAtDesc(anyLong())).thenReturn(Optional.empty());
     }
 
     @Nested
@@ -168,10 +173,7 @@ class TaskDependencyTest {
         @Test
         @DisplayName("should detect direct cycle (A->B, B->A)")
         void shouldDetectDirectCycle() {
-            when(taskRepository.findById(2L)).thenReturn(Optional.of(taskB));
-            when(taskRepository.findById(1L)).thenReturn(Optional.of(taskA));
             when(memberRepository.existsByOrganizationIdAndUserId(10L, 1L)).thenReturn(true);
-            when(taskDependencyRepository.existsByTaskIdAndDependsOnId(2L, 1L)).thenReturn(false);
 
             // B already depends on A (existing dependency)
             TaskDependency existingDep = TaskDependency.builder()

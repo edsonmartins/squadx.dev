@@ -167,6 +167,23 @@ export interface PageResponse<T> {
   total_pages: number;
 }
 
+export interface ProjectResponse {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  repository_url?: string;
+  default_branch: string;
+  is_active: boolean;
+  organization_id: number;
+  organization_name: string;
+  squad_id?: number | null;
+  squad_name?: string;
+  tasks_count: number;
+  created_at: string;
+  updated_at?: string;
+}
+
 export type TaskStatus =
   | "TODO"
   | "IN_PROGRESS"
@@ -212,6 +229,10 @@ export const authApi = {
 export const tasksApi = {
   listByProject: (projectId: number) =>
     api.get<PageResponse<TaskResponse>>(`/api/v1/tasks/project/${projectId}`),
+};
+
+export const projectsApi = {
+  list: () => api.get<PageResponse<ProjectResponse>>("/api/v1/projects/my"),
 };
 
 export const liveViewApi = {

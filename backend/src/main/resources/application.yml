@@ -157,6 +157,8 @@ squadx:
   brainsentry:
     url: ${SQUADX_BRAINSENTRY_URL:http://localhost:8090}
     tenant-id: ${SQUADX_BRAINSENTRY_TENANT_ID:default}
+    per-organization-tenant: ${SQUADX_BRAINSENTRY_PER_ORGANIZATION_TENANT:true}
+    tenant-prefix: ${SQUADX_BRAINSENTRY_TENANT_PREFIX:org-}
     enabled: ${SQUADX_BRAINSENTRY_ENABLED:false}
   live:
     url: ${SQUADX_LIVE_URL:http://localhost:3100}

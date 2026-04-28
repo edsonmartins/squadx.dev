@@ -23,7 +23,12 @@ public class IntegrationConfig {
     public static class BrainSentryConfig {
         private String url = "http://localhost:8090";
         private String tenantId = "default";
+        private boolean perOrganizationTenant = true;
+        private String tenantPrefix = "org-";
         private boolean enabled = false;
+        private String memoryScope = "adaptive";
+        private boolean proceduralMemoryEnabled = true;
+        private int proceduralLimit = 5;
     }
 
     @Getter

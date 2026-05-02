@@ -1,6 +1,8 @@
 package dev.squadx.service;
 
 import dev.squadx.dto.liveview.JoinSessionRequest;
+import dev.squadx.dto.liveview.LiveChatMessageRequest;
+import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
 import dev.squadx.exception.BadRequestException;
@@ -13,6 +15,7 @@ import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.LiveSessionParticipantRepository;
 import dev.squadx.repository.LiveSessionRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
+import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +49,9 @@ class LiveViewServiceTest {
     private TaskRepository taskRepository;
 
     @Mock
+    private AgentRepository agentRepository;
+
+    @Mock
     private OrganizationMemberRepository orgMemberRepository;
 
     @Mock
@@ -63,6 +69,7 @@ class LiveViewServiceTest {
     private Project project;
     private Task task;
     private LiveSession activeSession;
+    private Agent assignedAgent;
 
     @BeforeEach
     void setUp() {
@@ -102,6 +109,13 @@ class LiveViewServiceTest {
                 .project(project)
                 .build();
         task.setId(5L);
+
+        assignedAgent = Agent.builder()
+                .name("Builder")
+                .agentType(dev.squadx.model.enums.AgentType.BACKEND)
+                .squad(Squad.builder().name("Alpha").organization(organization).build())
+                .build();
+        assignedAgent.setId(9L);
 
         activeSession = new LiveSession();
         activeSession.setId(20L);
@@ -188,6 +202,43 @@ class LiveViewServiceTest {
             assertThatThrownBy(() -> liveViewService.createSession(request, hostUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("Task already has an active live session");
+        }
+    }
+
+    @Nested
+    @DisplayName("ensureDirectAgentSession()")
+    class EnsureDirectAgentSession {
+
+        @Test
+        @DisplayName("should create and return an active direct session for agent")
+        void shouldCreateDirectAgentSession() {
+            when(agentRepository.findById(9L)).thenReturn(Optional.of(assignedAgent));
+            when(orgMemberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
+            when(liveSessionRepository.findByAgentIdAndStatus(9L, LiveSessionStatus.ACTIVE)).thenReturn(Optional.empty());
+            when(liveSessionRepository.existsByCode(anyString())).thenReturn(false);
+            when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> {
+                LiveSession session = inv.getArgument(0);
+                if (session.getId() == null) {
+                    session.setId(30L);
+                }
+                return session;
+            });
+            when(participantRepository.save(any(LiveSessionParticipant.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(participantRepository.findBySessionIdAndLeftAtIsNull(30L)).thenReturn(List.of());
+            when(squadxLiveClient.createSession(null, 9L, "p2p")).thenReturn(Map.of(
+                    "sessionId", "direct-1",
+                    "joinCode", "JOIN9999",
+                    "joinUrl", "https://live.example/join/JOIN9999"
+            ));
+            when(squadxLiveClient.joinSession("JOIN9999", "Agent Builder")).thenReturn(Map.of("id", "guest-99"));
+
+            LiveSessionResponse response = liveViewService.ensureDirectAgentSession(9L, hostUser);
+
+            assertThat(response.getStatus()).isEqualTo(LiveSessionStatus.ACTIVE);
+            assertThat(response.getAgentId()).isEqualTo(9L);
+            assertThat(response.getSessionMode()).isEqualTo("DIRECT_AGENT");
+            assertThat(response.getExternalSessionId()).isEqualTo("direct-1");
+            verify(webSocketEventService).sendLiveSessionStarted(anyString(), eq(30L));
         }
     }
 
@@ -285,6 +336,88 @@ class LiveViewServiceTest {
             assertThatThrownBy(() -> liveViewService.startSession(20L, hostUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("Session is not in pending status");
+        }
+
+        @Test
+        @DisplayName("should register external agent participant when task has assigned agent")
+        void shouldRegisterExternalAgentParticipantWhenAgentAssigned() {
+            activeSession.setStatus(LiveSessionStatus.PENDING);
+            task.setAssignedAgent(assignedAgent);
+
+            when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
+            when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(participantRepository.findBySessionIdAndLeftAtIsNull(20L)).thenReturn(List.of());
+            when(squadxLiveClient.createSession(5L, 9L, "p2p")).thenReturn(Map.of(
+                    "sessionId", "live-session-1",
+                    "joinCode", "JOIN1234",
+                    "joinUrl", "https://live.example/join/JOIN1234"
+            ));
+            when(squadxLiveClient.joinSession("JOIN1234", "Agent Builder")).thenReturn(Map.of(
+                    "id", "guest-1"
+            ));
+
+            LiveSessionResponse response = liveViewService.startSession(20L, hostUser);
+
+            assertThat(response.getExternalSessionId()).isEqualTo("live-session-1");
+            verify(squadxLiveClient).joinSession("JOIN1234", "Agent Builder");
+        }
+    }
+
+    @Nested
+    @DisplayName("agent live chat")
+    class AgentLiveChat {
+
+        @Test
+        @DisplayName("should send agent message to linked squadx live session")
+        void shouldSendAgentMessage() {
+            task.setAssignedAgent(assignedAgent);
+            activeSession.setExternalSessionId("sess-1");
+            activeSession.setExternalJoinCode("JOIN1234");
+            activeSession.setExternalAgentParticipantId("guest-1");
+
+            LiveChatMessageRequest request = new LiveChatMessageRequest();
+            request.setContent("Working on the fix now");
+
+            when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
+            when(orgMemberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
+            when(liveSessionRepository.save(any(LiveSession.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(squadxLiveClient.sendChatMessage("sess-1", "Working on the fix now", "guest-1", null)).thenReturn(Map.of(
+                    "id", "msg-1",
+                    "session_id", "sess-1",
+                    "participant_id", "guest-1",
+                    "display_name", "Agent Builder",
+                    "content", "Working on the fix now",
+                    "message_type", "text",
+                    "created_at", "2026-04-29T00:00:00Z"
+            ));
+
+            LiveChatMessageResponse response = liveViewService.sendAgentMessage(20L, request, hostUser);
+
+            assertThat(response.getId()).isEqualTo("msg-1");
+            assertThat(response.getParticipantId()).isEqualTo("guest-1");
+            verify(squadxLiveClient).sendChatMessage("sess-1", "Working on the fix now", "guest-1", null);
+        }
+
+        @Test
+        @DisplayName("should fetch chat history from linked squadx live session")
+        void shouldFetchChatHistory() {
+            activeSession.setExternalSessionId("sess-1");
+
+            when(liveSessionRepository.findById(20L)).thenReturn(Optional.of(activeSession));
+            when(orgMemberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
+            when(squadxLiveClient.getChatHistory("sess-1", 20, null, null)).thenReturn(List.of(
+                    Map.of(
+                            "id", "msg-1",
+                            "content", "Hello",
+                            "message_type", "text",
+                            "created_at", "2026-04-29T00:00:00Z"
+                    )
+            ));
+
+            List<LiveChatMessageResponse> history = liveViewService.getChatHistory(20L, 20, null, null, hostUser);
+
+            assertThat(history).hasSize(1);
+            assertThat(history.get(0).getContent()).isEqualTo("Hello");
         }
     }
 }

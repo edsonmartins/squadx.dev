@@ -59,6 +59,7 @@ public class SecurityConfig {
                 // Public endpoints
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/health/**").permitAll()
+                .requestMatchers("/api/v1/webhooks/**").permitAll()
                 .requestMatchers("/api/v1/billing/webhook").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()

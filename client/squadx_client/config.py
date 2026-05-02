@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     # Alternative: Cloudflare TURN (free tier available)
     cloudflare_turn_token: str | None = Field(default=None, alias="CLOUDFLARE_TURN_TOKEN")
 
+    # Real smoke / local deterministic execution mode
+    smoke_execution_mode: bool = Field(default=False, alias="SQUADX_SMOKE_EXECUTION_MODE")
+    smoke_execution_delay_seconds: float = Field(default=0.5, alias="SQUADX_SMOKE_EXECUTION_DELAY_SECONDS")
+    smoke_execution_summary: str = Field(
+        default="Smoke execution completed successfully.",
+        alias="SQUADX_SMOKE_EXECUTION_SUMMARY"
+    )
+
     @property
     def expanded_data_dir(self) -> str:
         """Return expanded data directory path."""

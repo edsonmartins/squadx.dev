@@ -140,9 +140,13 @@ export default function LiveViewPage() {
                       {session.code}
                     </span>
                   </div>
-                  <CardTitle className="text-lg">{session.task_title}</CardTitle>
+                  <CardTitle className="text-lg">
+                    {session.task_title || session.agent_name || "Direct Agent Session"}
+                  </CardTitle>
                   <CardDescription>
-                    Hosted by {session.host_user_name}
+                    {session.session_mode === "DIRECT_AGENT" && session.agent_name
+                      ? `Direct conversation with ${session.agent_name}`
+                      : `Hosted by ${session.host_user_name}`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

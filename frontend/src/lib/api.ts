@@ -420,10 +420,58 @@ export const executionsApi = {
     api.get<Record<string, unknown>>(`/api/v1/executions/organization/${organizationId}/metrics`),
 };
 
+export const memoryApi = {
+  getPolicy: () => api.get<MemoryPolicyResponse>("/api/v1/memory/policy"),
+  getTaskContext: (taskId: number) =>
+    api.get<MemoryRecord[]>(`/api/v1/memory/tasks/${taskId}/context`),
+  listSkills: (params: {
+    organizationId: number;
+    projectId?: number;
+    agentId?: number;
+    query?: string;
+    limit?: number;
+  }) => {
+    const search = new URLSearchParams({
+      organizationId: String(params.organizationId),
+      ...(params.projectId ? { projectId: String(params.projectId) } : {}),
+      ...(params.agentId ? { agentId: String(params.agentId) } : {}),
+      ...(params.query ? { query: params.query } : {}),
+      ...(params.limit ? { limit: String(params.limit) } : {}),
+    });
+    return api.get<MemorySkill[]>(`/api/v1/memory/skills?${search.toString()}`);
+  },
+  createSkill: (data: CreateMemorySkillRequest) =>
+    api.post<MemorySkill>("/api/v1/memory/skills", data),
+  updateSkill: (memoryId: string, data: CreateMemorySkillRequest) =>
+    api.put<MemorySkill>(`/api/v1/memory/skills/${memoryId}`, data),
+  deleteSkill: (memoryId: string, organizationId: number) =>
+    api.delete<void>(`/api/v1/memory/skills/${memoryId}?organizationId=${organizationId}`),
+  searchHistory: (params: {
+    organizationId: number;
+    projectId?: number;
+    agentId?: number;
+    executionId?: number;
+    query?: string;
+    limit?: number;
+  }) => {
+    const search = new URLSearchParams({
+      organizationId: String(params.organizationId),
+      ...(params.projectId ? { projectId: String(params.projectId) } : {}),
+      ...(params.agentId ? { agentId: String(params.agentId) } : {}),
+      ...(params.executionId ? { executionId: String(params.executionId) } : {}),
+      ...(params.query ? { query: params.query } : {}),
+      ...(params.limit ? { limit: String(params.limit) } : {}),
+    });
+    return api.get<MemoryHistoryResponse>(`/api/v1/memory/history/search?${search.toString()}`);
+  },
+};
+
 // Live View API
 export const liveViewApi = {
   createSession: (data: CreateLiveSessionRequest) =>
     api.post<LiveSessionResponse>("/api/v1/live-view/sessions", data),
+  ensureDirectAgentSession: (agentId: number) =>
+    api.post<LiveSessionResponse>(`/api/v1/live-view/agents/${agentId}/direct-session`),
   joinSession: (code: string) =>
     api.post<LiveSessionResponse>("/api/v1/live-view/sessions/join", { code }),
   startSession: (sessionId: number) =>
@@ -467,6 +515,78 @@ export interface SquadResponse {
   active_agents_count: number;
   created_at: string;
   updated_at?: string;
+}
+
+export interface MemoryPolicyResponse {
+  enabled: boolean;
+  memoryScope: string;
+  proceduralMemoryEnabled: boolean;
+  proceduralLimit: number;
+  tenantMode: string;
+  tenantId?: string;
+}
+
+export interface MemoryRecord {
+  id: string;
+  content?: string;
+  summary?: string;
+  category?: string;
+  importance?: string;
+  memory_type?: string;
+  tags: string[];
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+  source_type?: string;
+  source_reference?: string;
+  created_by?: string;
+}
+
+export interface MemorySkill extends MemoryRecord {
+  organization_id?: number;
+  project_id?: number;
+  agent_id?: number;
+  agent_type?: string;
+  steps?: string[];
+  files_modified?: string[];
+  antipattern?: boolean;
+}
+
+export interface ExecutionHistoryRecord {
+  execution_id: number;
+  task_id: number;
+  task_title: string;
+  agent_id?: number;
+  agent_name?: string;
+  status: string;
+  brain_sentry_session_id?: string;
+  started_at?: string;
+  completed_at?: string;
+  summary?: string;
+}
+
+export interface MemoryHistoryResponse {
+  query?: string;
+  memories: MemoryRecord[];
+  skills: MemorySkill[];
+  executions: ExecutionHistoryRecord[];
+  active_sessions: Array<Record<string, unknown>>;
+  session?: Record<string, unknown>;
+  session_cache?: Array<Record<string, unknown>>;
+  profile?: Record<string, unknown>;
+}
+
+export interface CreateMemorySkillRequest {
+  organization_id: number;
+  project_id?: number;
+  agent_id?: number;
+  agent_type?: string;
+  title: string;
+  summary: string;
+  content?: string;
+  antipattern?: boolean;
+  steps?: string[];
+  files_modified?: string[];
 }
 
 export interface CreateSquadRequest {
@@ -548,8 +668,11 @@ export type LiveSessionStatus = "PENDING" | "ACTIVE" | "PAUSED" | "ENDED";
 export interface LiveSessionResponse {
   id: number;
   code: string;
-  task_id: number;
-  task_title: string;
+  task_id?: number;
+  task_title?: string;
+  agent_id?: number;
+  agent_name?: string;
+  session_mode?: "TASK" | "DIRECT_AGENT";
   host_user_id: number;
   host_user_name: string;
   container_id?: string;

@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -81,14 +82,19 @@ public class SquadxLiveClient {
         if (!isEnabled()) return null;
 
         try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            if (taskId != null) {
+                payload.put("taskId", taskId);
+            }
+            if (agentId != null) {
+                payload.put("agentId", agentId);
+            }
+            payload.put("mode", mode != null ? mode : "p2p");
+
             Map<String, Object> response = restClient.post()
                     .uri("/api/integration/sessions")
                     .header("Authorization", "Bearer " + jwtProvider.generateToken("squadx-live"))
-                    .body(Map.of(
-                            "taskId", taskId,
-                            "agentId", agentId != null ? agentId : 0,
-                            "mode", mode != null ? mode : "p2p"
-                    ))
+                    .body(payload)
                     .retrieve()
                     .body(Map.class);
 
@@ -147,5 +153,102 @@ public class SquadxLiveClient {
         } catch (Exception e) {
             log.warn("Failed to end SquadX Live session: {}", e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> joinSession(String joinCode, String displayName) {
+        if (!isEnabled() || joinCode == null || joinCode.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.post()
+                    .uri("/api/sessions/join/{joinCode}", joinCode)
+                    .body(Map.of("displayName", displayName != null ? displayName : "SquadX Agent"))
+                    .retrieve()
+                    .body(Map.class);
+
+            return unwrapData(response);
+        } catch (Exception e) {
+            log.warn("Failed to join SquadX Live session {}: {}", joinCode, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> sendChatMessage(String sessionId, String content, String participantId, String recipientId) {
+        if (!isEnabled() || sessionId == null || sessionId.isBlank() || participantId == null || participantId.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("sessionId", sessionId);
+            payload.put("content", content);
+            payload.put("participantId", participantId);
+            if (recipientId != null && !recipientId.isBlank()) {
+                payload.put("recipientId", recipientId);
+            }
+
+            Map<String, Object> response = restClient.post()
+                    .uri("/api/chat/send")
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+
+            return unwrapData(response);
+        } catch (Exception e) {
+            log.warn("Failed to send SquadX Live chat message to session {}: {}", sessionId, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getChatHistory(String sessionId, int limit, String before, String recipientId) {
+        if (!isEnabled() || sessionId == null || sessionId.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder.path("/api/chat/history")
+                                .queryParam("sessionId", sessionId)
+                                .queryParam("limit", Math.max(limit, 1));
+                        if (before != null && !before.isBlank()) {
+                            builder.queryParam("before", before);
+                        }
+                        if (recipientId != null && !recipientId.isBlank()) {
+                            builder.queryParam("recipientId", recipientId);
+                        }
+                        return builder.build();
+                    })
+                    .retrieve()
+                    .body(Map.class);
+
+            Object data = unwrapData(response).get("messages");
+            if (data instanceof List<?> messages) {
+                return messages.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList();
+            }
+            return List.of();
+        } catch (Exception e) {
+            log.warn("Failed to fetch SquadX Live chat history for session {}: {}", sessionId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> unwrapData(Map<String, Object> response) {
+        if (response == null) {
+            return Map.of();
+        }
+        Object data = response.get("data");
+        if (data instanceof Map<?, ?> dataMap) {
+            return (Map<String, Object>) dataMap;
+        }
+        return response;
     }
 }

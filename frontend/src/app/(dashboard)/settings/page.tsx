@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, User, Bell, Shield, Palette, Key } from "lucide-react";
+import { Save, User, Bell, Shield, Palette, Key, Brain, Search, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -24,10 +24,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/stores/auth-store";
-import { api } from "@/lib/api";
+import { useOrganizationStore } from "@/stores/organization-store";
+import { api, memoryApi, type CreateMemorySkillRequest } from "@/lib/api";
 
 export default function SettingsPage() {
   const { user, setUser } = useAuthStore();
+  const { selectedOrganization, organizations, fetchOrganizations } = useOrganizationStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -50,6 +52,44 @@ export default function SettingsPage() {
   const [autoStartLive, setAutoStartLive] = useState(true);
   const [defaultQuality, setDefaultQuality] = useState("hd");
   const [maxViewers, setMaxViewers] = useState("5");
+  const [memoryQuery, setMemoryQuery] = useState("");
+  const [skillTitle, setSkillTitle] = useState("");
+  const [skillSummary, setSkillSummary] = useState("");
+  const [skillContent, setSkillContent] = useState("");
+  const [skillSteps, setSkillSteps] = useState("");
+
+  const organizationId = selectedOrganization?.id || organizations[0]?.id;
+
+  useQuery({
+    queryKey: ["organizations", "settings-bootstrap"],
+    queryFn: async () => {
+      await fetchOrganizations();
+      return true;
+    },
+    enabled: organizations.length === 0,
+    staleTime: 60_000,
+  });
+
+  const memoryPolicyQuery = useQuery({
+    queryKey: ["memory", "policy"],
+    queryFn: () => memoryApi.getPolicy(),
+  });
+
+  const memorySkillsQuery = useQuery({
+    queryKey: ["memory", "skills", organizationId],
+    queryFn: () => memoryApi.listSkills({ organizationId: organizationId!, limit: 12 }),
+    enabled: Boolean(organizationId),
+  });
+
+  const memoryHistoryQuery = useQuery({
+    queryKey: ["memory", "history", organizationId, memoryQuery],
+    queryFn: () => memoryApi.searchHistory({
+      organizationId: organizationId!,
+      query: memoryQuery || "execution memory history",
+      limit: 8,
+    }),
+    enabled: Boolean(organizationId),
+  });
 
   // Profile update mutation
   const updateProfileMutation = useMutation({
@@ -96,6 +136,48 @@ export default function SettingsPage() {
     },
   });
 
+  const createSkillMutation = useMutation({
+    mutationFn: (data: CreateMemorySkillRequest) => memoryApi.createSkill(data),
+    onSuccess: () => {
+      setSkillTitle("");
+      setSkillSummary("");
+      setSkillContent("");
+      setSkillSteps("");
+      queryClient.invalidateQueries({ queryKey: ["memory", "skills", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["memory", "history", organizationId] });
+      toast({
+        title: "Skill created",
+        description: "The procedural memory is now available for future executions.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create skill.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteSkillMutation = useMutation({
+    mutationFn: (memoryId: string) => memoryApi.deleteSkill(memoryId, organizationId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["memory", "skills", organizationId] });
+      queryClient.invalidateQueries({ queryKey: ["memory", "history", organizationId] });
+      toast({
+        title: "Skill deleted",
+        description: "The procedural memory has been removed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete skill.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveProfile = () => {
     updateProfileMutation.mutate({ full_name: fullName });
   };
@@ -137,6 +219,28 @@ export default function SettingsPage() {
     });
   };
 
+  const handleCreateSkill = () => {
+    if (!organizationId || !skillTitle.trim() || !skillSummary.trim()) {
+      toast({
+        title: "Error",
+        description: "Organization, title and summary are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createSkillMutation.mutate({
+      organization_id: organizationId,
+      title: skillTitle.trim(),
+      summary: skillSummary.trim(),
+      content: skillContent.trim() || undefined,
+      steps: skillSteps
+        .split("\n")
+        .map((step) => step.trim())
+        .filter(Boolean),
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -164,6 +268,10 @@ export default function SettingsPage() {
           <TabsTrigger value="api-keys" className="gap-2">
             <Key className="h-4 w-4" />
             API Keys
+          </TabsTrigger>
+          <TabsTrigger value="memory" className="gap-2">
+            <Brain className="h-4 w-4" />
+            Memory
           </TabsTrigger>
         </TabsList>
 
@@ -439,6 +547,171 @@ export default function SettingsPage() {
                 <Save className="mr-2 h-4 w-4" />
                 Save API Keys
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="memory" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Memory Policy</CardTitle>
+              <CardDescription>
+                Inspect the active BrainSentry policy and scope used by agents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">Scope</p>
+                <p className="mt-1 font-medium">{memoryPolicyQuery.data?.memoryScope || "adaptive"}</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">Tenant Mode</p>
+                <p className="mt-1 font-medium">{memoryPolicyQuery.data?.tenantMode || "unknown"}</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">Procedural Memory</p>
+                <p className="mt-1 font-medium">
+                  {memoryPolicyQuery.data?.proceduralMemoryEnabled ? "Enabled" : "Disabled"}
+                </p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">Procedural Limit</p>
+                <p className="mt-1 font-medium">{memoryPolicyQuery.data?.proceduralLimit || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Managed Skills</CardTitle>
+              <CardDescription>
+                Procedural memories exposed as reusable, administrable product artifacts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="skillTitle">Title</Label>
+                  <Input id="skillTitle" value={skillTitle} onChange={(e) => setSkillTitle(e.target.value)} placeholder="Review migration failures" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="skillSummary">Summary</Label>
+                  <Input id="skillSummary" value={skillSummary} onChange={(e) => setSkillSummary(e.target.value)} placeholder="How the agent should approach this pattern" />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="skillContent">Guidance</Label>
+                <Input id="skillContent" value={skillContent} onChange={(e) => setSkillContent(e.target.value)} placeholder="Extra context, caveats, anti-patterns..." />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="skillSteps">Steps</Label>
+                <textarea
+                  id="skillSteps"
+                  value={skillSteps}
+                  onChange={(e) => setSkillSteps(e.target.value)}
+                  placeholder={"One step per line\nInspect failing migration\nCheck latest execution logs"}
+                  className="min-h-28 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <Button onClick={handleCreateSkill} disabled={createSkillMutation.isPending || !organizationId}>
+                <Save className="mr-2 h-4 w-4" />
+                {createSkillMutation.isPending ? "Saving..." : "Create Skill"}
+              </Button>
+
+              <div className="space-y-3">
+                {(memorySkillsQuery.data || []).map((skill) => (
+                  <div key={skill.id} className="rounded-lg border p-4" data-testid={`memory-skill-${skill.id}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{skill.summary || skill.content}</p>
+                          {skill.antipattern ? (
+                            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs text-orange-700">Antipattern</span>
+                          ) : (
+                            <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Pattern</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{skill.content}</p>
+                        {(skill.steps || []).length > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            {(skill.steps || []).map((step, index) => (
+                              <p key={`${skill.id}-${index}`}>{index + 1}. {step}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteSkillMutation.mutate(skill.id)}
+                        disabled={deleteSkillMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {memorySkillsQuery.data?.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No managed procedural skills yet for this organization.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Historical Search</CardTitle>
+              <CardDescription>
+                Search memories, procedures and execution summaries by organization.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  value={memoryQuery}
+                  onChange={(e) => setMemoryQuery(e.target.value)}
+                  placeholder="Search bugs, patterns, tasks or execution summaries..."
+                  data-testid="memory-history-query"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["memory", "history", organizationId] })}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  Search
+                </Button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Memories</p>
+                  {(memoryHistoryQuery.data?.memories || []).map((memory) => (
+                    <div key={memory.id} className="rounded-lg border p-3">
+                      <p className="text-sm font-medium">{memory.summary || memory.content}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{memory.category} · {memory.memory_type}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Execution History</p>
+                  {(memoryHistoryQuery.data?.executions || []).map((execution) => (
+                    <div key={execution.execution_id} className="rounded-lg border p-3">
+                      <p className="text-sm font-medium">{execution.task_title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Execution #{execution.execution_id} · {execution.status} · {execution.agent_name || "No agent"}
+                      </p>
+                      {execution.summary && (
+                        <p className="mt-2 text-sm text-muted-foreground">{execution.summary}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -224,17 +224,20 @@ class SquadXDaemon:
                     agent_id=str(task_data.get("assigned_agent_id") or task_data.get("agent_id") or ""),
                 )
 
-            # Run the orchestrator
-            result = await self.orchestrator.ainvoke(
-                {
-                    "task_id": task_id,
-                    "task": task_data,
-                    "execution_id": execution_id,
-                    "brainsentry_session_id": brainsentry_session_id,
-                    "project_path": task_data.get("project_path", settings.workspace_path),
-                    "messages": [],
-                }
-            )
+            if settings.smoke_execution_mode:
+                result = await self._run_smoke_execution(task_id, task_data, execution_id)
+            else:
+                # Run the orchestrator
+                result = await self.orchestrator.ainvoke(
+                    {
+                        "task_id": task_id,
+                        "task": task_data,
+                        "execution_id": execution_id,
+                        "brainsentry_session_id": brainsentry_session_id,
+                        "project_path": task_data.get("project_path", settings.workspace_path),
+                        "messages": [],
+                    }
+                )
 
             logger.info("task_execution_completed", task_id=task_id)
             await brainsentry_client.end_session(
@@ -260,6 +263,30 @@ class SquadXDaemon:
             if "brainsentry_client" in locals():
                 await brainsentry_client.close()
             self.current_tasks.pop(task_id, None)
+
+    async def _run_smoke_execution(
+        self,
+        task_id: int,
+        task_data: dict[str, Any],
+        execution_id: int | str,
+    ) -> dict[str, Any]:
+        """Run a deterministic local execution for real smoke tests.
+
+        This preserves the real backend/STOMP/BrainSentry flow without requiring
+        an external LLM provider during E2E validation.
+        """
+        await asyncio.sleep(max(settings.smoke_execution_delay_seconds, 0))
+        summary = settings.smoke_execution_summary
+        title = str(task_data.get("title") or f"Task {task_id}")
+        return {
+            "final_result": f"{summary} {title}",
+            "git_branch": f"smoke/execution-{execution_id}",
+            "git_commit": "smoke-commit",
+            "live_session_codes": [],
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cost": 0.0,
+        }
 
     async def _handle_task_cancelled(self, data: dict[str, Any]) -> None:
         """Handle task cancellation.

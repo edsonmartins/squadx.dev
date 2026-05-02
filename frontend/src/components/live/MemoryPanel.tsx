@@ -1,17 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { api } from '@/lib/api'
-
-interface Memory {
-  id: string
-  content: string
-  category: string
-  importance: string
-  type: string
-  tags: string[]
-  createdAt: string
-}
+import { memoryApi, type MemoryRecord } from '@/lib/api'
 
 interface MemoryPanelProps {
   taskId: number
@@ -23,15 +13,15 @@ interface MemoryPanelProps {
  * Displays past decisions, patterns, bugs, and learnings.
  */
 export default function MemoryPanel({ taskId, className = '' }: MemoryPanelProps) {
-  const [memories, setMemories] = useState<Memory[]>([])
+  const [memories, setMemories] = useState<MemoryRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     const fetchMemories = async () => {
       try {
-        const response = await api.get<{ data: Memory[] }>(`/api/v1/integration/memories?taskId=${taskId}`)
-        setMemories(response?.data || [])
+        const response = await memoryApi.getTaskContext(taskId)
+        setMemories(response || [])
       } catch {
         // BrainSentry may not be configured - fail silently
         setMemories([])
@@ -81,14 +71,14 @@ export default function MemoryPanel({ taskId, className = '' }: MemoryPanelProps
         {displayMemories.map((memory) => (
           <div key={memory.id} className="p-2 rounded border border-gray-200 text-xs">
             <div className="flex items-center gap-1 mb-1">
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${categoryColors[memory.category] || 'bg-gray-100 text-gray-600'}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${categoryColors[memory.category || ''] || 'bg-gray-100 text-gray-600'}`}>
                 {memory.category}
               </span>
-              {memory.tags.slice(0, 2).map((tag) => (
+              {(memory.tags || []).slice(0, 2).map((tag) => (
                 <span key={tag} className="text-gray-400">#{tag}</span>
               ))}
             </div>
-            <p className="text-gray-700 line-clamp-2">{memory.content}</p>
+            <p className="text-gray-700 line-clamp-2">{memory.summary || memory.content}</p>
           </div>
         ))}
       </div>

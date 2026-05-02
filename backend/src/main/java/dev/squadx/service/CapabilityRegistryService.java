@@ -1,6 +1,7 @@
 package dev.squadx.service;
 
 import dev.squadx.integration.BrainSentryClient;
+import dev.squadx.integration.LinktorClient;
 import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.notification.NotificationProviderRegistry;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ public class CapabilityRegistryService {
 
     private final BrainSentryClient brainSentryClient;
     private final SquadxLiveClient squadxLiveClient;
+    private final LinktorClient linktorClient;
     private final NotificationProviderRegistry notificationProviderRegistry;
     private final MemoryPolicyService memoryPolicyService;
 
@@ -23,6 +25,7 @@ public class CapabilityRegistryService {
         Map<String, Object> integrations = new LinkedHashMap<>();
         integrations.put("brainsentry", brainSentryClient.healthCheck());
         integrations.put("live", squadxLiveClient.healthCheck());
+        integrations.put("linktor", linktorClient.healthCheck());
         integrations.put("memoryPolicy", memoryPolicyService.describePolicy());
 
         List<Map<String, Object>> notifications = notificationProviderRegistry.describeProviders();

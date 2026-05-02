@@ -3,6 +3,7 @@ package dev.squadx.controller;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.integration.BrainSentryClient;
 import dev.squadx.integration.IntegrationConfig;
+import dev.squadx.integration.LinktorClient;
 import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.service.MemoryPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,7 @@ public class HealthController {
     private final RedisTemplate<String, Object> redisTemplate;
     private final BrainSentryClient brainSentryClient;
     private final SquadxLiveClient squadxLiveClient;
+    private final LinktorClient linktorClient;
     private final IntegrationConfig integrationConfig;
     private final MemoryPolicyService memoryPolicyService;
 
@@ -56,6 +58,7 @@ public class HealthController {
         status.put("brainsentry", brainSentryClient.healthCheck());
         status.put("memory_policy", memoryPolicyService.describePolicy());
         status.put("live", squadxLiveClient.healthCheck());
+        status.put("linktor", linktorClient.healthCheck());
         status.put("service_secret_configured",
                 integrationConfig.getServiceSecret() != null && !integrationConfig.getServiceSecret().isBlank());
 
@@ -63,7 +66,8 @@ public class HealthController {
                 && "UP".equals(status.get("redis"))
                 && integrationReady((Map<String, Object>) status.get("brainsentry"))
                 && memoryPolicyReady((Map<String, Object>) status.get("memory_policy"))
-                && integrationReady((Map<String, Object>) status.get("live"));
+                && integrationReady((Map<String, Object>) status.get("live"))
+                && integrationReady((Map<String, Object>) status.get("linktor"));
 
         status.put("status", ready ? "READY" : "DEGRADED");
 

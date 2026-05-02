@@ -213,6 +213,11 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
   }
 
   const sessionId = supabaseSession?.id || session.id.toString();
+  const sessionTitle = session.task_title || session.agent_name || "Direct Agent Session";
+  const sessionSubtitle =
+    session.session_mode === "DIRECT_AGENT" && session.agent_name
+      ? `Always-available conversation with ${session.agent_name}`
+      : `Hosted by ${session.host_user_name}`;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -224,9 +229,9 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
             Back
           </Button>
           <div>
-            <h1 className="text-lg font-semibold">{session.task_title}</h1>
+            <h1 className="text-lg font-semibold">{sessionTitle}</h1>
             <p className="text-sm text-muted-foreground">
-              Hosted by {session.host_user_name}
+              {sessionSubtitle}
             </p>
           </div>
         </div>

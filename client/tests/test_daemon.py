@@ -128,3 +128,33 @@ class TestExecuteTask:
             summary="boom",
         )
         daemon._send_task_failed.assert_awaited_once_with(88, "boom")
+
+    @pytest.mark.asyncio
+    async def test_smoke_execution_mode_skips_orchestrator_but_completes_flow(self, daemon):
+        task_data = {
+            "task_id": 99,
+            "title": "Smoke task",
+            "description": "Deterministic execution",
+            "execution_id": 500,
+            "brain_sentry_session_id": "bs-session-smoke",
+        }
+
+        with patch("squadx_client.daemon.BrainSentryClient") as mock_brainsentry_cls, \
+             patch("squadx_client.daemon.settings") as mock_settings:
+            brainsentry = MagicMock()
+            brainsentry.start_session = AsyncMock()
+            brainsentry.end_session = AsyncMock()
+            brainsentry.close = AsyncMock()
+            mock_brainsentry_cls.return_value = brainsentry
+
+            mock_settings.smoke_execution_mode = True
+            mock_settings.smoke_execution_delay_seconds = 0
+            mock_settings.smoke_execution_summary = "Smoke execution completed successfully."
+            mock_settings.workspace_path = "/tmp"
+
+            await daemon._execute_task(99, task_data)
+
+        daemon.orchestrator.ainvoke.assert_not_awaited()
+        brainsentry.end_session.assert_awaited_once()
+        completed_payload = daemon._send_task_completed.await_args.args[1]
+        assert completed_payload["final_result"].startswith("Smoke execution completed successfully.")

@@ -28,6 +28,10 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
     @Query("SELECT e FROM Execution e WHERE e.task.project.organization.id = :organizationId")
     Page<Execution> findByOrganizationId(Long organizationId, Pageable pageable);
 
+    List<Execution> findTop20ByTask_Project_Organization_IdOrderByCreatedAtDesc(Long organizationId);
+
+    List<Execution> findTop20ByTask_Project_IdOrderByCreatedAtDesc(Long projectId);
+
     @Query("SELECT SUM(e.inputTokens) FROM Execution e WHERE e.task.project.organization.id = :organizationId")
     Long sumInputTokensByOrganizationId(Long organizationId);
 

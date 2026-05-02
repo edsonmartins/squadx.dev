@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 BACKEND_DIR="$ROOT_DIR/backend"
+CLIENT_DIR="$ROOT_DIR/client"
 COMPOSE_FILE="$FRONTEND_DIR/e2e-real/docker-compose.real.yml"
 
 RUN_SUFFIX="${E2E_REAL_RUN_SUFFIX:-$$}"
@@ -30,8 +31,15 @@ OAUTH2_OKTA_ISSUER_URI="${OAUTH2_OKTA_ISSUER_URI:-https://example.okta.com/oauth
 
 BACKEND_PID=""
 BACKEND_LOG_FILE="/tmp/${PROJECT_NAME}-backend.log"
+DAEMON_PID=""
+DAEMON_LOG_FILE="/tmp/${PROJECT_NAME}-daemon.log"
 
 cleanup() {
+  if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
+    kill "$DAEMON_PID" >/dev/null 2>&1 || true
+    wait "$DAEMON_PID" >/dev/null 2>&1 || true
+  fi
+
   if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
     kill "$BACKEND_PID" >/dev/null 2>&1 || true
     wait "$BACKEND_PID" >/dev/null 2>&1 || true
@@ -85,6 +93,11 @@ echo "Starting backend on port ${API_PORT}..."
   AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
   AWS_REGION="${AWS_REGION}" \
   AWS_S3_BUCKET="${AWS_S3_BUCKET}" \
+  SQUADX_BRAINSENTRY_URL="${SQUADX_BRAINSENTRY_URL:-}" \
+  SQUADX_BRAINSENTRY_TENANT_ID="${SQUADX_BRAINSENTRY_TENANT_ID:-default}" \
+  SQUADX_BRAINSENTRY_TENANT_PREFIX="${SQUADX_BRAINSENTRY_TENANT_PREFIX:-org-}" \
+  SQUADX_BRAINSENTRY_PER_ORGANIZATION_TENANT="${SQUADX_BRAINSENTRY_PER_ORGANIZATION_TENANT:-true}" \
+  SQUADX_BRAINSENTRY_ENABLED="${SQUADX_BRAINSENTRY_ENABLED:-false}" \
   OAUTH2_GOOGLE_CLIENT_ID="${OAUTH2_GOOGLE_CLIENT_ID}" \
   OAUTH2_GOOGLE_CLIENT_SECRET="${OAUTH2_GOOGLE_CLIENT_SECRET}" \
   OAUTH2_MICROSOFT_CLIENT_ID="${OAUTH2_MICROSOFT_CLIENT_ID}" \
@@ -110,11 +123,39 @@ if ! curl -sS "http://127.0.0.1:${API_PORT}/api/v1/health/live" >/dev/null 2>&1;
   exit 1
 fi
 
+if [[ "${E2E_DAEMON_SMOKE:-0}" == "1" ]]; then
+  echo "Starting local daemon smoke client..."
+  ACCESS_TOKEN="$(curl -sS -X POST "http://127.0.0.1:${API_PORT}/api/v1/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"${E2E_ADMIN_EMAIL:-admin@squadx.dev}\",\"password\":\"${E2E_ADMIN_PASSWORD:-admin123}\"}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or {}).get("access_token",""))')"
+
+  if [[ -z "$ACCESS_TOKEN" ]]; then
+    echo "Could not obtain admin access token for daemon smoke"
+    exit 1
+  fi
+
+  (
+    cd "$CLIENT_DIR"
+    PYTHONPATH="$CLIENT_DIR" \
+    SQUADX_API_URL="http://127.0.0.1:${API_PORT}" \
+    SQUADX_WS_URL="ws://127.0.0.1:${API_PORT}/ws" \
+    SQUADX_API_TOKEN="$ACCESS_TOKEN" \
+    SQUADX_BRAINSENTRY_URL="${SQUADX_BRAINSENTRY_URL:-}" \
+    SQUADX_BRAINSENTRY_API_KEY="${SQUADX_BRAINSENTRY_API_KEY:-}" \
+    SQUADX_BRAINSENTRY_TENANT_ID="${SQUADX_BRAINSENTRY_TENANT_ID:-default}" \
+    SQUADX_SMOKE_EXECUTION_MODE="true" \
+    SQUADX_SMOKE_EXECUTION_DELAY_SECONDS="0.25" \
+    python3 -m squadx_client.main start --foreground
+  ) > "${DAEMON_LOG_FILE}" 2>&1 &
+  DAEMON_PID=$!
+fi
+
 echo "Running real E2E smoke..."
 (
   cd "$FRONTEND_DIR"
   E2E_API_URL="http://127.0.0.1:${API_PORT}" \
   E2E_FRONTEND_PORT="${FRONTEND_PORT}" \
   E2E_SERVICE_SECRET="${SERVICE_SECRET}" \
+  E2E_DAEMON_SMOKE="${E2E_DAEMON_SMOKE:-0}" \
   pnpm test:e2e:real
 )

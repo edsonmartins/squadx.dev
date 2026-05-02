@@ -2,6 +2,8 @@ package dev.squadx.controller;
 
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.liveview.JoinSessionRequest;
+import dev.squadx.dto.liveview.LiveChatMessageRequest;
+import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
 import dev.squadx.dto.supabase.SupabaseLiveSession;
@@ -39,6 +41,17 @@ public class LiveViewController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Live session created"));
+    }
+
+    @PostMapping("/agents/{agentId}/direct-session")
+    @Operation(summary = "Ensure an always-available direct live session for an agent")
+    public ResponseEntity<ApiResponse<LiveSessionResponse>> ensureDirectAgentSession(
+            @PathVariable Long agentId,
+            @AuthenticationPrincipal User user
+    ) {
+        LiveSessionResponse response = liveViewService.ensureDirectAgentSession(agentId, user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Direct agent session ready"));
     }
 
     @PostMapping("/sessions/join")
@@ -201,5 +214,30 @@ public class LiveViewController {
             return ResponseEntity.ok(ApiResponse.success(null, "Live session ended"));
         }
         return ResponseEntity.badRequest().build();
+    }
+
+    @GetMapping("/sessions/{sessionId}/chat")
+    @Operation(summary = "Get SquadX Live chat history for a linked live session")
+    public ResponseEntity<ApiResponse<List<LiveChatMessageResponse>>> getChatHistory(
+            @PathVariable Long sessionId,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(required = false) String before,
+            @RequestParam(required = false) String recipientId,
+            @AuthenticationPrincipal User user
+    ) {
+        List<LiveChatMessageResponse> response = liveViewService.getChatHistory(sessionId, limit, before, recipientId, user);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/sessions/{sessionId}/chat/agent-message")
+    @Operation(summary = "Send an agent message to the linked SquadX Live session")
+    public ResponseEntity<ApiResponse<LiveChatMessageResponse>> sendAgentMessage(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody LiveChatMessageRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        LiveChatMessageResponse response = liveViewService.sendAgentMessage(sessionId, request, user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Agent live message sent"));
     }
 }

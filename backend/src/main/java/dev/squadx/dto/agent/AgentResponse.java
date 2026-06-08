@@ -1,7 +1,9 @@
 package dev.squadx.dto.agent;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.squadx.model.enums.AgentRuntimeKind;
 import dev.squadx.model.enums.AgentType;
+import dev.squadx.model.enums.CliProvider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,6 +23,12 @@ public class AgentResponse {
 
     @JsonProperty("agent_type")
     private AgentType agentType;
+
+    @JsonProperty("runtime_kind")
+    private AgentRuntimeKind runtimeKind;
+
+    @JsonProperty("cli_provider")
+    private CliProvider cliProvider;
 
     private String description;
 

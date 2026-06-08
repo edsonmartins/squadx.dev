@@ -1,7 +1,9 @@
 package dev.squadx.dto.agent;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.squadx.model.enums.AgentRuntimeKind;
 import dev.squadx.model.enums.AgentType;
+import dev.squadx.model.enums.CliProvider;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -23,6 +25,12 @@ public class AgentRequest {
     @NotNull(message = "Agent type is required")
     @JsonProperty("agent_type")
     private AgentType agentType;
+
+    @JsonProperty("runtime_kind")
+    private AgentRuntimeKind runtimeKind;
+
+    @JsonProperty("cli_provider")
+    private CliProvider cliProvider;
 
     private String description;
 

@@ -1,6 +1,8 @@
 package dev.squadx.model;
 
+import dev.squadx.model.enums.AgentRuntimeKind;
 import dev.squadx.model.enums.AgentType;
+import dev.squadx.model.enums.CliProvider;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,6 +25,15 @@ public class Agent extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "agent_type", nullable = false)
     private AgentType agentType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "runtime_kind", nullable = false)
+    @Builder.Default
+    private AgentRuntimeKind runtimeKind = AgentRuntimeKind.NATIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cli_provider")
+    private CliProvider cliProvider;
 
     private String description;
 

@@ -42,6 +42,9 @@ public class AgentService {
         Agent agent = Agent.builder()
                 .name(request.getName())
                 .agentType(request.getAgentType())
+                .runtimeKind(request.getRuntimeKind() != null
+                        ? request.getRuntimeKind() : dev.squadx.model.enums.AgentRuntimeKind.NATIVE)
+                .cliProvider(request.getCliProvider())
                 .description(request.getDescription())
                 .modelId(request.getModelId() != null ? request.getModelId() : "gpt-4o")
                 .systemPrompt(request.getSystemPrompt())
@@ -109,6 +112,12 @@ public class AgentService {
         }
         if (request.getDescription() != null) {
             agent.setDescription(request.getDescription());
+        }
+        if (request.getRuntimeKind() != null) {
+            agent.setRuntimeKind(request.getRuntimeKind());
+        }
+        if (request.getCliProvider() != null) {
+            agent.setCliProvider(request.getCliProvider());
         }
         if (request.getModelId() != null) {
             agent.setModelId(request.getModelId());
@@ -225,6 +234,8 @@ public class AgentService {
                 .id(agent.getId())
                 .name(agent.getName())
                 .agentType(agent.getAgentType())
+                .runtimeKind(agent.getRuntimeKind())
+                .cliProvider(agent.getCliProvider())
                 .description(agent.getDescription())
                 .modelId(agent.getModelId())
                 .systemPrompt(agent.getSystemPrompt())

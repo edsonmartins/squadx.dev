@@ -331,8 +331,15 @@ public class ExecutionService {
         payload.put("project_name", task.getProject().getName());
         payload.put("assigned_agent_id", task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null);
         payload.put("assigned_agent_name", task.getAssignedAgent() != null ? task.getAssignedAgent().getName() : null);
-        payload.put("agent_id", execution.getAgent() != null ? execution.getAgent().getId() : null);
-        payload.put("agent_name", execution.getAgent() != null ? execution.getAgent().getName() : null);
+        Agent execAgent = execution.getAgent();
+        payload.put("agent_id", execAgent != null ? execAgent.getId() : null);
+        payload.put("agent_name", execAgent != null ? execAgent.getName() : null);
+        payload.put("agent_type", execAgent != null && execAgent.getAgentType() != null
+                ? execAgent.getAgentType().name() : null);
+        payload.put("runtime_kind", execAgent != null && execAgent.getRuntimeKind() != null
+                ? execAgent.getRuntimeKind().name() : "NATIVE");
+        payload.put("cli_provider", execAgent != null && execAgent.getCliProvider() != null
+                ? execAgent.getCliProvider().name() : null);
         payload.put("execution_id", execution.getId());
         payload.put("brain_sentry_session_id", execution.getBrainSentrySessionId());
         payload.put("tags", task.getTags());

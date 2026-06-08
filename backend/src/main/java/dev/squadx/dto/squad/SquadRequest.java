@@ -22,4 +22,7 @@ public class SquadRequest {
     @NotNull(message = "Organization ID is required")
     @JsonProperty("organization_id")
     private Long organizationId;
+
+    @JsonProperty("leader_agent_id")
+    private Long leaderAgentId;
 }

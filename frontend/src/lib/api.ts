@@ -259,8 +259,10 @@ export const autopilotsApi = {
     api
       .get<unknown>(`/api/v1/autopilots/organization/${organizationId}`)
       .then((d) =>
-        parseWithFallback(
-          pageSchema(autopilotResponseSchema),
+        parseWithFallback<PageResponse<AutopilotResponse>>(
+          pageSchema(autopilotResponseSchema) as unknown as z.ZodType<
+            PageResponse<AutopilotResponse>
+          >,
           d,
           emptyPage<AutopilotResponse>()
         )
@@ -278,8 +280,10 @@ export const autopilotsApi = {
     api
       .get<unknown>(`/api/v1/autopilots/${id}/runs`)
       .then((d) =>
-        parseWithFallback(
-          pageSchema(autopilotRunResponseSchema),
+        parseWithFallback<PageResponse<AutopilotRunResponse>>(
+          pageSchema(autopilotRunResponseSchema) as unknown as z.ZodType<
+            PageResponse<AutopilotRunResponse>
+          >,
           d,
           emptyPage<AutopilotRunResponse>()
         )
@@ -656,6 +660,13 @@ export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" |
 export type AgentRuntimeKind = "NATIVE" | "EXTERNAL_CLI";
 export type CliProvider = "CLAUDE_CODE" | "CODEX" | "GEMINI_CLI";
 
+export interface SquadAgentSummary {
+  id: number;
+  name: string;
+  agent_type: string;
+  is_active: boolean;
+}
+
 export interface SquadResponse {
   id: number;
   name: string;
@@ -665,6 +676,9 @@ export interface SquadResponse {
   organization_name: string;
   agents_count: number;
   active_agents_count: number;
+  leader_agent_id?: number | null;
+  leader_agent_name?: string;
+  agents?: SquadAgentSummary[];
   created_at: string;
   updated_at?: string;
 }
@@ -745,11 +759,13 @@ export interface CreateSquadRequest {
   name: string;
   description?: string;
   organization_id: number;
+  leader_agent_id?: number | null;
 }
 
 export interface UpdateSquadRequest {
   name?: string;
   description?: string;
+  leader_agent_id?: number | null;
 }
 
 // Agent Types

@@ -9,6 +9,7 @@ import dev.squadx.model.Organization;
 import dev.squadx.model.Squad;
 import dev.squadx.model.User;
 import dev.squadx.model.enums.UserRole;
+import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.OrganizationRepository;
 import dev.squadx.repository.SquadRepository;
@@ -46,6 +47,9 @@ class SquadServiceTest {
 
     @Mock
     private OrganizationMemberRepository memberRepository;
+
+    @Mock
+    private AgentRepository agentRepository;
 
     @InjectMocks
     private SquadService squadService;

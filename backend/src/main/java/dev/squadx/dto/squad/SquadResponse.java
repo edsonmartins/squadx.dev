@@ -34,6 +34,12 @@ public class SquadResponse {
     @JsonProperty("projects_count")
     private Integer projectsCount;
 
+    @JsonProperty("leader_agent_id")
+    private Long leaderAgentId;
+
+    @JsonProperty("leader_agent_name")
+    private String leaderAgentName;
+
     private List<AgentSummary> agents;
 
     @JsonProperty("created_at")

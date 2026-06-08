@@ -150,12 +150,21 @@ public class AutopilotWorkService {
             return autopilot.getTargetAgent();
         }
         if (autopilot.getTargetSquad() != null) {
+            // Squad leader-delegation: prefer the leader, then any online member,
+            // then the (possibly offline) leader, then the first active member.
+            Agent leader = autopilot.getTargetSquad().getLeaderAgent();
+            if (leader != null && isOnline(leader)) {
+                return leader;
+            }
             List<Agent> agents = agentRepository.findBySquadIdAndIsActiveTrue(autopilot.getTargetSquad().getId());
-            // Prefer an online agent; fall back to the first active one.
-            return agents.stream()
-                    .filter(this::isOnline)
-                    .findFirst()
-                    .orElse(agents.isEmpty() ? null : agents.get(0));
+            Agent online = agents.stream().filter(this::isOnline).findFirst().orElse(null);
+            if (online != null) {
+                return online;
+            }
+            if (leader != null) {
+                return leader;
+            }
+            return agents.isEmpty() ? null : agents.get(0);
         }
         return null;
     }

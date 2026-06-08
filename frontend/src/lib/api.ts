@@ -598,6 +598,10 @@ export const liveViewApi = {
 // Squad Types
 export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" | "COORDINATOR" | "DATABASE";
 
+// Runtime adapter: native LangGraph loop vs an external coding-agent CLI
+export type AgentRuntimeKind = "NATIVE" | "EXTERNAL_CLI";
+export type CliProvider = "CLAUDE_CODE" | "CODEX" | "GEMINI_CLI";
+
 export interface SquadResponse {
   id: number;
   name: string;
@@ -699,6 +703,8 @@ export interface AgentResponse {
   id: number;
   name: string;
   type: AgentType;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
   model: string;
   system_prompt?: string;
@@ -714,6 +720,8 @@ export interface AgentResponse {
 export interface CreateAgentRequest {
   name: string;
   type: AgentType;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
   model?: string;
   system_prompt?: string;
@@ -724,6 +732,8 @@ export interface CreateAgentRequest {
 
 export interface UpdateAgentRequest {
   name?: string;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
   model?: string;
   system_prompt?: string;

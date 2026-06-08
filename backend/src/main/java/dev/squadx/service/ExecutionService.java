@@ -245,6 +245,25 @@ public class ExecutionService {
         webSocketEventService.sendExecutionLog(executionId, level, message);
     }
 
+    /**
+     * Pending executions the client can claim by polling — a resilience fallback for
+     * when the STOMP push was missed (NAT/firewall, reconnect gaps). Returns the same
+     * payload shape as the {@code task_assigned} push, scoped to the user's orgs.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getPendingAssignments(User currentUser) {
+        return executionRepository.findTop100ByStatusOrderByCreatedAtAsc(ExecutionStatus.PENDING).stream()
+                .filter(e -> memberRepository.existsByOrganizationIdAndUserId(
+                        e.getTask().getProject().getOrganization().getId(), currentUser.getId()))
+                .map(e -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("task_id", e.getTask().getId());
+                    item.put("task", buildTaskAssignmentPayload(e.getTask(), e));
+                    return item;
+                })
+                .collect(Collectors.toList());
+    }
+
     public Map<String, Object> getOrganizationMetrics(Long organizationId, User currentUser) {
         validateUserAccess(organizationId, currentUser.getId());
 

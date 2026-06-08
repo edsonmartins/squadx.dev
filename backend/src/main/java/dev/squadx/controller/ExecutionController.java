@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -38,6 +39,14 @@ public class ExecutionController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Execution started"));
+    }
+
+    @GetMapping("/pending")
+    @Operation(summary = "List pending execution assignments for the client to claim (polling fallback)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPending(
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(executionService.getPendingAssignments(user)));
     }
 
     @GetMapping("/{id}")

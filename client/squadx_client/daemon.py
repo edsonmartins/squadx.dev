@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import aiohttp
 import structlog
 
 from squadx_client.config import settings
@@ -139,8 +140,17 @@ class SquadXDaemon:
             # Register client
             await self._register_client()
 
-            # Run with automatic reconnection
-            await self.stomp.run()
+            # Optional HTTP polling fallback (resilience behind NAT/firewall)
+            poll_task = None
+            if settings.poll_fallback_interval_seconds > 0:
+                poll_task = asyncio.create_task(self._poll_fallback_loop())
+
+            try:
+                # Run with automatic reconnection
+                await self.stomp.run()
+            finally:
+                if poll_task is not None:
+                    poll_task.cancel()
 
         except asyncio.CancelledError:
             logger.info("daemon_cancelled")
@@ -149,6 +159,39 @@ class SquadXDaemon:
             raise
         finally:
             await self.stop()
+
+    async def _poll_fallback_loop(self) -> None:
+        """Periodically claim pending tasks over HTTP as a STOMP-push fallback."""
+        interval = settings.poll_fallback_interval_seconds
+        logger.info("poll_fallback_started", interval=interval)
+        try:
+            while self.running:
+                await asyncio.sleep(interval)
+                try:
+                    await self._poll_pending_once()
+                except Exception as e:  # noqa: BLE001 - keep the loop alive
+                    logger.warning("poll_fallback_error", error=str(e))
+        except asyncio.CancelledError:
+            logger.info("poll_fallback_stopped")
+
+    async def _poll_pending_once(self) -> None:
+        """Fetch pending assignments and process any not already in flight."""
+        url = f"{self.api_url}/api/v1/executions/pending"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    logger.warning("poll_fallback_http_error", status=resp.status)
+                    return
+                body = await resp.json()
+
+        items = body.get("data") or []
+        for item in items:
+            task_id = item.get("task_id")
+            if task_id is None or task_id in self.current_tasks:
+                continue
+            logger.info("poll_fallback_claiming_task", task_id=task_id)
+            await self._handle_task_assigned(item)
 
     async def _register_client(self) -> None:
         """Register this client with the backend."""

@@ -29,6 +29,12 @@ class Settings(BaseSettings):
         default=1800, alias="SQUADX_EXTERNAL_CLI_TIMEOUT_SECONDS"
     )
 
+    # Resilience: periodically claim pending tasks over HTTP as a fallback when the
+    # STOMP push is missed (NAT/firewall, reconnect gaps). 0 disables polling.
+    poll_fallback_interval_seconds: int = Field(
+        default=0, alias="SQUADX_POLL_FALLBACK_INTERVAL_SECONDS"
+    )
+
     # Docker Configuration
     docker_host: str | None = Field(default=None, alias="DOCKER_HOST")
     docker_network: str = Field(default="squadx-network", alias="SQUADX_DOCKER_NETWORK")

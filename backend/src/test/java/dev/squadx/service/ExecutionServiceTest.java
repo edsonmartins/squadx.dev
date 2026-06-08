@@ -57,6 +57,9 @@ class ExecutionServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private SquadAgentResolver squadAgentResolver;
+
     @InjectMocks
     private ExecutionService executionService;
 
@@ -541,5 +544,18 @@ class ExecutionServiceTest {
             verify(executionRepository).save(any(Execution.class));
             verify(webSocketEventService).sendExecutionLog(1L, "INFO", "Test log message");
         }
+    }
+
+    @Test
+    void getPendingAssignmentsReturnsPayloadsForMemberOrgs() {
+        when(executionRepository.findTop100ByStatusOrderByCreatedAtAsc(ExecutionStatus.PENDING))
+                .thenReturn(java.util.List.of(testExecution));
+        when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+
+        var pending = executionService.getPendingAssignments(testUser);
+
+        assertThat(pending).hasSize(1);
+        assertThat(pending.get(0).get("task_id")).isEqualTo(1L);
+        assertThat(pending.get(0)).containsKey("task");
     }
 }

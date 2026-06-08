@@ -39,6 +39,7 @@ public class ExecutionService {
     private final WebSocketEventService webSocketEventService;
     private final BrainSentryClient brainSentryClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final SquadAgentResolver squadAgentResolver;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -61,6 +62,12 @@ public class ExecutionService {
                     .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
         } else if (task.getAssignedAgent() != null) {
             agent = task.getAssignedAgent();
+        } else if (task.getAssignedSquad() != null) {
+            // Squad leader-delegation: resolve the squad's leader (or an online member).
+            agent = squadAgentResolver.resolve(task.getAssignedSquad());
+            if (agent == null) {
+                throw new BadRequestException("No agent available in the assigned squad");
+            }
         } else {
             throw new BadRequestException("No agent specified for execution");
         }

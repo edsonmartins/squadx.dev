@@ -47,5 +47,8 @@ public class TaskRequest {
     @JsonProperty("assigned_agent_id")
     private Long assignedAgentId;
 
+    @JsonProperty("assigned_squad_id")
+    private Long assignedSquadId;
+
     private Set<String> tags;
 }

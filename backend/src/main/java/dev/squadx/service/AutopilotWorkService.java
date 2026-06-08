@@ -11,7 +11,6 @@ import dev.squadx.model.User;
 import dev.squadx.model.enums.AutopilotExecutionMode;
 import dev.squadx.model.enums.AutopilotRunStatus;
 import dev.squadx.model.enums.AutopilotTriggerType;
-import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.AutopilotRepository;
 import dev.squadx.repository.AutopilotRunRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +20,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Transactional units of work for autopilot firing, kept separate from the
@@ -38,12 +35,9 @@ import java.util.List;
 @Slf4j
 public class AutopilotWorkService {
 
-    /** An agent is considered online if it sent a heartbeat within this window. */
-    private static final long ONLINE_THRESHOLD_SECONDS = 120;
-
     private final AutopilotRepository autopilotRepository;
     private final AutopilotRunRepository autopilotRunRepository;
-    private final AgentRepository agentRepository;
+    private final SquadAgentResolver squadAgentResolver;
     private final TaskService taskService;
     private final ExecutionService executionService;
 
@@ -77,14 +71,16 @@ public class AutopilotWorkService {
             return PerformResult.failed("Autopilot has no owner user to attribute work to");
         }
 
-        Agent agent = resolveAgent(autopilot);
+        Agent agent = autopilot.getTargetAgent() != null
+                ? autopilot.getTargetAgent()
+                : squadAgentResolver.resolve(autopilot.getTargetSquad());
 
         boolean runTask = autopilot.getExecutionMode() == AutopilotExecutionMode.RUN_TASK;
         if (runTask) {
             if (agent == null) {
                 return PerformResult.skipped("No target agent available for RUN_TASK mode");
             }
-            if (!isOnline(agent)) {
+            if (!squadAgentResolver.isOnline(agent)) {
                 return PerformResult.skipped("Target agent '" + agent.getName() + "' is offline");
             }
         }
@@ -95,6 +91,8 @@ public class AutopilotWorkService {
                 .priority(autopilot.getTaskPriority())
                 .projectId(autopilot.getProject().getId())
                 .assignedAgentId(agent != null ? agent.getId() : null)
+                .assignedSquadId(autopilot.getTargetSquad() != null
+                        ? autopilot.getTargetSquad().getId() : null)
                 .build();
 
         TaskResponse task = taskService.create(taskRequest, owner);
@@ -143,39 +141,5 @@ public class AutopilotWorkService {
         autopilotRepository.save(autopilot);
 
         return run;
-    }
-
-    private Agent resolveAgent(Autopilot autopilot) {
-        if (autopilot.getTargetAgent() != null) {
-            return autopilot.getTargetAgent();
-        }
-        if (autopilot.getTargetSquad() != null) {
-            // Squad leader-delegation: prefer the leader, then any online member,
-            // then the (possibly offline) leader, then the first active member.
-            Agent leader = autopilot.getTargetSquad().getLeaderAgent();
-            if (leader != null && isOnline(leader)) {
-                return leader;
-            }
-            List<Agent> agents = agentRepository.findBySquadIdAndIsActiveTrue(autopilot.getTargetSquad().getId());
-            Agent online = agents.stream().filter(this::isOnline).findFirst().orElse(null);
-            if (online != null) {
-                return online;
-            }
-            if (leader != null) {
-                return leader;
-            }
-            return agents.isEmpty() ? null : agents.get(0);
-        }
-        return null;
-    }
-
-    private boolean isOnline(Agent agent) {
-        if (agent == null || !agent.isActive() || agent.getLastHeartbeat() == null) {
-            return false;
-        }
-        if ("DEAD".equals(agent.getLifecycleState())) {
-            return false;
-        }
-        return agent.getLastHeartbeat().isAfter(LocalDateTime.now().minusSeconds(ONLINE_THRESHOLD_SECONDS));
     }
 }

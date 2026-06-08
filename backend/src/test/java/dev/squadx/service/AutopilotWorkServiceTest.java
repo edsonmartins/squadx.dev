@@ -9,7 +9,6 @@ import dev.squadx.model.enums.AutopilotExecutionMode;
 import dev.squadx.model.enums.AutopilotRunStatus;
 import dev.squadx.model.enums.AutopilotTriggerType;
 import dev.squadx.model.enums.TaskPriority;
-import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.AutopilotRepository;
 import dev.squadx.repository.AutopilotRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +33,7 @@ class AutopilotWorkServiceTest {
 
     @Mock private AutopilotRepository autopilotRepository;
     @Mock private AutopilotRunRepository autopilotRunRepository;
-    @Mock private AgentRepository agentRepository;
+    @Mock private SquadAgentResolver squadAgentResolver;
     @Mock private TaskService taskService;
     @Mock private ExecutionService executionService;
 
@@ -100,9 +99,7 @@ class AutopilotWorkServiceTest {
     void runTaskModeSuccess() {
         autopilot.setExecutionMode(AutopilotExecutionMode.RUN_TASK);
         autopilot.setTargetAgent(agent);
-        agent.setActive(true);
-        agent.setLifecycleState("READY");
-        agent.setLastHeartbeat(LocalDateTime.now());
+        when(squadAgentResolver.isOnline(agent)).thenReturn(true);
 
         when(autopilotRepository.findById(1L)).thenReturn(Optional.of(autopilot));
         when(taskService.create(any(TaskRequest.class), eq(owner)))
@@ -123,9 +120,7 @@ class AutopilotWorkServiceTest {
     void runTaskModeSkippedWhenAgentOffline() {
         autopilot.setExecutionMode(AutopilotExecutionMode.RUN_TASK);
         autopilot.setTargetAgent(agent);
-        agent.setActive(true);
-        agent.setLifecycleState("READY");
-        agent.setLastHeartbeat(LocalDateTime.now().minusMinutes(10)); // stale -> offline
+        when(squadAgentResolver.isOnline(agent)).thenReturn(false);
 
         when(autopilotRepository.findById(1L)).thenReturn(Optional.of(autopilot));
 
@@ -142,12 +137,10 @@ class AutopilotWorkServiceTest {
     void runTaskModeResolvesSquadAgent() {
         autopilot.setExecutionMode(AutopilotExecutionMode.RUN_TASK);
         autopilot.setTargetSquad(squad);
-        agent.setActive(true);
-        agent.setLifecycleState("READY");
-        agent.setLastHeartbeat(LocalDateTime.now());
 
         when(autopilotRepository.findById(1L)).thenReturn(Optional.of(autopilot));
-        when(agentRepository.findBySquadIdAndIsActiveTrue(10L)).thenReturn(List.of(agent));
+        when(squadAgentResolver.resolve(squad)).thenReturn(agent);
+        when(squadAgentResolver.isOnline(agent)).thenReturn(true);
         when(taskService.create(any(TaskRequest.class), eq(owner)))
                 .thenReturn(TaskResponse.builder().id(501L).build());
         when(executionService.startExecution(any(ExecutionRequest.class), eq(owner)))
@@ -156,7 +149,7 @@ class AutopilotWorkServiceTest {
         var result = workService.perform(1L, AutopilotTriggerType.CRON);
 
         assertThat(result.status()).isEqualTo(AutopilotRunStatus.SUCCESS);
-        verify(agentRepository).findBySquadIdAndIsActiveTrue(10L);
+        verify(squadAgentResolver).resolve(squad);
     }
 
     @Test

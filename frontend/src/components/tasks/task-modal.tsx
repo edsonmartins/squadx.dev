@@ -8,6 +8,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   tasksApi,
   agentsApi,
+  squadsApi,
   TaskResponse,
   TaskStatus,
   TaskPriority,
@@ -43,6 +44,7 @@ const taskSchema = z.object({
   estimated_hours: z.number().min(0).max(1000).optional().nullable(),
   due_date: z.string().optional().nullable().or(z.literal("")),
   assigned_agent_id: z.number().optional().nullable(),
+  assigned_squad_id: z.number().optional().nullable(),
   tags: z.string().optional(),
 });
 
@@ -93,6 +95,13 @@ export function TaskModal({
     enabled: !!organizationId,
   });
 
+  // Fetch squads for the organization (for squad assignment / leader-delegation)
+  const { data: squads } = useQuery({
+    queryKey: ["squads", organizationId],
+    queryFn: () => squadsApi.list(organizationId!),
+    enabled: !!organizationId,
+  });
+
   const {
     register,
     handleSubmit,
@@ -111,6 +120,7 @@ export function TaskModal({
       estimated_hours: null,
       due_date: null,
       assigned_agent_id: null,
+      assigned_squad_id: null,
       tags: "",
     },
   });
@@ -118,6 +128,7 @@ export function TaskModal({
   const status = watch("status");
   const priority = watch("priority");
   const assignedAgentId = watch("assigned_agent_id");
+  const assignedSquadId = watch("assigned_squad_id");
 
   // Reset form when modal opens/closes or task changes
   useEffect(() => {
@@ -132,6 +143,7 @@ export function TaskModal({
           estimated_hours: task.estimated_hours || null,
           due_date: task.due_date?.split("T")[0] || null,
           assigned_agent_id: task.assigned_agent_id || null,
+          assigned_squad_id: task.assigned_squad_id ?? null,
           tags: task.tags?.join(", ") || "",
         });
       } else {
@@ -144,6 +156,7 @@ export function TaskModal({
           estimated_hours: null,
           due_date: null,
           assigned_agent_id: null,
+          assigned_squad_id: null,
           tags: "",
         });
       }
@@ -165,6 +178,7 @@ export function TaskModal({
         estimated_hours: data.estimated_hours || undefined,
         due_date: data.due_date || undefined,
         assigned_agent_id: data.assigned_agent_id || undefined,
+        assigned_squad_id: data.assigned_squad_id ?? undefined,
         project_id: projectId,
         tags,
       });
@@ -201,6 +215,7 @@ export function TaskModal({
         estimated_hours: data.estimated_hours || undefined,
         due_date: data.due_date || undefined,
         assigned_agent_id: data.assigned_agent_id || undefined,
+        assigned_squad_id: data.assigned_squad_id ?? undefined,
         tags,
       });
     },
@@ -367,6 +382,31 @@ export function TaskModal({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="assigned_squad">Assigned Squad</Label>
+              <Select
+                value={assignedSquadId?.toString() || "none"}
+                onValueChange={(value) =>
+                  setValue("assigned_squad_id", value === "none" ? null : parseInt(value))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Assign to a squad (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No squad assigned</SelectItem>
+                  {squads?.content?.map((squad) => (
+                    <SelectItem key={squad.id} value={squad.id.toString()}>
+                      {squad.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Squad work routes to the squad&apos;s leader (or an online member).
+              </p>
             </div>
 
             <div className="grid gap-2">

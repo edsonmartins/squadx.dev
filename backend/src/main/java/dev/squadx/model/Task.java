@@ -68,6 +68,10 @@ public class Task extends BaseEntity {
     private Agent assignedAgent;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_squad_id")
+    private Squad assignedSquad;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id")
     private User createdBy;
 

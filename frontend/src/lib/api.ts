@@ -481,6 +481,8 @@ export interface TaskResponse {
   project_name: string;
   assigned_agent_id?: number;
   assigned_agent_name?: string;
+  assigned_squad_id?: number | null;
+  assigned_squad_name?: string;
   execution_id?: number;
   brain_sentry_session_id?: string;
   parent_task_id?: number;
@@ -506,6 +508,7 @@ export interface CreateTaskRequest {
   project_id: number;
   parent_task_id?: number;
   assigned_agent_id?: number;
+  assigned_squad_id?: number | null;
   tags?: string[];
 }
 
@@ -518,6 +521,7 @@ export interface UpdateTaskRequest {
   estimated_hours?: number;
   due_date?: string;
   assigned_agent_id?: number;
+  assigned_squad_id?: number | null;
   tags?: string[];
 }
 

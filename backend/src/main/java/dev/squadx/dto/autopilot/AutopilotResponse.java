@@ -69,6 +69,9 @@ public class AutopilotResponse {
     @JsonProperty("run_count")
     private Integer runCount;
 
+    @JsonProperty("webhook_token")
+    private String webhookToken;
+
     @JsonProperty("created_by_id")
     private Long createdById;
 

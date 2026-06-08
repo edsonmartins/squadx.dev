@@ -79,6 +79,10 @@ public class Autopilot extends BaseEntity {
     @Builder.Default
     private Integer runCount = 0;
 
+    /** Secret token for the public webhook trigger URL. */
+    @Column(name = "webhook_token", unique = true)
+    private String webhookToken;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id")
     private User createdBy;

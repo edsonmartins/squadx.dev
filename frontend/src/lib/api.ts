@@ -236,6 +236,7 @@ const autopilotResponseSchema = z.object({
   last_run_at: z.string().optional(),
   next_run_at: z.string().optional(),
   run_count: z.number().catch(0),
+  webhook_token: z.string().optional(),
   created_by_id: z.number().optional(),
   created_by_name: z.string().optional(),
   created_at: z.string().catch(""),
@@ -276,6 +277,8 @@ export const autopilotsApi = {
     api.patch<AutopilotResponse>(`/api/v1/autopilots/${id}/toggle`),
   run: (id: number) =>
     api.post<AutopilotRunResponse>(`/api/v1/autopilots/${id}/run`),
+  rotateWebhook: (id: number) =>
+    api.post<AutopilotResponse>(`/api/v1/autopilots/${id}/webhook/rotate`),
   runs: (id: number) =>
     api
       .get<unknown>(`/api/v1/autopilots/${id}/runs`)
@@ -317,6 +320,7 @@ export interface AutopilotResponse {
   last_run_at?: string;
   next_run_at?: string;
   run_count: number;
+  webhook_token?: string;
   created_by_id?: number;
   created_by_name?: string;
   created_at: string;

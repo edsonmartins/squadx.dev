@@ -62,7 +62,7 @@ public class AutopilotWorkService {
         if (autopilot == null) {
             return PerformResult.skipped("Autopilot no longer exists");
         }
-        if (!autopilot.isEnabled() && trigger == AutopilotTriggerType.CRON) {
+        if (!autopilot.isEnabled() && trigger != AutopilotTriggerType.MANUAL) {
             return PerformResult.skipped("Autopilot is disabled");
         }
 

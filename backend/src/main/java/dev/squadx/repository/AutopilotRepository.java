@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AutopilotRepository extends JpaRepository<Autopilot, Long> {
@@ -14,4 +15,6 @@ public interface AutopilotRepository extends JpaRepository<Autopilot, Long> {
     Page<Autopilot> findByOrganizationId(Long organizationId, Pageable pageable);
 
     List<Autopilot> findByEnabledTrue();
+
+    Optional<Autopilot> findByWebhookToken(String webhookToken);
 }

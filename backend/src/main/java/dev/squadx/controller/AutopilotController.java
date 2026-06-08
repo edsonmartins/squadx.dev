@@ -90,6 +90,16 @@ public class AutopilotController {
                 ApiResponse.success(autopilotService.runNow(id, user), "Autopilot triggered"));
     }
 
+    @PostMapping("/{id}/webhook/rotate")
+    @Operation(summary = "(Re)generate the autopilot's webhook token")
+    public ResponseEntity<ApiResponse<AutopilotResponse>> rotateWebhookToken(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(autopilotService.rotateWebhookToken(id, user), "Webhook token rotated"));
+    }
+
     @GetMapping("/{id}/runs")
     @Operation(summary = "List run history for an autopilot")
     public ResponseEntity<ApiResponse<PageResponse<AutopilotRunResponse>>> getRuns(

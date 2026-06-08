@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneId;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -64,6 +65,7 @@ public class AutopilotService {
                 .taskPriority(request.getTaskPriority() != null ? request.getTaskPriority() : TaskPriority.MEDIUM)
                 .enabled(request.getEnabled() == null || request.getEnabled())
                 .createdBy(currentUser)
+                .webhookToken(generateWebhookToken())
                 .build();
 
         applyTargets(autopilot, request, organizationId);
@@ -158,6 +160,28 @@ public class AutopilotService {
         loadForUser(id, currentUser);
         AutopilotRun run = autopilotExecutor.execute(id, AutopilotTriggerType.MANUAL);
         return run != null ? mapRunToResponse(run) : null;
+    }
+
+    /** Fire an autopilot via its public webhook token (no auth — the token is the secret). */
+    public AutopilotRunResponse fireByWebhook(String token) {
+        Autopilot autopilot = autopilotRepository.findByWebhookToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Unknown webhook token"));
+        AutopilotRun run = autopilotExecutor.execute(autopilot.getId(), AutopilotTriggerType.WEBHOOK);
+        return run != null ? mapRunToResponse(run) : null;
+    }
+
+    /** (Re)generate the webhook token — also used to grant a token to older autopilots. */
+    @Transactional
+    public AutopilotResponse rotateWebhookToken(Long id, User currentUser) {
+        Autopilot autopilot = loadForUser(id, currentUser);
+        autopilot.setWebhookToken(generateWebhookToken());
+        autopilot = autopilotRepository.save(autopilot);
+        return mapToResponse(autopilot);
+    }
+
+    private String generateWebhookToken() {
+        return UUID.randomUUID().toString().replace("-", "")
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
     // ---- Scheduling ----
@@ -275,6 +299,7 @@ public class AutopilotService {
                 .lastRunAt(autopilot.getLastRunAt())
                 .nextRunAt(autopilot.getNextRunAt())
                 .runCount(autopilot.getRunCount())
+                .webhookToken(autopilot.getWebhookToken())
                 .createdById(autopilot.getCreatedBy() != null ? autopilot.getCreatedBy().getId() : null)
                 .createdByName(autopilot.getCreatedBy() != null ? autopilot.getCreatedBy().getFullName() : null)
                 .createdAt(autopilot.getCreatedAt())

@@ -1,6 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, RefreshCw } from "lucide-react";
 import { autopilotsApi, AutopilotResponse, AutopilotRunStatus } from "@/lib/api";
 import {
   Sheet,
@@ -10,7 +12,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { describeCron } from "@/components/autopilots/schedule-editor";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const statusVariant: Record<
   AutopilotRunStatus,
@@ -30,11 +37,45 @@ export function AutopilotDetailSheet({
   autopilot,
   onClose,
 }: AutopilotDetailSheetProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [token, setToken] = useState<string | undefined>(autopilot?.webhook_token);
+
+  useEffect(() => {
+    setToken(autopilot?.webhook_token);
+  }, [autopilot?.id, autopilot?.webhook_token]);
+
   const { data: runs, isLoading } = useQuery({
     queryKey: ["autopilot-runs", autopilot?.id],
     queryFn: () => autopilotsApi.runs(autopilot!.id),
     enabled: !!autopilot,
   });
+
+  const rotateMutation = useMutation({
+    mutationFn: () => autopilotsApi.rotateWebhook(autopilot!.id),
+    onSuccess: (updated) => {
+      setToken(updated.webhook_token);
+      queryClient.invalidateQueries({ queryKey: ["autopilots"] });
+      toast({ title: "Webhook token rotated" });
+    },
+    onError: () =>
+      toast({
+        title: "Error",
+        description: "Failed to rotate the webhook token.",
+        variant: "destructive",
+      }),
+  });
+
+  const webhookUrl = token
+    ? `${API_URL}/api/v1/webhooks/autopilots/${token}`
+    : null;
+
+  const copyWebhook = () => {
+    if (webhookUrl && typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(webhookUrl);
+      toast({ title: "Webhook URL copied" });
+    }
+  };
 
   return (
     <Sheet open={!!autopilot} onOpenChange={(o) => !o && onClose()}>
@@ -78,6 +119,40 @@ export function AutopilotDetailSheet({
                   label="Status"
                   value={autopilot.enabled ? "Enabled" : "Disabled"}
                 />
+              </div>
+
+              <div>
+                <h4 className="text-sm font-medium mb-2">Webhook trigger</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  POST to this URL to fire the autopilot (the token is the secret).
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 min-w-0 truncate rounded-md border bg-muted px-2 py-1.5 text-xs">
+                    {webhookUrl ?? "No token — rotate to generate one"}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={copyWebhook}
+                    disabled={!webhookUrl}
+                    title="Copy URL"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => rotateMutation.mutate()}
+                    disabled={rotateMutation.isPending}
+                    title="Rotate token"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               <div>

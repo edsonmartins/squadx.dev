@@ -532,7 +532,15 @@ export interface UpdateTaskRequest {
 // Squads API
 export const squadsApi = {
   list: (organizationId: number) =>
-    api.get<PageResponse<SquadResponse>>(`/api/v1/squads/organization/${organizationId}`),
+    api
+      .get<unknown>(`/api/v1/squads/organization/${organizationId}`)
+      .then((d) =>
+        parseWithFallback<PageResponse<SquadResponse>>(
+          pageSchema(squadResponseSchema) as unknown as z.ZodType<PageResponse<SquadResponse>>,
+          d,
+          emptyPage<SquadResponse>()
+        )
+      ),
   get: (id: number) => api.get<SquadResponse>(`/api/v1/squads/${id}`),
   create: (data: CreateSquadRequest) =>
     api.post<SquadResponse>("/api/v1/squads", data),
@@ -543,14 +551,84 @@ export const squadsApi = {
     api.patch<SquadResponse>(`/api/v1/squads/${id}/toggle-active`),
 };
 
+// Agent / Squad response schemas — parse, don't cast (see schema.ts / CLAUDE.md).
+const agentResponseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  type: z
+    .enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"])
+    .catch("FULLSTACK"),
+  runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]).optional(),
+  cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
+  description: z.string().optional(),
+  model: z.string().catch(""),
+  system_prompt: z.string().optional(),
+  temperature: z.number().catch(0.7),
+  max_tokens: z.number().catch(4096),
+  is_active: z.boolean().catch(true),
+  squad_id: z.number(),
+  squad_name: z.string().catch(""),
+  created_at: z.string().catch(""),
+  updated_at: z.string().optional(),
+});
+
+const squadResponseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  is_active: z.boolean().catch(true),
+  organization_id: z.number(),
+  organization_name: z.string().catch(""),
+  agents_count: z.number().catch(0),
+  active_agents_count: z.number().catch(0),
+  leader_agent_id: z.number().nullable().optional(),
+  leader_agent_name: z.string().optional(),
+  agents: z
+    .array(
+      z.object({
+        id: z.number(),
+        name: z.string(),
+        agent_type: z.string().catch(""),
+        is_active: z.boolean().catch(true),
+      })
+    )
+    .optional(),
+  created_at: z.string().catch(""),
+  updated_at: z.string().optional(),
+});
+
 // Agents API
 export const agentsApi = {
   list: (squadId: number) =>
-    api.get<PageResponse<AgentResponse>>(`/api/v1/agents/squad/${squadId}`),
+    api
+      .get<unknown>(`/api/v1/agents/squad/${squadId}`)
+      .then((d) =>
+        parseWithFallback<PageResponse<AgentResponse>>(
+          pageSchema(agentResponseSchema) as unknown as z.ZodType<PageResponse<AgentResponse>>,
+          d,
+          emptyPage<AgentResponse>()
+        )
+      ),
   listByOrganization: (organizationId: number) =>
-    api.get<PageResponse<AgentResponse>>(`/api/v1/agents/organization/${organizationId}`),
+    api
+      .get<unknown>(`/api/v1/agents/organization/${organizationId}`)
+      .then((d) =>
+        parseWithFallback<PageResponse<AgentResponse>>(
+          pageSchema(agentResponseSchema) as unknown as z.ZodType<PageResponse<AgentResponse>>,
+          d,
+          emptyPage<AgentResponse>()
+        )
+      ),
   listActive: (squadId: number) =>
-    api.get<AgentResponse[]>(`/api/v1/agents/squad/${squadId}/active`),
+    api
+      .get<unknown>(`/api/v1/agents/squad/${squadId}/active`)
+      .then((d) =>
+        parseWithFallback<AgentResponse[]>(
+          z.array(agentResponseSchema).catch([]) as unknown as z.ZodType<AgentResponse[]>,
+          d,
+          []
+        )
+      ),
   get: (id: number) => api.get<AgentResponse>(`/api/v1/agents/${id}`),
   create: (data: CreateAgentRequest) =>
     api.post<AgentResponse>("/api/v1/agents", data),

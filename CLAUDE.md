@@ -100,6 +100,18 @@ without white-screening:
 - When you add or change an endpoint, add/extend its schema in the same change and test it
   against a malformed payload (missing field, wrong type, null array).
 
+### Shared types (mobile) — follow-up
+
+`mobile/lib/api.ts` hand-duplicates a small subset (~7) of the API types in
+`frontend/src/lib/api.ts`, so they can drift. There is currently **no pnpm
+workspace** (frontend/mobile/desktop are independent projects). To share types
+without drift: add a root `pnpm-workspace.yaml` + a `packages/shared-types`
+package, have both apps import from it, and configure Expo for it
+(`metro.config.js` `watchFolders` + `tsconfig.json` path mapping). This MUST be
+verified against a real Expo/Metro build before landing — Metro does not resolve
+symlinked workspace packages out of the box. Until then, keep the mobile types in
+sync by hand and mirror the frontend field names exactly.
+
 ## Client conventions (Python daemon)
 
 - Specialist agents live in `agents/` (`BaseAgent` subclasses); `create_agent` in

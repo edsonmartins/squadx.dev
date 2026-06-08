@@ -211,6 +211,100 @@ export const tasksApi = {
     api.get<TaskResponse[]>(`/api/v1/tasks/${taskId}/blockers`),
 };
 
+// Autopilots API
+export const autopilotsApi = {
+  list: (organizationId: number) =>
+    api.get<PageResponse<AutopilotResponse>>(
+      `/api/v1/autopilots/organization/${organizationId}`
+    ),
+  get: (id: number) => api.get<AutopilotResponse>(`/api/v1/autopilots/${id}`),
+  create: (data: CreateAutopilotRequest) =>
+    api.post<AutopilotResponse>("/api/v1/autopilots", data),
+  update: (id: number, data: UpdateAutopilotRequest) =>
+    api.put<AutopilotResponse>(`/api/v1/autopilots/${id}`, data),
+  toggle: (id: number) =>
+    api.patch<AutopilotResponse>(`/api/v1/autopilots/${id}/toggle`),
+  run: (id: number) =>
+    api.post<AutopilotRunResponse>(`/api/v1/autopilots/${id}/run`),
+  runs: (id: number) =>
+    api.get<PageResponse<AutopilotRunResponse>>(
+      `/api/v1/autopilots/${id}/runs`
+    ),
+  delete: (id: number) => api.delete(`/api/v1/autopilots/${id}`),
+};
+
+// Autopilot types
+export type AutopilotExecutionMode = "CREATE_TASK" | "RUN_TASK";
+export type AutopilotTriggerType = "CRON" | "MANUAL";
+export type AutopilotRunStatus = "SUCCESS" | "SKIPPED" | "FAILED";
+
+export interface AutopilotResponse {
+  id: number;
+  name: string;
+  description?: string;
+  cron_expression: string;
+  timezone: string;
+  execution_mode: AutopilotExecutionMode;
+  organization_id: number;
+  project_id: number;
+  project_name: string;
+  target_squad_id?: number | null;
+  target_squad_name?: string;
+  target_agent_id?: number | null;
+  target_agent_name?: string;
+  task_title: string;
+  task_description?: string;
+  task_priority: TaskPriority;
+  enabled: boolean;
+  last_run_at?: string;
+  next_run_at?: string;
+  run_count: number;
+  created_by_id?: number;
+  created_by_name?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateAutopilotRequest {
+  name: string;
+  description?: string;
+  cron_expression: string;
+  timezone?: string;
+  execution_mode?: AutopilotExecutionMode;
+  project_id: number;
+  target_squad_id?: number | null;
+  target_agent_id?: number | null;
+  task_title: string;
+  task_description?: string;
+  task_priority?: TaskPriority;
+  enabled?: boolean;
+}
+
+export interface UpdateAutopilotRequest {
+  name?: string;
+  description?: string;
+  cron_expression?: string;
+  timezone?: string;
+  execution_mode?: AutopilotExecutionMode;
+  target_squad_id?: number | null;
+  target_agent_id?: number | null;
+  task_title?: string;
+  task_description?: string;
+  task_priority?: TaskPriority;
+  enabled?: boolean;
+}
+
+export interface AutopilotRunResponse {
+  id: number;
+  autopilot_id: number;
+  trigger_type: AutopilotTriggerType;
+  status: AutopilotRunStatus;
+  created_task_id?: number;
+  execution_id?: number;
+  message?: string;
+  triggered_at: string;
+}
+
 // Types
 export interface AuthResponse {
   access_token: string;

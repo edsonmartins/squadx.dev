@@ -224,8 +224,16 @@ class SquadXDaemon:
                     agent_id=str(task_data.get("assigned_agent_id") or task_data.get("agent_id") or ""),
                 )
 
+            runtime_kind = str(task_data.get("runtime_kind") or "NATIVE").upper()
+
             if settings.smoke_execution_mode:
                 result = await self._run_smoke_execution(task_id, task_data, execution_id)
+            elif runtime_kind == "EXTERNAL_CLI":
+                # Runtime adapter: drive an external coding CLI in the sandbox
+                # instead of the native LangGraph loop.
+                result = await self._run_external_cli_task(
+                    task_id, task_data, execution_id, brainsentry_session_id
+                )
             else:
                 # Run the orchestrator
                 result = await self.orchestrator.ainvoke(
@@ -263,6 +271,95 @@ class SquadXDaemon:
             if "brainsentry_client" in locals():
                 await brainsentry_client.close()
             self.current_tasks.pop(task_id, None)
+
+    async def _run_external_cli_task(
+        self,
+        task_id: int,
+        task_data: dict[str, Any],
+        execution_id: int | str,
+        brainsentry_session_id: str | None,
+    ) -> dict[str, Any]:
+        """Drive an external coding CLI (Claude Code/Codex/Gemini) in the sandbox."""
+        from squadx_client.agents.factory import create_agent
+        from squadx_client.docker.sandbox import AgentSandbox
+
+        title = task_data.get("title") or f"Task {task_id}"
+        description = task_data.get("description") or title
+        cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
+        workspace_path = task_data.get("project_path") or settings.workspace_path
+
+        # Inject provider API keys into the sandbox environment (BYO key).
+        environment: dict[str, str] = {}
+        if settings.anthropic_api_key:
+            environment["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        if settings.openai_api_key:
+            environment["OPENAI_API_KEY"] = settings.openai_api_key
+        if getattr(settings, "google_api_key", None):
+            environment["GOOGLE_API_KEY"] = settings.google_api_key
+
+        sandbox = AgentSandbox(
+            task_id=task_id,
+            agent_type="external_cli",
+            workspace_path=workspace_path,
+        )
+        started = await sandbox.start(
+            image=settings.agent_image,
+            memory_limit=settings.agent_memory_limit,
+            cpu_limit=settings.agent_cpu_limit,
+            enable_vnc=settings.enable_vnc,
+            environment=environment,
+        )
+        if not started:
+            raise RuntimeError("Failed to start sandbox for external CLI agent")
+
+        try:
+            agent = create_agent(
+                "external_cli",
+                sandbox=sandbox,
+                brainsentry_session_id=brainsentry_session_id,
+                runtime_kind="EXTERNAL_CLI",
+                cli_provider=cli_provider,
+            )
+
+            def _progress(chunk: str) -> None:
+                stripped = chunk.strip()
+                if not stripped:
+                    return
+                step = stripped.splitlines()[-1][:200]
+                asyncio.create_task(
+                    self._send_task_status(
+                        task_id, "running", progress=50, current_step=step
+                    )
+                )
+
+            result = await agent.execute(
+                task_title=title,
+                task_description=description,
+                context={
+                    "main_task": task_data,
+                    "execution_id": execution_id,
+                    "progress_callback": _progress,
+                },
+            )
+
+            live_codes = [sandbox.live_join_code] if sandbox.live_join_code else []
+            branch = await sandbox.execute(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=30
+            )
+            commit = await sandbox.execute(["git", "rev-parse", "HEAD"], timeout=30)
+
+            return {
+                "final_result": result.get("output", ""),
+                "files_modified": result.get("files_modified", []),
+                "git_branch": branch.output.strip() if branch.success else None,
+                "git_commit": commit.output.strip() if commit.success else None,
+                "live_session_codes": live_codes,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "total_cost": 0.0,
+            }
+        finally:
+            await sandbox.stop()
 
     async def _run_smoke_execution(
         self,

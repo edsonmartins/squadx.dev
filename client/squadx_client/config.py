@@ -21,7 +21,13 @@ class Settings(BaseSettings):
     # LLM Configuration
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    google_api_key: str | None = Field(default=None, alias="GOOGLE_API_KEY")
     default_model: str = Field(default="gpt-4o", alias="SQUADX_DEFAULT_MODEL")
+
+    # External CLI runtime adapter (Claude Code / Codex / Gemini CLI in the sandbox)
+    external_cli_timeout_seconds: int = Field(
+        default=1800, alias="SQUADX_EXTERNAL_CLI_TIMEOUT_SECONDS"
+    )
 
     # Docker Configuration
     docker_host: str | None = Field(default=None, alias="DOCKER_HOST")

@@ -233,16 +233,31 @@ def create_agent(
     agent_type: str,
     sandbox: Optional["AgentSandbox"] = None,
     brainsentry_session_id: str | None = None,
+    runtime_kind: str | None = None,
+    cli_provider: str | None = None,
 ) -> BaseAgent:
     """Create an agent of the specified type.
 
     Args:
         agent_type: Type of agent (frontend, backend, fullstack, devops, qa, coordinator, database)
         sandbox: Optional AgentSandbox for tool-based execution
+        runtime_kind: "NATIVE" (default) or "EXTERNAL_CLI" to drive an external CLI
+        cli_provider: CLI to use when runtime_kind is EXTERNAL_CLI
+            (CLAUDE_CODE, CODEX, GEMINI_CLI)
 
     Returns:
         An instance of the appropriate agent class
     """
+    if runtime_kind and runtime_kind.upper() == "EXTERNAL_CLI":
+        # Imported lazily to avoid a circular import at module load.
+        from squadx_client.agents.external_cli_agent import ExternalCliAgent
+
+        return ExternalCliAgent(
+            provider=cli_provider or "CLAUDE_CODE",
+            sandbox=sandbox,
+            brainsentry_session_id=brainsentry_session_id,
+        )
+
     agents = {
         "frontend": FrontendAgent,
         "backend": BackendAgent,

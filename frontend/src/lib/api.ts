@@ -802,6 +802,8 @@ export interface MemorySkill extends MemoryRecord {
   steps?: string[];
   files_modified?: string[];
   antipattern?: boolean;
+  /** True for human-authored skills; false for BrainSentry-learned procedural memory. */
+  authored?: boolean;
 }
 
 export interface ExecutionHistoryRecord {

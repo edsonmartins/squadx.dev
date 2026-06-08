@@ -299,6 +299,10 @@ public class MemoryGovernanceService {
         item.put("steps", metadata.getOrDefault("steps", List.of()));
         item.put("files_modified", metadata.getOrDefault("filesModified", List.of()));
         item.put("antipattern", "ANTIPATTERN".equals(String.valueOf(memory.getOrDefault("category", "")).toUpperCase(Locale.ROOT)));
+        // Distinguish human-authored skills from BrainSentry-learned procedural memory.
+        boolean authored = "squadx-procedure".equals(String.valueOf(item.get("source_type")))
+                || "squadx".equals(String.valueOf(metadata.get("managedBy")));
+        item.put("authored", authored);
         return item;
     }
 

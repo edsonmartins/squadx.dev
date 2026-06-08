@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { parseWithFallback, pageSchema, emptyPage } from "./schema";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 interface ApiResponse<T> {
@@ -211,12 +214,57 @@ export const tasksApi = {
     api.get<TaskResponse[]>(`/api/v1/tasks/${taskId}/blockers`),
 };
 
+// Autopilot response schemas — parse, don't cast (see schema.ts / CLAUDE.md).
+const autopilotResponseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  cron_expression: z.string(),
+  timezone: z.string().catch("UTC"),
+  execution_mode: z.enum(["CREATE_TASK", "RUN_TASK"]).catch("CREATE_TASK"),
+  organization_id: z.number(),
+  project_id: z.number(),
+  project_name: z.string().catch(""),
+  target_squad_id: z.number().nullable().optional(),
+  target_squad_name: z.string().optional(),
+  target_agent_id: z.number().nullable().optional(),
+  target_agent_name: z.string().optional(),
+  task_title: z.string().catch(""),
+  task_description: z.string().optional(),
+  task_priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).catch("MEDIUM"),
+  enabled: z.boolean().catch(true),
+  last_run_at: z.string().optional(),
+  next_run_at: z.string().optional(),
+  run_count: z.number().catch(0),
+  created_by_id: z.number().optional(),
+  created_by_name: z.string().optional(),
+  created_at: z.string().catch(""),
+  updated_at: z.string().optional(),
+});
+
+const autopilotRunResponseSchema = z.object({
+  id: z.number(),
+  autopilot_id: z.number(),
+  trigger_type: z.enum(["CRON", "MANUAL"]).catch("CRON"),
+  status: z.enum(["SUCCESS", "SKIPPED", "FAILED"]).catch("FAILED"),
+  created_task_id: z.number().optional(),
+  execution_id: z.number().optional(),
+  message: z.string().optional(),
+  triggered_at: z.string().catch(""),
+});
+
 // Autopilots API
 export const autopilotsApi = {
   list: (organizationId: number) =>
-    api.get<PageResponse<AutopilotResponse>>(
-      `/api/v1/autopilots/organization/${organizationId}`
-    ),
+    api
+      .get<unknown>(`/api/v1/autopilots/organization/${organizationId}`)
+      .then((d) =>
+        parseWithFallback(
+          pageSchema(autopilotResponseSchema),
+          d,
+          emptyPage<AutopilotResponse>()
+        )
+      ),
   get: (id: number) => api.get<AutopilotResponse>(`/api/v1/autopilots/${id}`),
   create: (data: CreateAutopilotRequest) =>
     api.post<AutopilotResponse>("/api/v1/autopilots", data),
@@ -227,9 +275,15 @@ export const autopilotsApi = {
   run: (id: number) =>
     api.post<AutopilotRunResponse>(`/api/v1/autopilots/${id}/run`),
   runs: (id: number) =>
-    api.get<PageResponse<AutopilotRunResponse>>(
-      `/api/v1/autopilots/${id}/runs`
-    ),
+    api
+      .get<unknown>(`/api/v1/autopilots/${id}/runs`)
+      .then((d) =>
+        parseWithFallback(
+          pageSchema(autopilotRunResponseSchema),
+          d,
+          emptyPage<AutopilotRunResponse>()
+        )
+      ),
   delete: (id: number) => api.delete(`/api/v1/autopilots/${id}`),
 };
 

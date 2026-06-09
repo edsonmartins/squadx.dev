@@ -142,8 +142,9 @@ class Pass5ServiceTest {
         when(changeRepository.findById(5L)).thenReturn(Optional.of(change));
         when(memberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
         when(specTaskRepository.findByChangeId(5L)).thenReturn(List.of(task));
-        when(scenarioRepository.findByRequirementId(9L)).thenReturn(List.of(scenario("s", true)));
-        when(pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(42L)).thenReturn(Optional.empty());
+        when(scenarioRepository.findByRequirementIdIn(List.of(9L))).thenReturn(List.of(scenario("s", true)));
+        when(pass5RunRepository.findBySpecTaskIdInOrderByCreatedAtDescIdDesc(List.of(42L)))
+                .thenReturn(List.of());
 
         var statuses = service.getStatusesForChange(5L, user);
 

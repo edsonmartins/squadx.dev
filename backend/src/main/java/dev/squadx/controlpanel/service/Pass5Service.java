@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -104,7 +106,7 @@ public class Pass5Service {
         return buildStatus(task);
     }
 
-    /** Status do Pass 5 de todas as tarefas de uma mudança (um único acesso — evita N requisições). */
+    /** Status do Pass 5 de todas as tarefas de uma mudança (uma requisição; lookups em lote, sem N+1). */
     @Transactional(readOnly = true)
     public List<Pass5StatusResponse> getStatusesForChange(Long changeId, User currentUser) {
         Change change = changeRepository.findById(changeId)
@@ -113,14 +115,43 @@ public class Pass5Service {
         if (!memberRepository.existsByOrganizationIdAndUserId(orgId, currentUser.getId())) {
             throw new ForbiddenException("User does not have access to this organization");
         }
-        return specTaskRepository.findByChangeId(changeId).stream()
-                .map(this::buildStatus)
+
+        List<SpecTask> tasks = specTaskRepository.findByChangeId(changeId);
+        if (tasks.isEmpty()) {
+            return List.of();
+        }
+
+        // Lote 1: cenários por requisito.
+        List<Long> requirementIds = tasks.stream()
+                .map(SpecTask::getRequirement).filter(Objects::nonNull)
+                .map(Requirement::getId).distinct().collect(Collectors.toList());
+        Map<Long, List<Scenario>> scenariosByRequirement = requirementIds.isEmpty()
+                ? Map.of()
+                : scenarioRepository.findByRequirementIdIn(requirementIds).stream()
+                        .collect(Collectors.groupingBy(s -> s.getRequirement().getId()));
+
+        // Lote 2: último Pass5Run por tarefa (ordenado desc → primeiro de cada tarefa é o mais recente).
+        List<Long> taskIds = tasks.stream().map(SpecTask::getId).collect(Collectors.toList());
+        Map<Long, Pass5Run> latestRunByTask = pass5RunRepository
+                .findBySpecTaskIdInOrderByCreatedAtDescIdDesc(taskIds).stream()
+                .collect(Collectors.toMap(r -> r.getSpecTask().getId(), r -> r, (first, dup) -> first));
+
+        return tasks.stream()
+                .map(task -> assembleStatus(
+                        task,
+                        task.getRequirement() != null
+                                ? scenariosByRequirement.getOrDefault(task.getRequirement().getId(), List.of())
+                                : List.of(),
+                        latestRunByTask.get(task.getId())))
                 .collect(Collectors.toList());
     }
 
     private Pass5StatusResponse buildStatus(SpecTask task) {
-        List<Scenario> scenarios = scenariosOf(task);
-        Pass5Run last = pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(task.getId()).orElse(null);
+        return assembleStatus(task, scenariosOf(task),
+                pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(task.getId()).orElse(null));
+    }
+
+    private Pass5StatusResponse assembleStatus(SpecTask task, List<Scenario> scenarios, Pass5Run last) {
         return Pass5StatusResponse.builder()
                 .specTaskId(task.getId())
                 .outcome(last != null ? last.getOutcome() : null)

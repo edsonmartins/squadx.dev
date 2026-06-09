@@ -146,7 +146,12 @@ export function RequirementModal({ open, onClose, changeId }: RequirementModalPr
               {fields.map((f, i) => (
                 <div key={f.id} className="space-y-2 rounded border p-2">
                   <div className="flex items-center gap-2">
-                    <Input placeholder="Nome do cenário" {...register(`scenarios.${i}.name`)} />
+                    <div className="flex-1">
+                      <Input placeholder="Nome do cenário" {...register(`scenarios.${i}.name`)} />
+                      {errors.scenarios?.[i]?.name && (
+                        <p className="text-sm text-destructive">{errors.scenarios[i]?.name?.message}</p>
+                      )}
+                    </div>
                     {fields.length > 1 && (
                       <Button type="button" size="icon" variant="ghost" onClick={() => remove(i)}>
                         <Trash2 className="h-4 w-4" />
@@ -154,9 +159,12 @@ export function RequirementModal({ open, onClose, changeId }: RequirementModalPr
                     )}
                   </div>
                   <Input placeholder="QUANDO ..." {...register(`scenarios.${i}.when`)} />
+                  {errors.scenarios?.[i]?.when && (
+                    <p className="text-sm text-destructive">{errors.scenarios[i]?.when?.message}</p>
+                  )}
                   <Input placeholder="ENTÃO ..." {...register(`scenarios.${i}.then`)} />
-                  {errors.scenarios?.[i] && (
-                    <p className="text-sm text-destructive">Preencha nome, QUANDO e ENTÃO.</p>
+                  {errors.scenarios?.[i]?.then && (
+                    <p className="text-sm text-destructive">{errors.scenarios[i]?.then?.message}</p>
                   )}
                 </div>
               ))}

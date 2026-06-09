@@ -7,8 +7,10 @@ import dev.squadx.controlpanel.model.Change;
 import dev.squadx.controlpanel.model.Requirement;
 import dev.squadx.controlpanel.model.SpecTask;
 import dev.squadx.controlpanel.model.enums.AssigneeType;
+import dev.squadx.controlpanel.model.enums.EventSource;
 import dev.squadx.controlpanel.model.enums.Pass5Result;
 import dev.squadx.controlpanel.model.enums.SpecTaskStatus;
+import dev.squadx.controlpanel.model.enums.TaskEventType;
 import dev.squadx.controlpanel.repository.ChangeRepository;
 import dev.squadx.controlpanel.repository.RequirementRepository;
 import dev.squadx.controlpanel.repository.SpecTaskRepository;
@@ -32,7 +34,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +46,7 @@ class SpecTaskServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private AgentRepository agentRepository;
     @Mock private OrganizationMemberRepository memberRepository;
+    @Mock private SpecEventService specEventService;
     @Spy private SpecTaskStateMachine stateMachine = new SpecTaskStateMachine();
 
     @InjectMocks private SpecTaskService service;
@@ -75,17 +78,13 @@ class SpecTaskServiceTest {
         when(memberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
     }
 
-    private void mockSave() {
-        when(specTaskRepository.save(any(SpecTask.class))).thenAnswer(i -> i.getArgument(0));
-    }
-
     @Test
-    void startsTask() {  // R4
+    void startRecordsStartedEvent() {  // R4
         mockTask(task(SpecTaskStatus.A_FAZER));
-        mockSave();
-        SpecTaskResponse r = service.transition(42L,
+        service.transition(42L,
                 SpecTaskTransitionRequest.builder().status(SpecTaskStatus.EM_CURSO).build(), user);
-        assertThat(r.getStatus()).isEqualTo(SpecTaskStatus.EM_CURSO);
+        verify(specEventService).record(eq(42L), eq(TaskEventType.STARTED), eq(EventSource.MCP),
+                anyString(), isNull(), any());
     }
 
     @Test
@@ -95,6 +94,7 @@ class SpecTaskServiceTest {
                 SpecTaskTransitionRequest.builder().status(SpecTaskStatus.EM_VALIDACAO).build(), user))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid transition");
+        verify(specEventService, never()).record(anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -116,37 +116,29 @@ class SpecTaskServiceTest {
     }
 
     @Test
-    void blockSetsReason() {  // R4
+    void blockRecordsBlockedEventWithReason() {  // R4
         mockTask(task(SpecTaskStatus.EM_CURSO));
-        mockSave();
-        SpecTaskResponse r = service.transition(42L,
+        service.transition(42L,
                 SpecTaskTransitionRequest.builder().status(SpecTaskStatus.BLOQUEADA).note("waiting on API").build(),
                 user);
-        assertThat(r.getStatus()).isEqualTo(SpecTaskStatus.BLOQUEADA);
-        assertThat(r.getBlockerReason()).isEqualTo("waiting on API");
+        verify(specEventService).record(eq(42L), eq(TaskEventType.BLOCKED), eq(EventSource.MCP),
+                anyString(), eq("waiting on API"), any());
     }
 
     @Test
-    void pass5ApprovalConcludes() {  // R5
-        SpecTask t = task(SpecTaskStatus.EM_VALIDACAO);
-        when(specTaskRepository.findById(42L)).thenReturn(Optional.of(t));
-        when(specTaskRepository.save(any(SpecTask.class))).thenAnswer(i -> i.getArgument(0));
-
-        SpecTaskResponse r = service.applyPass5Outcome(42L, Pass5Result.PASS, null);
-        assertThat(r.getStatus()).isEqualTo(SpecTaskStatus.CONCLUIDA);
-        assertThat(r.getPass5()).isEqualTo(Pass5Result.PASS);
+    void pass5ApprovalRecordsApprovedEvent() {  // R5
+        when(specTaskRepository.findById(42L)).thenReturn(Optional.of(task(SpecTaskStatus.EM_VALIDACAO)));
+        service.applyPass5Outcome(42L, Pass5Result.PASS, null);
+        verify(specEventService).record(eq(42L), eq(TaskEventType.PASS5_APPROVED), eq(EventSource.PASS5),
+                anyString(), isNull(), any());
     }
 
     @Test
-    void pass5FailureSetsAjustesWithCritique() {  // R5
-        SpecTask t = task(SpecTaskStatus.EM_VALIDACAO);
-        when(specTaskRepository.findById(42L)).thenReturn(Optional.of(t));
-        when(specTaskRepository.save(any(SpecTask.class))).thenAnswer(i -> i.getArgument(0));
-
-        SpecTaskResponse r = service.applyPass5Outcome(42L, Pass5Result.FAIL, "cenário X sem teste");
-        assertThat(r.getStatus()).isEqualTo(SpecTaskStatus.AJUSTES);
-        assertThat(r.getPass5()).isEqualTo(Pass5Result.FAIL);
-        assertThat(r.getReviseReason()).isEqualTo("cenário X sem teste");
+    void pass5FailureRecordsChangesEventWithCritique() {  // R5
+        when(specTaskRepository.findById(42L)).thenReturn(Optional.of(task(SpecTaskStatus.EM_VALIDACAO)));
+        service.applyPass5Outcome(42L, Pass5Result.FAIL, "cenário X sem teste");
+        verify(specEventService).record(eq(42L), eq(TaskEventType.PASS5_CHANGES), eq(EventSource.PASS5),
+                anyString(), eq("cenário X sem teste"), any());
     }
 
     @Test

@@ -25,11 +25,11 @@ identificadores em EN.
 - [x] 2.1 Migração Flyway `V36`: `spec_versions` (version/current/summary/author/commit/content_hash; UNIQUE(change,version)). — vm:R1 · ADR-0001
 - [x] 2.2 `SpecVersionService` (nova versão ao aprovar; `current` único; histórico). — vm:R1 · ADR-0001
 - [x] 2.3 `ChangeFolderRenderer` determinístico (ordenação estável, sem voláteis; markdown OpenSpec). — vm:R3 · RFC-0002
-- [x] 2.4 `DefaultSpecMaterializer`: render → `GitCommitGateway` (porta) → registra sha em `SpecVersion`. — vm:R2 · RFC-0002 _(commit/push Git real: integração externa)_
+- [x] 2.4 `DefaultSpecMaterializer` → `GitHubCommitGateway` (GitHub Git Data API: blobs→tree→commit→ref, branch `spec/<key>`); registra sha em `SpecVersion`. — vm:R2 · RFC-0002 _(no-op gracioso sem token/repo; provider GitHub)_
 - [x] 2.5 Idempotência por content-hash: conteúdo igual + commit → no-op. — vm:R3 · RFC-0002
-- [~] 2.6 Detecção de conflito de materialização — contrato no `GitCommitGateway`; aplicada pela impl real. — vm:R5 · RFC-0002
+- [x] 2.6 Detecção de conflito de materialização: `update-ref` não-force; 422/409 → `CommitResult.conflict` → `unavailable`. — vm:R5 · RFC-0002
 - [x] 2.7 Spec materializada como markdown OpenSpec legível (sem lock-in). — vm:R4 · ADR-0001
-- [~] 2.8 Histórico de versões: endpoint `GET /changes/{id}/versions` feito; **UI pendente**. — vm:R1, vm:R2
+- [x] 2.8 Histórico de versões: endpoint `GET /changes/{id}/versions` + UI `VersionHistory`. — vm:R1, vm:R2
 
 ## 3. MCP server `workspace` (workspace-mcp-server)
 

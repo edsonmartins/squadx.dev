@@ -17,7 +17,18 @@ public class IntegrationConfig {
     private BrainSentryConfig brainsentry = new BrainSentryConfig();
     private LiveConfig live = new LiveConfig();
     private LinktorConfig linktor = new LinktorConfig();
+    private GitConfig git = new GitConfig();
     private String serviceSecret;
+
+    /** Git provider config for Control Panel spec materialization (RFC-0002). */
+    @Getter
+    @Setter
+    public static class GitConfig {
+        private boolean enabled = false;
+        private String apiUrl = "https://api.github.com";
+        private String token;
+        private String branchPrefix = "spec/";
+    }
 
     @Getter
     @Setter

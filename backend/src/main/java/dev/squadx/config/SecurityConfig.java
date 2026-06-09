@@ -34,6 +34,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final dev.squadx.controlpanel.mcp.WorkspaceSessionFilter workspaceSessionFilter;
     private final UserDetailsService userDetailsService;
     private final org.springframework.beans.factory.ObjectProvider<CustomOidcUserService> customOidcUserService;
     private final org.springframework.beans.factory.ObjectProvider<AuthenticationSuccessHandler> oauth2SuccessHandler;
@@ -60,6 +61,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/health/**").permitAll()
                 .requestMatchers("/api/v1/webhooks/**").permitAll()
+                // Workspace MCP tools authenticate via the session-token filter below
+                .requestMatchers("/api/v1/workspace/tools/**").permitAll()
                 .requestMatchers("/api/v1/billing/webhook").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
@@ -86,6 +89,7 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())
+            .addFilterBefore(workspaceSessionFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 

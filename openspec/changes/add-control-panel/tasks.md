@@ -33,14 +33,14 @@ identificadores em EN.
 
 ## 3. MCP server `workspace` (workspace-mcp-server)
 
-- [ ] 3.1 Esqueleto do MCP server (`integration/mcp/`): transporte stdio + HTTP/SSE; `tools/list`. — mcp:R7 · RFC-0001, ADR-0003
-- [ ] 3.2 Auth por token de sessão escopado (org/projeto/change/assignee); rejeitar fora de escopo. — mcp:R6 · RFC-0001
-- [ ] 3.3 `get_change` / `get_tasks` (briefing). — mcp:R1 · RFC-0001
-- [ ] 3.4 `update_task_status` (apenas `em_curso`/`implementado`; rejeitar proibidos) → emite evento. — mcp:R2 · RFC-0001, RFC-0003
-- [ ] 3.5 `report_blocker` (motivo obrigatório) → `bloqueada`. — mcp:R3 · RFC-0001
-- [ ] 3.6 `materialize_change` (delega ao materializador; retorna version+commit). — mcp:R4 · RFC-0001, RFC-0002
-- [ ] 3.7 `scaffold_tests` (esqueleto por cenário + cobertura). — mcp:R5 · RFC-0001, ADR-0005
-- [ ] 3.8 `contractVersion` (semver) anunciado nas capabilities. — mcp:R7 · RFC-0001
+- [~] 3.1 Superfície do contrato (`controlpanel/mcp/`): HTTP (`/api/v1/workspace/tools`) + `tools/list`. — mcp:R7 · RFC-0001, ADR-0003 _(bridge MCP stdio/SSE: adaptador externo posterior)_
+- [x] 3.2 Auth por token de sessão escopado (user/org/projeto/change/assignee) + filtro; rejeita fora de escopo (`E_SCOPE`). — mcp:R6 · RFC-0001
+- [x] 3.3 `get_change` / `get_tasks` (briefing; reúso de Change/Requirement/SpecTask services). — mcp:R1 · RFC-0001
+- [x] 3.4 `update_task_status` (só `em_curso`/`implementado`; `em_curso`→transition, `implementado`→evento; rejeita proibidos). — mcp:R2 · RFC-0001, RFC-0003
+- [x] 3.5 `report_blocker` (motivo obrigatório) → `bloqueada`. — mcp:R3 · RFC-0001
+- [x] 3.6 `materialize_change` (delega à porta `SpecMaterializer`; Noop por ora). — mcp:R4 · RFC-0001, RFC-0002 _(impl real em `spec-versioning-materialization`)_
+- [x] 3.7 `scaffold_tests` (método por cenário, nome rastreável `R<n>_<slug>`, + cobertura). — mcp:R5 · RFC-0001, ADR-0005
+- [x] 3.8 `contract_version` (semver) anunciado em `tools/list` e na emissão de sessão. — mcp:R7 · RFC-0001
 
 ## 4. Rastreio de execução (execution-tracking)
 

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -115,5 +116,47 @@ class HarnessServiceTest {
 
         assertThatThrownBy(() -> service.list(100L, user))
                 .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void touchConnectionStampsLastConnected() {
+        Harness harness = Harness.builder().organization(org).key("claude-code").name("n").build();
+        when(harnessRepository.findByOrganizationIdAndKey(100L, "claude-code"))
+                .thenReturn(Optional.of(harness));
+        when(harnessRepository.save(any(Harness.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.touchConnection(100L, "claude-code");
+
+        assertThat(harness.getLastConnectedAt()).isNotNull();
+    }
+
+    @Test
+    void touchConnectionIgnoresUnknownOrBlankKey() {
+        service.touchConnection(100L, null);
+        service.touchConnection(100L, " ");
+        when(harnessRepository.findByOrganizationIdAndKey(100L, "ghost")).thenReturn(Optional.empty());
+        service.touchConnection(100L, "ghost");
+
+        verify(harnessRepository, never()).save(any());
+    }
+
+    @Test
+    void statusIsDerivedFromLastConnection() {
+        ReflectionTestUtils.setField(service, "sessionTtlSeconds", 3600L);
+        when(memberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
+
+        Harness recent = Harness.builder().organization(org).key("a").name("A")
+                .lastConnectedAt(java.time.Instant.now().minusSeconds(60)).build();
+        Harness stale = Harness.builder().organization(org).key("b").name("B")
+                .lastConnectedAt(java.time.Instant.now().minusSeconds(7200)).build();
+        Harness never = Harness.builder().organization(org).key("c").name("C").build();
+        when(harnessRepository.findByOrganizationId(100L)).thenReturn(List.of(recent, stale, never));
+
+        var responses = service.list(100L, user);
+
+        assertThat(responses.get(0).getStatus()).isEqualTo(HarnessStatus.CONNECTED);
+        assertThat(responses.get(1).getStatus()).isEqualTo(HarnessStatus.AVAILABLE);
+        assertThat(responses.get(2).getStatus()).isEqualTo(HarnessStatus.AVAILABLE);
+        assertThat(responses.get(0).getLastConnectedAt()).isNotNull();
     }
 }

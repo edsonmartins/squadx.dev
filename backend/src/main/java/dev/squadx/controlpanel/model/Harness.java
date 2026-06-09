@@ -52,4 +52,8 @@ public class Harness extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id")
     private Agent agent;
+
+    /** Última abertura de sessão MCP com este harness (status CONNECTED é derivado disto). */
+    @Column(name = "last_connected_at")
+    private java.time.Instant lastConnectedAt;
 }

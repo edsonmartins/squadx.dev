@@ -14,5 +14,7 @@ public interface HarnessRepository extends JpaRepository<Harness, Long> {
 
     boolean existsByOrganizationIdAndKey(Long organizationId, String key);
 
+    Optional<Harness> findByOrganizationIdAndKey(Long organizationId, String key);
+
     Optional<Harness> findByAgentId(Long agentId);
 }

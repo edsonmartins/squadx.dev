@@ -33,7 +33,7 @@ identificadores em EN.
 
 ## 3. MCP server `workspace` (workspace-mcp-server)
 
-- [~] 3.1 Superfície do contrato (`controlpanel/mcp/`): HTTP (`/api/v1/workspace/tools`) + `tools/list`. — mcp:R7 · RFC-0001, ADR-0003 _(bridge MCP stdio/SSE: adaptador externo posterior)_
+- [x] 3.1 Superfície do contrato: HTTP (`/api/v1/workspace/tools`) + **bridge MCP stdio/SSE** (`squadx-workspace-mcp` no client Python, FastMCP). — mcp:R7 · RFC-0001, ADR-0003
 - [x] 3.2 Auth por token de sessão escopado (user/org/projeto/change/assignee) + filtro; rejeita fora de escopo (`E_SCOPE`). — mcp:R6 · RFC-0001
 - [x] 3.3 `get_change` / `get_tasks` (briefing; reúso de Change/Requirement/SpecTask services). — mcp:R1 · RFC-0001
 - [x] 3.4 `update_task_status` (só `em_curso`/`implementado`; `em_curso`→transition, `implementado`→evento; rejeita proibidos). — mcp:R2 · RFC-0001, RFC-0003

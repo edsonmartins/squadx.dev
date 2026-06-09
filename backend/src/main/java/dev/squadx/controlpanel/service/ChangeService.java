@@ -101,6 +101,18 @@ public class ChangeService {
         return result;
     }
 
+    /** Valida acesso e devolve o escopo (org/projeto/change) para abrir uma sessão MCP do workspace. */
+    @Transactional(readOnly = true)
+    public WorkspaceScope resolveScope(Long changeId, User currentUser) {
+        Change change = loadForUser(changeId, currentUser);
+        return new WorkspaceScope(
+                change.getProject().getOrganization().getId(),
+                change.getProject().getId(),
+                change.getId());
+    }
+
+    public record WorkspaceScope(Long orgId, Long projectId, Long changeId) {}
+
     private Change loadForUser(Long id, User currentUser) {
         Change change = changeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Change not found"));

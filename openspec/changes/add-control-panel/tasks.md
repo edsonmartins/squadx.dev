@@ -9,16 +9,16 @@ identificadores em EN.
 
 ## 1. Modelo de trabalho (control-panel-work-model)
 
-- [ ] 1.1 Migração Flyway: `changes`, `requirements`, `scenarios`, `spec_tasks` (sem prefixo de
-  app; FKs por projeto/mudança/requisito). — wm:R1, wm:R2, wm:R3 · ADR-0006
-- [ ] 1.2 Entidades JPA + DTOs (MapStruct) para Change/Requirement/Scenario/Task. — wm:R1–R3 · ADR-0006
-- [ ] 1.3 Validação "requisito exige ≥1 cenário" no service de criação/edição. — wm:R2
-- [ ] 1.4 Rastreabilidade bidirecional requisito↔tarefa (`requirementRef`/`taskRefs`). — wm:R3
-- [ ] 1.5 Máquina de estados (6 estados) + tabela de transições válidas; rejeitar inválidas. — wm:R4 · ADR-0004, RFC-0003
-- [ ] 1.6 Garantir que `concluida`/`ajustes` só venham do Pass 5 (bloquear nos demais caminhos). — wm:R5 · ADR-0004
-- [ ] 1.7 Responsável humano|agente (modelo de Assignee; agente resolve harness+modelo). — wm:R6 · ADR-0003
-- [ ] 1.8 Projeção "onde estamos" (dashboard + barra por mudança) a partir de eventos. — wm:R7 · ADR-0002, RFC-0003
-- [ ] 1.9 Controllers REST + telas (dashboard, workspace, tarefas lista/kanban, detalhe). — wm:R1–R7
+- [x] 1.1 Migração Flyway: `changes`, `requirements`, `scenarios`, `spec_tasks` (sem prefixo de
+  app; FKs por projeto/mudança/requisito). — wm:R1, wm:R2, wm:R3 · ADR-0006 _(V33; ver nota de coordenação com a PR #1)_
+- [x] 1.2 Entidades JPA + DTOs para Change/Requirement/Scenario/Task. — wm:R1–R3 · ADR-0006 _(mapeamento manual; não há MapStruct no repo)_
+- [x] 1.3 Validação "requisito exige ≥1 cenário" no service de criação/edição. — wm:R2
+- [x] 1.4 Rastreabilidade bidirecional requisito↔tarefa (`requirementRef`/`taskRefs`). — wm:R3
+- [x] 1.5 Máquina de estados (6 estados) + tabela de transições válidas; rejeitar inválidas. — wm:R4 · ADR-0004, RFC-0003
+- [x] 1.6 Garantir que `concluida`/`ajustes` só venham do Pass 5 (bloquear nos demais caminhos). — wm:R5 · ADR-0004
+- [x] 1.7 Responsável humano|agente (modelo de Assignee). — wm:R6 · ADR-0003 _(resolução do modelo do harness fica em `harness-connectors`)_
+- [x] 1.8 Projeção "onde estamos" (endpoint where-we-are: contagem por status/total/progresso). — wm:R7 · ADR-0002, RFC-0003 _(derivação a partir de eventos vem em `execution-tracking`)_
+- [~] 1.9 Controllers REST (changes/requirements/spec-tasks + where-we-are) — feito; **telas (dashboard, workspace, kanban, detalhe) pendentes na fatia de frontend**. — wm:R1–R7
 
 ## 2. Versionamento + materialização (spec-versioning-materialization)
 

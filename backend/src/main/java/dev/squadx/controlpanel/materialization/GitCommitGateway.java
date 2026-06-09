@@ -3,14 +3,32 @@ package dev.squadx.controlpanel.materialization;
 import java.util.Map;
 
 /**
- * Porta para o commit/push real da spec materializada no Git (RFC-0002). A implementação real
- * (working-tree + credenciais + detecção de conflito — R5) é integração externa; o default é
- * {@link NoopGitCommitGateway}.
+ * Porta para o commit da spec materializada no Git (RFC-0002). A implementação padrão é
+ * {@link GitHubCommitGateway} (GitHub Git Data API), que faz no-op gracioso quando não configurada.
  */
 public interface GitCommitGateway {
 
-    CommitResult commit(String changeKey, Map<String, String> files, String message);
+    CommitResult commit(GitTarget target, Map<String, String> files, String message);
 
-    /** {@code sha == null} indica que nada foi comitado (ex.: gateway não configurado). */
-    record CommitResult(String sha) {}
+    /** Alvo do commit: repositório do projeto, branch base e a chave da mudança (vira branch). */
+    record GitTarget(String repositoryUrl, String baseBranch, String changeKey) {}
+
+    /**
+     * Resultado: {@code sha != null} = commit feito; {@code conflict} = head divergiu (R5);
+     * caso contrário (sha null, sem conflito) = não materializado (não configurado / erro).
+     */
+    record CommitResult(String sha, boolean conflict, String message) {
+
+        public static CommitResult committed(String sha) {
+            return new CommitResult(sha, false, null);
+        }
+
+        public static CommitResult conflict(String message) {
+            return new CommitResult(null, true, message);
+        }
+
+        public static CommitResult skipped(String message) {
+            return new CommitResult(null, false, message);
+        }
+    }
 }

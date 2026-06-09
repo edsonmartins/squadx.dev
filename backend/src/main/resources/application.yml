@@ -163,6 +163,11 @@ squadx:
   live:
     url: ${SQUADX_LIVE_URL:http://localhost:3100}
     enabled: ${SQUADX_LIVE_ENABLED:false}
+  git:
+    enabled: ${SQUADX_GIT_ENABLED:false}
+    api-url: ${SQUADX_GIT_API_URL:https://api.github.com}
+    token: ${SQUADX_GIT_TOKEN:}
+    branch-prefix: ${SQUADX_GIT_BRANCH_PREFIX:spec/}
   linktor:
     url: ${SQUADX_LINKTOR_URL:http://localhost:8081}
     enabled: ${SQUADX_LINKTOR_ENABLED:false}

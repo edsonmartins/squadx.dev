@@ -57,8 +57,10 @@ public class DefaultSpecMaterializer implements SpecMaterializer {
         }
 
         String key = changeKey(change);
+        GitCommitGateway.GitTarget target = new GitCommitGateway.GitTarget(
+                change.getProject().getRepositoryUrl(), change.getProject().getDefaultBranch(), key);
         GitCommitGateway.CommitResult result = gitCommitGateway.commit(
-                key, files, "spec(" + key + "): materialize " + label);
+                target, files, "spec(" + key + "): materialize " + label);
 
         version.setContentHash(hash);
         if (result.sha() != null) {
@@ -67,8 +69,11 @@ public class DefaultSpecMaterializer implements SpecMaterializer {
             return MaterializationResult.of(label, result.sha());
         }
         specVersionRepository.save(version);
+        if (result.conflict()) {
+            return MaterializationResult.unavailable("Conflito de materialização: " + result.message());
+        }
         return new MaterializationResult(false, label, null,
-                "Rendered " + files.size() + " file(s); git commit pending (no gateway configured)");
+                "Rendered " + files.size() + " file(s); git commit pendente (" + result.message() + ")");
     }
 
     private SpecVersion createAutoV1(Change change) {

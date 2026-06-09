@@ -37,7 +37,10 @@ class DefaultSpecMaterializerTest {
 
     @BeforeEach
     void setUp() {
-        change = Change.builder().module("auth").build();
+        dev.squadx.model.Project project = dev.squadx.model.Project.builder()
+                .name("Proj").slug("proj").repositoryUrl("https://github.com/o/r").defaultBranch("main").build();
+        project.setId(7L);
+        change = Change.builder().module("auth").project(project).build();
         change.setId(5L);
         version = SpecVersion.builder().change(change).version(1).current(true).build();
 
@@ -53,8 +56,8 @@ class DefaultSpecMaterializerTest {
     @Test
     void commitsViaGateway() {
         when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.of(version));
-        when(gitCommitGateway.commit(eq("auth"), any(), anyString()))
-                .thenReturn(new GitCommitGateway.CommitResult("sha1"));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.committed("sha1"));
 
         SpecMaterializer.MaterializationResult result = materializer.materialize(5L);
 
@@ -67,8 +70,8 @@ class DefaultSpecMaterializerTest {
     @Test
     void idempotentNoOpOnSecondMaterialize() {
         when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.of(version));
-        when(gitCommitGateway.commit(eq("auth"), any(), anyString()))
-                .thenReturn(new GitCommitGateway.CommitResult("sha1"));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.committed("sha1"));
 
         materializer.materialize(5L);   // commits
         materializer.materialize(5L);   // same content + commit present → no-op
@@ -79,22 +82,35 @@ class DefaultSpecMaterializerTest {
     @Test
     void noGatewayCommitLeavesPending() {
         when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.of(version));
-        when(gitCommitGateway.commit(eq("auth"), any(), anyString()))
-                .thenReturn(new GitCommitGateway.CommitResult(null));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.skipped("git materialization not configured"));
 
         SpecMaterializer.MaterializationResult result = materializer.materialize(5L);
 
         assertThat(result.available()).isFalse();
         assertThat(result.commit()).isNull();
-        assertThat(result.message()).contains("pending");
+        assertThat(result.message()).contains("pendente");
         assertThat(version.getContentHash()).isNotBlank();
+    }
+
+    @Test
+    void conflictIsSurfaced() {
+        when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.of(version));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.conflict("branch moved"));
+
+        SpecMaterializer.MaterializationResult result = materializer.materialize(5L);
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.commit()).isNull();
+        assertThat(result.message()).contains("Conflito");
     }
 
     @Test
     void createsAutoV1WhenNoCurrentVersion() {
         when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.empty());
-        when(gitCommitGateway.commit(eq("auth"), any(), anyString()))
-                .thenReturn(new GitCommitGateway.CommitResult("sha1"));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.committed("sha1"));
 
         SpecMaterializer.MaterializationResult result = materializer.materialize(5L);
 

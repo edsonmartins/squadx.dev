@@ -31,6 +31,7 @@ class ExecutionRecord:
     tokens_used: int = 0
     cost: float = 0.0
     metadata: Optional[str] = None  # JSON string
+    created_at: Optional[str] = None
 
 
 @dataclass

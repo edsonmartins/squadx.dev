@@ -39,7 +39,7 @@ class TestSockJSUnwrap:
 
     def test_unwrap_array_message(self):
         client = StompClient("ws://localhost:8080/ws")
-        data = 'a["CONNECTED\\nversion:1.2\\n\\n\\x00"]'
+        data = 'a["CONNECTED\\nversion:1.2\\n\\n\\u0000"]'
         result = client._unwrap_sockjs(data)
         assert "CONNECTED" in result
 

@@ -115,6 +115,54 @@ class SquadxLiveClientTest {
         verify(liveSessionRepository).findByTaskIdOrderByCreatedAtDesc(10L);
     }
 
+    @Test
+    @DisplayName("joinSession should unwrap participant data")
+    void joinSessionShouldUnwrapParticipantData() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/api/sessions/join/ABCD1234", exchange -> respond(exchange, 200,
+                "{\"success\":true,\"data\":{\"id\":\"participant-1\",\"display_name\":\"Agent Dev\"}}"));
+        server.start();
+
+        SquadxLiveClient client = new SquadxLiveClient(configFor(server), jwtProviderFor(server), liveSessionRepository);
+
+        Map<String, Object> participant = client.joinSession("ABCD1234", "Agent Dev");
+
+        assertThat(participant.get("id")).isEqualTo("participant-1");
+        assertThat(participant.get("display_name")).isEqualTo("Agent Dev");
+    }
+
+    @Test
+    @DisplayName("sendChatMessage should unwrap created message data")
+    void sendChatMessageShouldUnwrapCreatedMessageData() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/api/chat/send", exchange -> respond(exchange, 201,
+                "{\"success\":true,\"data\":{\"id\":\"msg-1\",\"content\":\"Hello team\",\"session_id\":\"sess-1\"}}"));
+        server.start();
+
+        SquadxLiveClient client = new SquadxLiveClient(configFor(server), jwtProviderFor(server), liveSessionRepository);
+
+        Map<String, Object> message = client.sendChatMessage("sess-1", "Hello team", "participant-1", null);
+
+        assertThat(message.get("id")).isEqualTo("msg-1");
+        assertThat(message.get("content")).isEqualTo("Hello team");
+    }
+
+    @Test
+    @DisplayName("getChatHistory should unwrap message list")
+    void getChatHistoryShouldUnwrapMessageList() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/api/chat/history", exchange -> respond(exchange, 200,
+                "{\"success\":true,\"data\":{\"messages\":[{\"id\":\"msg-1\",\"content\":\"First\"},{\"id\":\"msg-2\",\"content\":\"Second\"}]}}"));
+        server.start();
+
+        SquadxLiveClient client = new SquadxLiveClient(configFor(server), jwtProviderFor(server), liveSessionRepository);
+
+        List<Map<String, Object>> messages = client.getChatHistory("sess-1", 50, null, null);
+
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0).get("id")).isEqualTo("msg-1");
+    }
+
     private IntegrationConfig configFor(HttpServer httpServer) {
         IntegrationConfig config = new IntegrationConfig();
         config.setServiceSecret("12345678901234567890123456789012");

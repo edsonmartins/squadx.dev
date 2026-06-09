@@ -89,11 +89,11 @@ class TestHandleConfigUpdate:
     """Test handle_config_update modifies settings."""
 
     async def test_updates_max_concurrent_agents(self, handler):
-        with patch("squadx_client.websocket.handlers.settings") as mock_settings:
+        # handle_config_update imports settings from squadx_client.config locally.
+        with patch("squadx_client.config.settings") as mock_settings:
             data = {"type": "config_update", "config": {"max_concurrent_agents": 8}}
             await handler.handle_config_update(data)
-            mock_settings.__setattr__ = MagicMock()
-            # The handler sets attributes via setattr; verify it ran without error.
+            assert mock_settings.max_concurrent_agents == 8
 
     async def test_updates_multiple_fields(self, handler):
         data = {

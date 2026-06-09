@@ -178,6 +178,20 @@ public class WebSocketEventService {
         );
     }
 
+    public void sendExternalParticipantJoined(String sessionCode, String participantId, String displayName, String role) {
+        log.debug("Broadcasting external participant joined for session {}", sessionCode);
+        messagingTemplate.convertAndSend(
+                "/topic/live/" + sessionCode + "/participants",
+                Map.of(
+                        "action", "joined",
+                        "participantId", participantId != null ? participantId : "",
+                        "displayName", displayName != null ? displayName : "Guest",
+                        "role", role != null ? role : "viewer",
+                        "source", "squadx-live"
+                )
+        );
+    }
+
     public void sendParticipantLeft(String sessionCode, Long userId, String userName, int currentViewers) {
         log.debug("Broadcasting participant left for session {}", sessionCode);
         messagingTemplate.convertAndSend(

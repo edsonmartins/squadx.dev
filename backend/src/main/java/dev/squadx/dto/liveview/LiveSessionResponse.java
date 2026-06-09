@@ -15,6 +15,9 @@ public class LiveSessionResponse {
     private String code;
     private Long taskId;
     private String taskTitle;
+    private Long agentId;
+    private String agentName;
+    private String sessionMode;
     private Long hostUserId;
     private String hostUserName;
     private String containerId;
@@ -27,6 +30,8 @@ public class LiveSessionResponse {
     private String externalSessionId;
     private String externalJoinCode;
     private String externalJoinUrl;
+    private String externalAgentParticipantId;
+    private String externalAgentDisplayName;
     private List<ParticipantResponse> participants;
     private Instant createdAt;
     private LocalDateTime endedAt;

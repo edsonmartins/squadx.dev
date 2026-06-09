@@ -299,7 +299,7 @@ Format your response as:
         """Build context string from context dict."""
         context_str = ""
         if context:
-            if context.get("main_task"):
+            if context.get("main_task") is not None:
                 context_str += f"\n\nMain task: {context['main_task'].get('title', 'N/A')}"
             if context.get("completed_subtasks"):
                 context_str += "\n\nAlready completed:"

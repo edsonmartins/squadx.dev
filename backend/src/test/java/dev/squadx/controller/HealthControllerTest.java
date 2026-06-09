@@ -3,6 +3,7 @@ package dev.squadx.controller;
 import dev.squadx.exception.GlobalExceptionHandler;
 import dev.squadx.integration.BrainSentryClient;
 import dev.squadx.integration.IntegrationConfig;
+import dev.squadx.integration.LinktorClient;
 import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.security.JwtAuthenticationFilter;
 import dev.squadx.security.JwtService;
@@ -60,6 +61,9 @@ class HealthControllerTest {
 
     @MockBean
     private SquadxLiveClient squadxLiveClient;
+
+    @MockBean
+    private LinktorClient linktorClient;
 
     @MockBean
     private IntegrationConfig integrationConfig;
@@ -144,6 +148,13 @@ class HealthControllerTest {
                     "reachable", false,
                     "status", "DISABLED"
             ));
+            when(linktorClient.healthCheck()).thenReturn(java.util.Map.of(
+                    "enabled", true,
+                    "configured", true,
+                    "reachable", true,
+                    "authenticated", true,
+                    "status", "UP"
+            ));
             when(integrationConfig.getServiceSecret()).thenReturn("secret");
 
             mockMvc.perform(get("/api/v1/health/doctor"))
@@ -153,6 +164,7 @@ class HealthControllerTest {
                     .andExpect(jsonPath("$.data.brainsentry.status").value("UP"))
                     .andExpect(jsonPath("$.data.memory_policy.status").value("ACTIVE"))
                     .andExpect(jsonPath("$.data.live.status").value("DISABLED"))
+                    .andExpect(jsonPath("$.data.linktor.status").value("UP"))
                     .andExpect(jsonPath("$.data.service_secret_configured").value(true));
         }
 
@@ -188,6 +200,13 @@ class HealthControllerTest {
                     "reachable", false,
                     "status", "DISABLED"
             ));
+            when(linktorClient.healthCheck()).thenReturn(java.util.Map.of(
+                    "enabled", true,
+                    "configured", true,
+                    "reachable", false,
+                    "authenticated", false,
+                    "status", "DOWN"
+            ));
             when(integrationConfig.getServiceSecret()).thenReturn("");
 
             mockMvc.perform(get("/api/v1/health/doctor"))
@@ -195,6 +214,7 @@ class HealthControllerTest {
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.errors.status").value("DEGRADED"))
                     .andExpect(jsonPath("$.errors.brainsentry.status").value("DOWN"))
+                    .andExpect(jsonPath("$.errors.linktor.status").value("DOWN"))
                     .andExpect(jsonPath("$.errors.service_secret_configured").value(false));
         }
     }

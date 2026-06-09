@@ -97,6 +97,7 @@ def mock_sandbox(mock_docker_manager):
     sandbox.status = SandboxStatus.RUNNING
     sandbox.container_id = "container-123"
     sandbox.vnc_port = 5900
+    sandbox.live_join_code = None
     sandbox.manager = mock_docker_manager
 
     # Mock async methods

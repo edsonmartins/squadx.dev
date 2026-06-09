@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createTaskForAdmin, ensureProjectForAdmin, issueServiceToken, loginAsAdmin, seedRealSession } from "./helpers/auth";
+import { createTaskForAdmin, ensureAgentForAdmin, ensureProjectForAdmin, issueServiceToken, loginAsAdmin, seedRealSession } from "./helpers/auth";
 
 test("real backend accepts admin login", async ({ page }) => {
   await page.goto("/login");
@@ -227,4 +227,76 @@ test("real backend reconciles live session and recording webhook events", async 
   const recordingCard = page.getByTestId(`recording-card-${recordingId}`);
   await expect(recordingCard.getByText("COMPLETED", { exact: true })).toBeVisible();
   await expect(recordingCard.getByText("2m 0s")).toBeVisible();
+});
+
+test("real backend completes an execution through the daemon loop", async ({ request }) => {
+  test.skip(process.env.E2E_DAEMON_SMOKE !== "1", "Daemon smoke is not enabled for this run.");
+
+  const { auth, project, agent } = await ensureAgentForAdmin(request);
+  const apiUrl = process.env.E2E_API_URL || "http://127.0.0.1:8080";
+  const taskTitle = `E2E Daemon Execution ${Date.now()}`;
+
+  const createTaskResponse = await request.post(`${apiUrl}/api/v1/tasks`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+    data: {
+      title: taskTitle,
+      description: "Exercise execution -> daemon -> completion flow.",
+      status: "TODO",
+      priority: "MEDIUM",
+      project_id: project.id,
+      assigned_agent_id: agent.id,
+    },
+  });
+  expect(createTaskResponse.ok()).toBeTruthy();
+  const task = (await createTaskResponse.json()).data as { id: number };
+
+  const startExecutionResponse = await request.post(`${apiUrl}/api/v1/executions`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+    data: {
+      task_id: task.id,
+      agent_id: agent.id,
+    },
+  });
+  expect(startExecutionResponse.ok()).toBeTruthy();
+  const execution = (await startExecutionResponse.json()).data as { id: number };
+
+  let finalStatus = "PENDING";
+  let sessionId: string | undefined;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const executionResponse = await request.get(`${apiUrl}/api/v1/executions/${execution.id}`, {
+      headers: {
+        Authorization: `Bearer ${auth.access_token}`,
+      },
+    });
+    expect(executionResponse.ok()).toBeTruthy();
+    const payload = (await executionResponse.json()).data as {
+      status: string;
+      result?: string;
+      brain_sentry_session_id?: string;
+    };
+    finalStatus = payload.status;
+    sessionId = payload.brain_sentry_session_id;
+    if (finalStatus === "COMPLETED") {
+      expect(payload.result).toContain("Smoke execution completed successfully.");
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  expect(finalStatus).toBe("COMPLETED");
+  if (process.env.E2E_BRAINSENTRY_ASSERT === "1") {
+    expect(sessionId).toBeTruthy();
+  }
+
+  const taskResponse = await request.get(`${apiUrl}/api/v1/tasks/${task.id}`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+  });
+  expect(taskResponse.ok()).toBeTruthy();
+  expect((await taskResponse.json()).data.status).toBe("IN_REVIEW");
 });

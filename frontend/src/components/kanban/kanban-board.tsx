@@ -57,7 +57,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   const liveSessionMap = useMemo(() => {
     const map = new Map<number, string>();
     liveSessions.forEach((session) => {
-      if (session.status === "ACTIVE" || session.status === "PENDING") {
+      if ((session.status === "ACTIVE" || session.status === "PENDING") && session.task_id) {
         map.set(session.task_id, session.code);
       }
     });

@@ -163,6 +163,15 @@ squadx:
   live:
     url: ${SQUADX_LIVE_URL:http://localhost:3100}
     enabled: ${SQUADX_LIVE_ENABLED:false}
+  linktor:
+    url: ${SQUADX_LINKTOR_URL:http://localhost:8081}
+    enabled: ${SQUADX_LINKTOR_ENABLED:false}
+    email: ${SQUADX_LINKTOR_EMAIL:}
+    password: ${SQUADX_LINKTOR_PASSWORD:}
+    default-conversation-id: ${SQUADX_LINKTOR_DEFAULT_CONVERSATION_ID:}
+    channel-id: ${SQUADX_LINKTOR_CHANNEL_ID:}
+    contact-id: ${SQUADX_LINKTOR_CONTACT_ID:}
+    auto-create-conversation: ${SQUADX_LINKTOR_AUTO_CREATE_CONVERSATION:false}
   notifications:
     slack:
       enabled: true

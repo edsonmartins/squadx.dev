@@ -303,6 +303,68 @@ class DockerManager:
             logger.error(f"Failed to exec command: {e}")
             return -1, str(e)
 
+    async def exec_command_stream(
+        self,
+        container_id: str,
+        command: list[str],
+        workdir: Optional[str] = None,
+    ):
+        """Execute a command, streaming output incrementally.
+
+        Async generator yielding ("stdout"|"stderr", text) tuples as output
+        arrives, then a final ("exit", exit_code) tuple. The blocking Docker
+        iteration runs in a worker thread; chunks are marshalled back to the
+        event loop via a queue so callbacks run safely on the main loop.
+        """
+        if not self.client:
+            yield ("error", "Docker client not connected")
+            yield ("exit", -1)
+            return
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        sentinel = object()
+
+        def _worker():
+            try:
+                api = self.client.api
+                exec_id = api.exec_create(container_id, command, workdir=workdir)["Id"]
+                stream = api.exec_start(exec_id, stream=True, demux=True)
+                for stdout_chunk, stderr_chunk in stream:
+                    if stdout_chunk:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            ("stdout", stdout_chunk.decode("utf-8", "replace")),
+                        )
+                    if stderr_chunk:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            ("stderr", stderr_chunk.decode("utf-8", "replace")),
+                        )
+                exit_code = api.exec_inspect(exec_id).get("ExitCode", 0)
+                loop.call_soon_threadsafe(queue.put_nowait, ("exit", exit_code))
+            except Exception as e:  # noqa: BLE001 - surface to consumer
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(e)))
+                loop.call_soon_threadsafe(queue.put_nowait, ("exit", -1))
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+
+        worker = loop.run_in_executor(None, _worker)
+        try:
+            while True:
+                item = await queue.get()
+                if item is sentinel:
+                    break
+                yield item
+        finally:
+            # Do NOT block on the worker thread on the abnormal path: if the
+            # consumer closes this generator early (e.g. execute_streaming hit its
+            # timeout), awaiting the still-running blocking Docker stream would
+            # defeat the timeout. The thread exits on its own when the exec stream
+            # ends — which the caller forces by stopping the sandbox/container.
+            if worker.done():
+                worker.result()
+
     async def get_vnc_port(self, container_id: str) -> Optional[int]:
         """Get the mapped VNC port for a container."""
         if not self.client:

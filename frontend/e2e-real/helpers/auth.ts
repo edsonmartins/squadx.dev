@@ -41,6 +41,16 @@ interface ProjectResponse {
   name: string;
 }
 
+interface SquadResponse {
+  id: number;
+  name: string;
+}
+
+interface AgentResponse {
+  id: number;
+  name: string;
+}
+
 interface TaskResponse {
   id: number;
   title: string;
@@ -49,6 +59,7 @@ interface TaskResponse {
 
 let cachedAuth: AuthPayload | null = null;
 let cachedProject: ProjectResponse | null = null;
+let cachedAgent: AgentResponse | null = null;
 
 export async function loginAsAdmin(request: APIRequestContext) {
   if (cachedAuth) {
@@ -203,6 +214,98 @@ export async function createTaskForAdmin(
   }
 
   return { auth, project, task: body.data };
+}
+
+export async function ensureAgentForAdmin(request: APIRequestContext) {
+  if (cachedAuth && cachedProject && cachedAgent) {
+    return { auth: cachedAuth, project: cachedProject, agent: cachedAgent };
+  }
+
+  const auth = await loginAsAdmin(request);
+
+  const organizationsResponse = await request.get(`${apiUrl}/api/v1/organizations/my`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+  });
+  const organizationsBody = (await organizationsResponse.json()) as ApiEnvelope<PageResponse<OrganizationResponse>>;
+  const organizationId = organizationsBody.data?.content?.[0]?.id;
+  if (!organizationId) {
+    throw new Error("No organization available for agent seeding");
+  }
+
+  const agentsResponse = await request.get(`${apiUrl}/api/v1/agents/organization/${organizationId}`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+  });
+  if (agentsResponse.ok()) {
+    const agentsBody = (await agentsResponse.json()) as ApiEnvelope<PageResponse<AgentResponse>>;
+    const existingAgent = agentsBody.data?.content?.[0];
+    if (existingAgent) {
+      cachedAgent = existingAgent;
+      const { project } = await ensureProjectForAdmin(request);
+      return { auth, project, agent: existingAgent };
+    }
+  }
+
+  const squadsResponse = await request.get(`${apiUrl}/api/v1/squads/organization/${organizationId}`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+  });
+
+  let squadId: number | undefined;
+  if (squadsResponse.ok()) {
+    const squadsBody = (await squadsResponse.json()) as ApiEnvelope<PageResponse<SquadResponse>>;
+    squadId = squadsBody.data?.content?.[0]?.id;
+  }
+
+  if (!squadId) {
+    const createSquadResponse = await request.post(`${apiUrl}/api/v1/squads`, {
+      headers: {
+        Authorization: `Bearer ${auth.access_token}`,
+      },
+      data: {
+        name: `E2E Squad ${Date.now()}`,
+        description: "Squad created by the real daemon smoke suite",
+        organization_id: organizationId,
+      },
+    });
+    if (!createSquadResponse.ok()) {
+      throw new Error(`Failed to create squad with status ${createSquadResponse.status()}`);
+    }
+    const squadBody = (await createSquadResponse.json()) as ApiEnvelope<SquadResponse>;
+    squadId = squadBody.data?.id;
+  }
+
+  if (!squadId) {
+    throw new Error("Could not resolve squad for agent seeding");
+  }
+
+  const createAgentResponse = await request.post(`${apiUrl}/api/v1/agents`, {
+    headers: {
+      Authorization: `Bearer ${auth.access_token}`,
+    },
+    data: {
+      name: `E2E Agent ${Date.now()}`,
+      agent_type: "FULLSTACK",
+      squad_id: squadId,
+      capabilities: ["execute_task"],
+    },
+  });
+  if (!createAgentResponse.ok()) {
+    throw new Error(`Failed to create agent with status ${createAgentResponse.status()}`);
+  }
+
+  const agentBody = (await createAgentResponse.json()) as ApiEnvelope<AgentResponse>;
+  if (!agentBody.data?.id) {
+    throw new Error("Agent creation response did not include an agent id");
+  }
+
+  cachedAgent = agentBody.data;
+  const { project } = await ensureProjectForAdmin(request);
+  return { auth, project, agent: agentBody.data };
 }
 
 export function issueServiceToken(issuer: string) {

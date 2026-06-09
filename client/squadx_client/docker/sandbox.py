@@ -306,6 +306,70 @@ class AgentSandbox:
                 duration_seconds=time.time() - start_time,
             )
 
+    async def execute_streaming(
+        self,
+        command: list[str],
+        on_output=None,
+        workdir: str = "/workspace",
+        timeout: float = 1800,
+    ) -> SandboxResult:
+        """Execute a (potentially long-running) command, streaming its output.
+
+        ``on_output`` is called on the event loop with each text chunk as it
+        arrives, suitable for forwarding live progress. The full output is also
+        buffered and returned in the result.
+        """
+        if self.status != SandboxStatus.RUNNING or not self.container_id:
+            return SandboxResult(
+                success=False,
+                exit_code=-1,
+                output="",
+                error=f"Sandbox not running (status: {self.status})",
+            )
+
+        import time
+        start_time = time.time()
+        chunks: list[str] = []
+        exit_code = 0
+        error: Optional[str] = None
+
+        async def _run() -> None:
+            nonlocal exit_code, error
+            async for kind, payload in self.manager.exec_command_stream(
+                self.container_id, command, workdir=workdir
+            ):
+                if kind in ("stdout", "stderr"):
+                    chunks.append(payload)
+                    if on_output:
+                        try:
+                            on_output(payload)
+                        except Exception as cb_err:  # noqa: BLE001
+                            logger.error(f"Streaming output callback error: {cb_err}")
+                elif kind == "exit":
+                    exit_code = payload
+                elif kind == "error":
+                    error = payload
+                    exit_code = -1
+
+        try:
+            await asyncio.wait_for(_run(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return SandboxResult(
+                success=False,
+                exit_code=-1,
+                output="".join(chunks),
+                error=f"Command timed out after {timeout}s",
+                duration_seconds=timeout,
+            )
+
+        return SandboxResult(
+            success=exit_code == 0 and error is None,
+            exit_code=exit_code,
+            output="".join(chunks),
+            error=error,
+            duration_seconds=time.time() - start_time,
+        )
+
     async def write_file(self, path: str, content: str) -> bool:
         """Write a file in the sandbox.
 

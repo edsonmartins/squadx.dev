@@ -49,9 +49,10 @@ class CapabilityControllerTest {
     @DisplayName("GET /api/v1/capabilities should return registry payload")
     void shouldReturnCapabilityRegistry() throws Exception {
         when(capabilityRegistryService.getCapabilities()).thenReturn(Map.of(
-                "summary", Map.of("integrations", 3, "notificationProviders", 1, "proceduralMemoryEnabled", true),
+                "summary", Map.of("integrations", 4, "notificationProviders", 1, "proceduralMemoryEnabled", true),
                 "integrations", Map.of(
                         "brainsentry", Map.of("status", "UP", "enabled", true),
+                        "linktor", Map.of("status", "UP", "enabled", true),
                         "live", Map.of("status", "DISABLED", "enabled", false),
                         "memoryPolicy", Map.of("status", "ACTIVE", "memoryScope", "adaptive", "proceduralMemoryEnabled", true)
                 ),
@@ -63,8 +64,9 @@ class CapabilityControllerTest {
         mockMvc.perform(get("/api/v1/capabilities"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.summary.integrations").value(3))
+                .andExpect(jsonPath("$.data.summary.integrations").value(4))
                 .andExpect(jsonPath("$.data.integrations.brainsentry.status").value("UP"))
+                .andExpect(jsonPath("$.data.integrations.linktor.status").value("UP"))
                 .andExpect(jsonPath("$.data.integrations.memoryPolicy.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.notifications[0].key").value("notifications.slack"));
     }

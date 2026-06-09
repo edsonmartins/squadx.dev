@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -163,6 +165,213 @@ public class BrainSentryClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listMemories(Long organizationId, int page, int size) {
+        if (!isEnabled()) {
+            return List.of();
+        }
+
+        try {
+            Object response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/v1/memories")
+                            .queryParam("page", Math.max(page, 0))
+                            .queryParam("size", Math.max(size, 1))
+                            .build())
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .body(Object.class);
+
+            return unwrapMemoryList(response);
+        } catch (Exception e) {
+            log.warn("BrainSentry list memories failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> searchMemories(Long organizationId, String query, int limit) {
+        if (!isEnabled() || query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            Object response = restClient.post()
+                    .uri("/api/v1/memories/search")
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .body(Map.of("query", query, "limit", Math.max(limit, 1)))
+                    .retrieve()
+                    .body(Object.class);
+
+            return unwrapMemoryList(response);
+        } catch (Exception e) {
+            log.warn("BrainSentry memory search failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> createMemory(Long organizationId, Map<String, Object> payload) {
+        if (!isEnabled()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.post()
+                    .uri("/api/v1/memories")
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            return response != null ? response : Map.of();
+        } catch (Exception e) {
+            log.warn("BrainSentry create memory failed: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> updateMemory(Long organizationId, String memoryId, Map<String, Object> payload) {
+        if (!isEnabled() || memoryId == null || memoryId.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.put()
+                    .uri("/api/v1/memories/{id}", memoryId)
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            return response != null ? response : Map.of();
+        } catch (Exception e) {
+            log.warn("BrainSentry update memory failed: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    public boolean deleteMemory(Long organizationId, String memoryId) {
+        if (!isEnabled() || memoryId == null || memoryId.isBlank()) {
+            return false;
+        }
+
+        try {
+            restClient.delete()
+                    .uri("/api/v1/memories/{id}", memoryId)
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (Exception e) {
+            log.warn("BrainSentry delete memory failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getProfile(Long organizationId, String userId) {
+        if (!isEnabled() || userId == null || userId.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.get()
+                    .uri("/api/v1/profile/{userId}", userId)
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .body(Map.class);
+            return response != null ? response : Map.of();
+        } catch (Exception e) {
+            log.warn("BrainSentry get profile failed: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listActiveSessions(Long organizationId) {
+        if (!isEnabled()) {
+            return List.of();
+        }
+
+        try {
+            Object response = restClient.get()
+                    .uri("/api/v1/sessions/active")
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .body(Object.class);
+
+            if (response instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("BrainSentry list active sessions failed: {}", e.getMessage());
+        }
+
+        return List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getSession(Long organizationId, String sessionId) {
+        if (!isEnabled() || sessionId == null || sessionId.isBlank()) {
+            return Map.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.get()
+                    .uri("/api/v1/sessions/{id}", sessionId)
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .body(Map.class);
+            return response != null ? response : Map.of();
+        } catch (Exception e) {
+            log.warn("BrainSentry get session failed: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getSessionCache(Long organizationId, String sessionId, int limit) {
+        if (!isEnabled() || sessionId == null || sessionId.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            Map<String, Object> response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/v1/session-cache/{sessionId}")
+                            .queryParam("limit", Math.max(limit, 1))
+                            .build(sessionId))
+                    .header("Authorization", "Bearer " + jwtProvider.generateToken("brainsentry"))
+                    .header("X-Tenant-ID", resolveTenantId(organizationId))
+                    .retrieve()
+                    .body(Map.class);
+
+            if (response == null) {
+                return List.of();
+            }
+            Object interactions = response.get("interactions");
+            if (interactions instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("BrainSentry get session cache failed: {}", e.getMessage());
+        }
+
+        return List.of();
+    }
+
     private void createMemory(String tenantId,
                               String content,
                               String summary,
@@ -193,6 +402,42 @@ public class BrainSentryClient {
                 .body(payload)
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> unwrapMemoryList(Object response) {
+        if (response instanceof List<?> list) {
+            return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> (Map<String, Object>) item)
+                    .toList();
+        }
+
+        if (response instanceof Map<?, ?> map) {
+            Object memories = map.get("memories");
+            if (memories instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList();
+            }
+
+            Object content = map.get("content");
+            if (content instanceof List<?> list) {
+                return list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList();
+            }
+
+            if (!map.isEmpty()) {
+                List<Map<String, Object>> single = new ArrayList<>();
+                single.add((Map<String, Object>) map);
+                return single;
+            }
+        }
+
+        return Collections.emptyList();
     }
 
     private String resolveTenantId(Long organizationId) {

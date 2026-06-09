@@ -48,6 +48,9 @@ class TaskServiceTest {
     private AgentRepository agentRepository;
 
     @Mock
+    private SquadRepository squadRepository;
+
+    @Mock
     private OrganizationMemberRepository memberRepository;
 
     @Mock

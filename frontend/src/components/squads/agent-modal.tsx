@@ -5,7 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { agentsApi, AgentResponse, AgentType } from "@/lib/api";
+import {
+  agentsApi,
+  AgentResponse,
+  AgentType,
+  AgentRuntimeKind,
+  CliProvider,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,17 +33,40 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-const agentSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  type: z.enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"]),
-  description: z.string().max(500).optional(),
-  model: z.string().min(1, "Model is required"),
-  system_prompt: z.string().max(4000).optional(),
-  temperature: z.number().min(0).max(2),
-  max_tokens: z.number().min(100).max(128000),
-});
+const agentSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100),
+    type: z.enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"]),
+    runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]),
+    cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
+    description: z.string().max(500).optional(),
+    // Model only applies to native agents; external CLIs manage their own model.
+    model: z.string().optional(),
+    system_prompt: z.string().max(4000).optional(),
+    temperature: z.number().min(0).max(2),
+    max_tokens: z.number().min(100).max(128000),
+  })
+  .refine(
+    (data) => data.runtime_kind !== "EXTERNAL_CLI" || !!data.cli_provider,
+    { message: "Select a CLI provider", path: ["cli_provider"] }
+  )
+  .refine(
+    (data) => data.runtime_kind !== "NATIVE" || !!(data.model && data.model.length > 0),
+    { message: "Model is required", path: ["model"] }
+  );
 
 type AgentFormData = z.infer<typeof agentSchema>;
+
+const runtimeOptions: { value: AgentRuntimeKind; label: string; description: string }[] = [
+  { value: "NATIVE", label: "Native (specialized)", description: "SquadX's built-in agentic loop with tools" },
+  { value: "EXTERNAL_CLI", label: "External CLI", description: "Run a frontier coding CLI inside the sandbox" },
+];
+
+const cliProviderOptions: { value: CliProvider; label: string }[] = [
+  { value: "CLAUDE_CODE", label: "Claude Code" },
+  { value: "CODEX", label: "Codex CLI" },
+  { value: "GEMINI_CLI", label: "Gemini CLI" },
+];
 
 const agentTypes: { value: AgentType; label: string; description: string }[] = [
   { value: "COORDINATOR", label: "Coordinator", description: "Orchestrates tasks and delegates to specialists" },
@@ -81,6 +110,8 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
     defaultValues: {
       name: "",
       type: "FULLSTACK",
+      runtime_kind: "NATIVE",
+      cli_provider: null,
       description: "",
       model: "claude-3-5-sonnet-20241022",
       system_prompt: "",
@@ -91,6 +122,8 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
 
   const agentType = watch("type");
   const model = watch("model");
+  const runtimeKind = watch("runtime_kind");
+  const cliProvider = watch("cli_provider");
 
   // Reset form when modal opens/closes or agent changes
   useEffect(() => {
@@ -99,6 +132,8 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
         reset({
           name: agent.name,
           type: agent.type,
+          runtime_kind: agent.runtime_kind || "NATIVE",
+          cli_provider: agent.cli_provider ?? null,
           description: agent.description || "",
           model: agent.model,
           system_prompt: agent.system_prompt || "",
@@ -109,6 +144,8 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
         reset({
           name: "",
           type: "FULLSTACK",
+          runtime_kind: "NATIVE",
+          cli_provider: null,
           description: "",
           model: "claude-3-5-sonnet-20241022",
           system_prompt: "",
@@ -122,9 +159,16 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
   const createMutation = useMutation({
     mutationFn: (data: AgentFormData) =>
       agentsApi.create({
-        ...data,
-        squad_id: squadId!,
+        name: data.name,
+        agent_type: data.type,
+        runtime_kind: data.runtime_kind,
+        cli_provider: data.runtime_kind === "EXTERNAL_CLI" ? data.cli_provider : null,
+        description: data.description,
+        model_id: data.model || undefined,
         system_prompt: data.system_prompt || undefined,
+        temperature: data.temperature,
+        max_tokens: data.max_tokens,
+        squad_id: squadId!,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents", squadId] });
@@ -148,8 +192,10 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
     mutationFn: (data: AgentFormData) =>
       agentsApi.update(agent!.id, {
         name: data.name,
+        runtime_kind: data.runtime_kind,
+        cli_provider: data.runtime_kind === "EXTERNAL_CLI" ? data.cli_provider : null,
         description: data.description,
-        model: data.model,
+        model_id: data.model || undefined,
         system_prompt: data.system_prompt,
         temperature: data.temperature,
         max_tokens: data.max_tokens,
@@ -246,6 +292,71 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
+                <Label htmlFor="runtime_kind">Runtime</Label>
+                <Select
+                  value={runtimeKind}
+                  onValueChange={(value) =>
+                    setValue("runtime_kind", value as AgentRuntimeKind)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select runtime" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {runtimeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {runtimeOptions.find((o) => o.value === runtimeKind)?.description}
+                </p>
+              </div>
+
+              {runtimeKind === "EXTERNAL_CLI" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="cli_provider">CLI provider *</Label>
+                  <Select
+                    value={cliProvider ?? ""}
+                    onValueChange={(value) =>
+                      setValue("cli_provider", value as CliProvider, {
+                        shouldValidate: true,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a CLI" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cliProviderOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.cli_provider && (
+                    <p className="text-sm text-destructive">
+                      {errors.cli_provider.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {runtimeKind === "EXTERNAL_CLI" && (
+              <p className="text-xs text-muted-foreground">
+                The CLI runs inside the hardened sandbox with the screen streamed to
+                Live View. Model/prompt settings below are managed by the CLI itself.
+              </p>
+            )}
+
+            {runtimeKind === "NATIVE" && (
+            <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
                 <Label htmlFor="model">Model *</Label>
                 <Select
                   value={model}
@@ -303,6 +414,8 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
                 Custom instructions for the agent. Leave empty to use default prompts.
               </p>
             </div>
+            </>
+            )}
           </div>
 
           <DialogFooter>

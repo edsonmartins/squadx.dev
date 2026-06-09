@@ -1,6 +1,8 @@
 package dev.squadx.service;
 
 import dev.squadx.dto.liveview.JoinSessionRequest;
+import dev.squadx.dto.liveview.LiveChatMessageRequest;
+import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
 import dev.squadx.dto.liveview.ParticipantResponse;
@@ -10,6 +12,7 @@ import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.LiveSessionStatus;
+import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.LiveSessionParticipantRepository;
 import dev.squadx.repository.LiveSessionRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +37,7 @@ public class LiveViewService {
     private final LiveSessionRepository liveSessionRepository;
     private final LiveSessionParticipantRepository participantRepository;
     private final TaskRepository taskRepository;
+    private final AgentRepository agentRepository;
     private final OrganizationMemberRepository orgMemberRepository;
     private final WebSocketEventService webSocketEventService;
     private final SquadxLiveClient squadxLiveClient;
@@ -89,12 +94,57 @@ public class LiveViewService {
     }
 
     @Transactional
+    public LiveSessionResponse ensureDirectAgentSession(Long agentId, User user) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+
+        Long organizationId = agent.getSquad().getOrganization().getId();
+        if (!hasOrganizationAccess(user, organizationId)) {
+            throw new ForbiddenException("You don't have access to this agent");
+        }
+
+        LiveSession existing = liveSessionRepository.findByAgentIdAndStatus(agentId, LiveSessionStatus.ACTIVE)
+                .orElse(null);
+        if (existing != null) {
+            hydrateExternalSession(existing);
+            ensureExternalAgentParticipantIfAvailable(existing);
+            existing = liveSessionRepository.save(existing);
+            return mapToResponse(existing);
+        }
+
+        LiveSession session = new LiveSession();
+        session.setCode(generateUniqueCode());
+        session.setAgent(agent);
+        session.setHostUser(user);
+        session.setMaxViewers(25);
+        session.setResolution("1280x720");
+        session.setStatus(LiveSessionStatus.ACTIVE);
+        session = liveSessionRepository.save(session);
+
+        LiveSessionParticipant hostParticipant = new LiveSessionParticipant();
+        hostParticipant.setSession(session);
+        hostParticipant.setUser(user);
+        hostParticipant.setIsHost(true);
+        hostParticipant.setCanControl(true);
+        participantRepository.save(hostParticipant);
+
+        hydrateExternalSession(session);
+        ensureExternalAgentParticipantIfAvailable(session);
+        session = liveSessionRepository.save(session);
+
+        webSocketEventService.sendLiveSessionStarted(session.getCode(), session.getId());
+        log.info("Direct agent session ensured: {} for agent {}", session.getCode(), agent.getId());
+
+        return mapToResponse(session);
+    }
+
+    @Transactional
     public LiveSessionResponse joinSession(JoinSessionRequest request, User user) {
         LiveSession session = liveSessionRepository.findByCodeAndStatus(request.getCode(), LiveSessionStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("Active session not found with code: " + request.getCode()));
 
         // Check if user has access to the task's organization
-        Long organizationId = session.getTask().getProject().getOrganization().getId();
+        Long organizationId = getSessionOrganizationId(session);
         if (!hasOrganizationAccess(user, organizationId)) {
             throw new ForbiddenException("You don't have access to this session");
         }
@@ -177,6 +227,7 @@ public class LiveViewService {
 
         hydrateExternalSession(session);
         session.setStatus(LiveSessionStatus.ACTIVE);
+        ensureExternalAgentParticipantIfAvailable(session);
         session = liveSessionRepository.save(session);
 
         // Notify via WebSocket
@@ -185,6 +236,39 @@ public class LiveViewService {
         log.info("Live session started: {}", session.getCode());
 
         return mapToResponse(session);
+    }
+
+    @Transactional
+    public LiveChatMessageResponse sendAgentMessage(Long sessionId, LiveChatMessageRequest request, User user) {
+        LiveSession session = getManagedSession(sessionId, user);
+        ensureSessionActive(session);
+        ensureExternalSessionAvailable(session);
+
+        String participantId = ensureExternalAgentParticipant(session);
+        Map<String, Object> message = squadxLiveClient.sendChatMessage(
+                session.getExternalSessionId(),
+                request.getContent(),
+                participantId,
+                request.getRecipientId()
+        );
+
+        if (message.isEmpty()) {
+            throw new BadRequestException("Failed to send message to SquadX Live");
+        }
+
+        liveSessionRepository.save(session);
+        return mapChatMessage(message);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LiveChatMessageResponse> getChatHistory(Long sessionId, int limit, String before, String recipientId, User user) {
+        LiveSession session = getManagedSession(sessionId, user);
+        ensureExternalSessionAvailable(session);
+
+        return squadxLiveClient.getChatHistory(session.getExternalSessionId(), limit, before, recipientId)
+                .stream()
+                .map(this::mapChatMessage)
+                .toList();
     }
 
     @Transactional
@@ -269,7 +353,7 @@ public class LiveViewService {
         LiveSession session = liveSessionRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
 
-        Long organizationId = session.getTask().getProject().getOrganization().getId();
+        Long organizationId = getSessionOrganizationId(session);
         if (!hasOrganizationAccess(user, organizationId)) {
             throw new ForbiddenException("You don't have access to this session");
         }
@@ -339,9 +423,8 @@ public class LiveViewService {
         }
 
         Long taskId = session.getTask() != null ? session.getTask().getId() : null;
-        Long agentId = session.getTask() != null && session.getTask().getAssignedAgent() != null
-                ? session.getTask().getAssignedAgent().getId()
-                : null;
+        Agent linkedAgent = getSessionAgent(session);
+        Long agentId = linkedAgent != null ? linkedAgent.getId() : null;
 
         Map<String, String> externalSession = squadxLiveClient.createSession(taskId, agentId, "p2p");
         if (externalSession == null || externalSession.isEmpty()) {
@@ -351,6 +434,68 @@ public class LiveViewService {
         session.setExternalSessionId(blankToNull(externalSession.get("sessionId")));
         session.setExternalJoinCode(blankToNull(externalSession.get("joinCode")));
         session.setExternalJoinUrl(blankToNull(externalSession.get("joinUrl")));
+    }
+
+    private String ensureExternalAgentParticipant(LiveSession session) {
+        if (session.getExternalAgentParticipantId() != null && !session.getExternalAgentParticipantId().isBlank()) {
+            return session.getExternalAgentParticipantId();
+        }
+
+        Agent agent = getSessionAgent(session);
+        if (agent == null) {
+            throw new BadRequestException("Session has no linked agent for live communication");
+        }
+
+        String joinCode = session.getExternalJoinCode();
+        if (joinCode == null || joinCode.isBlank()) {
+            throw new BadRequestException("Live session has no external join code");
+        }
+
+        String displayName = "Agent " + agent.getName();
+        Map<String, Object> participant = squadxLiveClient.joinSession(joinCode, displayName);
+        String participantId = blankToNull(stringValue(participant.get("id")));
+        if (participantId == null) {
+            throw new BadRequestException("Failed to register agent in SquadX Live session");
+        }
+
+        session.setExternalAgentParticipantId(participantId);
+        session.setExternalAgentDisplayName(displayName);
+        return participantId;
+    }
+
+    private void ensureExternalAgentParticipantIfAvailable(LiveSession session) {
+        if (getSessionAgent(session) == null) {
+            return;
+        }
+
+        try {
+            ensureExternalAgentParticipant(session);
+        } catch (BadRequestException e) {
+            log.warn("Failed to provision external agent participant for session {}: {}", session.getId(), e.getMessage());
+        }
+    }
+
+    private LiveSession getManagedSession(Long sessionId, User user) {
+        LiveSession session = liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
+
+        Long organizationId = getSessionOrganizationId(session);
+        if (!hasOrganizationAccess(user, organizationId)) {
+            throw new ForbiddenException("You don't have access to this session");
+        }
+        return session;
+    }
+
+    private void ensureSessionActive(LiveSession session) {
+        if (session.getStatus() != LiveSessionStatus.ACTIVE) {
+            throw new BadRequestException("Live session is not active");
+        }
+    }
+
+    private void ensureExternalSessionAvailable(LiveSession session) {
+        if (session.getExternalSessionId() == null || session.getExternalSessionId().isBlank()) {
+            throw new BadRequestException("Session is not linked to SquadX Live");
+        }
     }
 
     private LiveSessionResponse mapToResponse(LiveSession session) {
@@ -365,8 +510,11 @@ public class LiveViewService {
         return LiveSessionResponse.builder()
                 .id(session.getId())
                 .code(session.getCode())
-                .taskId(session.getTask().getId())
-                .taskTitle(session.getTask().getTitle())
+                .taskId(session.getTask() != null ? session.getTask().getId() : null)
+                .taskTitle(session.getTask() != null ? session.getTask().getTitle() : null)
+                .agentId(session.getAgent() != null ? session.getAgent().getId() : getAgentIdFromTask(session))
+                .agentName(resolveAgentName(session))
+                .sessionMode(session.getTask() != null ? "TASK" : "DIRECT_AGENT")
                 .hostUserId(session.getHostUser().getId())
                 .hostUserName(session.getHostUser().getFullName())
                 .containerId(session.getContainerId())
@@ -379,10 +527,39 @@ public class LiveViewService {
                 .externalSessionId(session.getExternalSessionId())
                 .externalJoinCode(session.getExternalJoinCode())
                 .externalJoinUrl(session.getExternalJoinUrl())
+                .externalAgentParticipantId(session.getExternalAgentParticipantId())
+                .externalAgentDisplayName(session.getExternalAgentDisplayName())
                 .participants(participants)
                 .createdAt(session.getCreatedAt())
                 .endedAt(session.getEndedAt())
                 .build();
+    }
+
+    private Long getSessionOrganizationId(LiveSession session) {
+        if (session.getTask() != null) {
+            return session.getTask().getProject().getOrganization().getId();
+        }
+        if (session.getAgent() != null) {
+            return session.getAgent().getSquad().getOrganization().getId();
+        }
+        throw new BadRequestException("Session is not linked to a task or agent");
+    }
+
+    private Agent getSessionAgent(LiveSession session) {
+        if (session.getAgent() != null) {
+            return session.getAgent();
+        }
+        return session.getTask() != null ? session.getTask().getAssignedAgent() : null;
+    }
+
+    private Long getAgentIdFromTask(LiveSession session) {
+        Agent agent = getSessionAgent(session);
+        return agent != null ? agent.getId() : null;
+    }
+
+    private String resolveAgentName(LiveSession session) {
+        Agent agent = getSessionAgent(session);
+        return agent != null ? agent.getName() : null;
     }
 
     private String resolveViewerUrl(LiveSession session) {
@@ -401,6 +578,34 @@ public class LiveViewService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    private String stringValue(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private LiveChatMessageResponse mapChatMessage(Map<String, Object> message) {
+        return LiveChatMessageResponse.builder()
+                .id(stringValue(message.get("id")))
+                .sessionId(stringValue(message.getOrDefault("session_id", message.get("sessionId"))))
+                .participantId(stringValue(message.getOrDefault("participant_id", message.get("participantId"))))
+                .displayName(stringValue(message.getOrDefault("display_name", message.get("displayName"))))
+                .content(stringValue(message.get("content")))
+                .messageType(stringValue(message.getOrDefault("message_type", message.get("messageType"))))
+                .recipientId(stringValue(message.getOrDefault("recipient_id", message.get("recipientId"))))
+                .createdAt(parseInstant(message.getOrDefault("created_at", message.get("createdAt"))))
+                .build();
+    }
+
+    private Instant parseInstant(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(String.valueOf(value));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private ParticipantResponse mapParticipant(LiveSessionParticipant participant) {

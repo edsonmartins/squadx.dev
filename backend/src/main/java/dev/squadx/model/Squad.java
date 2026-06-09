@@ -32,6 +32,11 @@ public class Squad extends BaseEntity {
     @Builder.Default
     private Set<Agent> agents = new HashSet<>();
 
+    /** Leader agent that work assigned to the squad routes to. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leader_agent_id")
+    private Agent leaderAgent;
+
     @OneToMany(mappedBy = "squad")
     @Builder.Default
     private Set<Project> projects = new HashSet<>();

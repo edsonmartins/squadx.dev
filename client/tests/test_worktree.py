@@ -87,11 +87,7 @@ class TestWorktreeManager:
             MagicMock(returncode=0),  # git commit
         ]
 
-        with patch.object(info, "exists", new_callable=lambda: property(lambda self: True)):
-            # Override exists to return True
-            pass
-
-        # Directly patch os.path.isdir for the exists check
+        # info.exists is a read-only property backed by os.path.isdir; force it True.
         with patch("squadx_client.git.worktree.os.path.isdir", return_value=True):
             result = mgr.checkpoint("frontend", "test checkpoint")
 

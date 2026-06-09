@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { parseWithFallback, pageSchema, emptyPage } from "./schema";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 interface ApiResponse<T> {
@@ -137,6 +140,31 @@ export class ApiError extends Error {
 
 export const api = new ApiClient(API_URL);
 
+/**
+ * GET a paginated endpoint and validate it against `item`'s schema, falling back
+ * to an empty page on drift (parse, don't cast — see schema.ts / CLAUDE.md).
+ */
+function getPage<T>(endpoint: string, item: z.ZodTypeAny): Promise<PageResponse<T>> {
+  return api.get<unknown>(endpoint).then((d) =>
+    parseWithFallback<PageResponse<T>>(
+      pageSchema(item) as unknown as z.ZodType<PageResponse<T>>,
+      d,
+      emptyPage<T>()
+    )
+  );
+}
+
+/** GET an array endpoint and validate it, falling back to [] on drift. */
+function getList<T>(endpoint: string, item: z.ZodTypeAny): Promise<T[]> {
+  return api.get<unknown>(endpoint).then((d) =>
+    parseWithFallback<T[]>(
+      z.array(item).catch([]) as unknown as z.ZodType<T[]>,
+      d,
+      []
+    )
+  );
+}
+
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
@@ -210,6 +238,145 @@ export const tasksApi = {
   getBlockers: (taskId: number) =>
     api.get<TaskResponse[]>(`/api/v1/tasks/${taskId}/blockers`),
 };
+
+// Autopilot response schemas — parse, don't cast (see schema.ts / CLAUDE.md).
+const autopilotResponseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  cron_expression: z.string(),
+  timezone: z.string().catch("UTC"),
+  execution_mode: z.enum(["CREATE_TASK", "RUN_TASK"]).catch("CREATE_TASK"),
+  organization_id: z.number(),
+  project_id: z.number(),
+  project_name: z.string().catch(""),
+  target_squad_id: z.number().nullable().optional(),
+  target_squad_name: z.string().optional(),
+  target_agent_id: z.number().nullable().optional(),
+  target_agent_name: z.string().optional(),
+  task_title: z.string().catch(""),
+  task_description: z.string().optional(),
+  task_priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).catch("MEDIUM"),
+  enabled: z.boolean().catch(true),
+  last_run_at: z.string().optional(),
+  next_run_at: z.string().optional(),
+  run_count: z.number().catch(0),
+  webhook_token: z.string().optional(),
+  created_by_id: z.number().optional(),
+  created_by_name: z.string().optional(),
+  created_at: z.string().catch(""),
+  updated_at: z.string().optional(),
+});
+
+const autopilotRunResponseSchema = z.object({
+  id: z.number(),
+  autopilot_id: z.number(),
+  trigger_type: z.enum(["CRON", "MANUAL", "WEBHOOK"]).catch("CRON"),
+  status: z.enum(["SUCCESS", "SKIPPED", "FAILED"]).catch("FAILED"),
+  created_task_id: z.number().optional(),
+  execution_id: z.number().optional(),
+  message: z.string().optional(),
+  triggered_at: z.string().catch(""),
+});
+
+// Autopilots API
+export const autopilotsApi = {
+  list: (organizationId: number) =>
+    getPage<AutopilotResponse>(
+      `/api/v1/autopilots/organization/${organizationId}`,
+      autopilotResponseSchema
+    ),
+  get: (id: number) => api.get<AutopilotResponse>(`/api/v1/autopilots/${id}`),
+  create: (data: CreateAutopilotRequest) =>
+    api.post<AutopilotResponse>("/api/v1/autopilots", data),
+  update: (id: number, data: UpdateAutopilotRequest) =>
+    api.put<AutopilotResponse>(`/api/v1/autopilots/${id}`, data),
+  toggle: (id: number) =>
+    api.patch<AutopilotResponse>(`/api/v1/autopilots/${id}/toggle`),
+  run: (id: number) =>
+    api.post<AutopilotRunResponse>(`/api/v1/autopilots/${id}/run`),
+  rotateWebhook: (id: number) =>
+    api.post<AutopilotResponse>(`/api/v1/autopilots/${id}/webhook/rotate`),
+  runs: (id: number) =>
+    getPage<AutopilotRunResponse>(
+      `/api/v1/autopilots/${id}/runs`,
+      autopilotRunResponseSchema
+    ),
+  delete: (id: number) => api.delete(`/api/v1/autopilots/${id}`),
+};
+
+// Autopilot types
+export type AutopilotExecutionMode = "CREATE_TASK" | "RUN_TASK";
+export type AutopilotTriggerType = "CRON" | "MANUAL" | "WEBHOOK";
+export type AutopilotRunStatus = "SUCCESS" | "SKIPPED" | "FAILED";
+
+export interface AutopilotResponse {
+  id: number;
+  name: string;
+  description?: string;
+  cron_expression: string;
+  timezone: string;
+  execution_mode: AutopilotExecutionMode;
+  organization_id: number;
+  project_id: number;
+  project_name: string;
+  target_squad_id?: number | null;
+  target_squad_name?: string;
+  target_agent_id?: number | null;
+  target_agent_name?: string;
+  task_title: string;
+  task_description?: string;
+  task_priority: TaskPriority;
+  enabled: boolean;
+  last_run_at?: string;
+  next_run_at?: string;
+  run_count: number;
+  webhook_token?: string;
+  created_by_id?: number;
+  created_by_name?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateAutopilotRequest {
+  name: string;
+  description?: string;
+  cron_expression: string;
+  timezone?: string;
+  execution_mode?: AutopilotExecutionMode;
+  project_id: number;
+  target_squad_id?: number | null;
+  target_agent_id?: number | null;
+  task_title: string;
+  task_description?: string;
+  task_priority?: TaskPriority;
+  enabled?: boolean;
+}
+
+export interface UpdateAutopilotRequest {
+  name?: string;
+  description?: string;
+  cron_expression?: string;
+  timezone?: string;
+  execution_mode?: AutopilotExecutionMode;
+  target_squad_id?: number | null;
+  target_agent_id?: number | null;
+  task_title?: string;
+  task_description?: string;
+  task_priority?: TaskPriority;
+  enabled?: boolean;
+}
+
+export interface AutopilotRunResponse {
+  id: number;
+  autopilot_id: number;
+  trigger_type: AutopilotTriggerType;
+  status: AutopilotRunStatus;
+  created_task_id?: number;
+  execution_id?: number;
+  message?: string;
+  triggered_at: string;
+}
 
 // Types
 export interface AuthResponse {
@@ -329,6 +496,8 @@ export interface TaskResponse {
   project_name: string;
   assigned_agent_id?: number;
   assigned_agent_name?: string;
+  assigned_squad_id?: number | null;
+  assigned_squad_name?: string;
   execution_id?: number;
   brain_sentry_session_id?: string;
   parent_task_id?: number;
@@ -354,6 +523,7 @@ export interface CreateTaskRequest {
   project_id: number;
   parent_task_id?: number;
   assigned_agent_id?: number;
+  assigned_squad_id?: number | null;
   tags?: string[];
 }
 
@@ -366,13 +536,17 @@ export interface UpdateTaskRequest {
   estimated_hours?: number;
   due_date?: string;
   assigned_agent_id?: number;
+  assigned_squad_id?: number | null;
   tags?: string[];
 }
 
 // Squads API
 export const squadsApi = {
   list: (organizationId: number) =>
-    api.get<PageResponse<SquadResponse>>(`/api/v1/squads/organization/${organizationId}`),
+    getPage<SquadResponse>(
+      `/api/v1/squads/organization/${organizationId}`,
+      squadResponseSchema
+    ),
   get: (id: number) => api.get<SquadResponse>(`/api/v1/squads/${id}`),
   create: (data: CreateSquadRequest) =>
     api.post<SquadResponse>("/api/v1/squads", data),
@@ -383,14 +557,84 @@ export const squadsApi = {
     api.patch<SquadResponse>(`/api/v1/squads/${id}/toggle-active`),
 };
 
+// Agent / Squad response schemas — parse, don't cast (see schema.ts / CLAUDE.md).
+// The backend serializes agent_type / model_id (see AgentResponse.java @JsonProperty);
+// map them onto the frontend's `type` / `model` so the real values survive.
+const agentResponseSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    agent_type: z
+      .enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"])
+      .catch("FULLSTACK"),
+    runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]).optional(),
+    cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
+    description: z.string().optional(),
+    model_id: z.string().catch(""),
+    system_prompt: z.string().optional(),
+    temperature: z.number().catch(0.7),
+    max_tokens: z.number().catch(4096),
+    is_active: z.boolean().catch(true),
+    squad_id: z.number(),
+    squad_name: z.string().catch(""),
+    created_at: z.string().catch(""),
+    updated_at: z.string().optional(),
+  })
+  .transform((o) => ({
+    id: o.id,
+    name: o.name,
+    type: o.agent_type,
+    runtime_kind: o.runtime_kind,
+    cli_provider: o.cli_provider,
+    description: o.description,
+    model: o.model_id,
+    system_prompt: o.system_prompt,
+    temperature: o.temperature,
+    max_tokens: o.max_tokens,
+    is_active: o.is_active,
+    squad_id: o.squad_id,
+    squad_name: o.squad_name,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+  }));
+
+const squadResponseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  is_active: z.boolean().catch(true),
+  organization_id: z.number(),
+  organization_name: z.string().catch(""),
+  agents_count: z.number().catch(0),
+  active_agents_count: z.number().catch(0),
+  projects_count: z.number().catch(0),
+  leader_agent_id: z.number().nullable().optional(),
+  leader_agent_name: z.string().optional(),
+  agents: z
+    .array(
+      z.object({
+        id: z.number(),
+        name: z.string(),
+        agent_type: z.string().catch(""),
+        is_active: z.boolean().catch(true),
+      })
+    )
+    .optional(),
+  created_at: z.string().catch(""),
+  updated_at: z.string().optional(),
+});
+
 // Agents API
 export const agentsApi = {
   list: (squadId: number) =>
-    api.get<PageResponse<AgentResponse>>(`/api/v1/agents/squad/${squadId}`),
+    getPage<AgentResponse>(`/api/v1/agents/squad/${squadId}`, agentResponseSchema),
   listByOrganization: (organizationId: number) =>
-    api.get<PageResponse<AgentResponse>>(`/api/v1/agents/organization/${organizationId}`),
+    getPage<AgentResponse>(
+      `/api/v1/agents/organization/${organizationId}`,
+      agentResponseSchema
+    ),
   listActive: (squadId: number) =>
-    api.get<AgentResponse[]>(`/api/v1/agents/squad/${squadId}/active`),
+    getList<AgentResponse>(`/api/v1/agents/squad/${squadId}/active`, agentResponseSchema),
   get: (id: number) => api.get<AgentResponse>(`/api/v1/agents/${id}`),
   create: (data: CreateAgentRequest) =>
     api.post<AgentResponse>("/api/v1/agents", data),
@@ -420,10 +664,58 @@ export const executionsApi = {
     api.get<Record<string, unknown>>(`/api/v1/executions/organization/${organizationId}/metrics`),
 };
 
+export const memoryApi = {
+  getPolicy: () => api.get<MemoryPolicyResponse>("/api/v1/memory/policy"),
+  getTaskContext: (taskId: number) =>
+    api.get<MemoryRecord[]>(`/api/v1/memory/tasks/${taskId}/context`),
+  listSkills: (params: {
+    organizationId: number;
+    projectId?: number;
+    agentId?: number;
+    query?: string;
+    limit?: number;
+  }) => {
+    const search = new URLSearchParams({
+      organizationId: String(params.organizationId),
+      ...(params.projectId ? { projectId: String(params.projectId) } : {}),
+      ...(params.agentId ? { agentId: String(params.agentId) } : {}),
+      ...(params.query ? { query: params.query } : {}),
+      ...(params.limit ? { limit: String(params.limit) } : {}),
+    });
+    return api.get<MemorySkill[]>(`/api/v1/memory/skills?${search.toString()}`);
+  },
+  createSkill: (data: CreateMemorySkillRequest) =>
+    api.post<MemorySkill>("/api/v1/memory/skills", data),
+  updateSkill: (memoryId: string, data: CreateMemorySkillRequest) =>
+    api.put<MemorySkill>(`/api/v1/memory/skills/${memoryId}`, data),
+  deleteSkill: (memoryId: string, organizationId: number) =>
+    api.delete<void>(`/api/v1/memory/skills/${memoryId}?organizationId=${organizationId}`),
+  searchHistory: (params: {
+    organizationId: number;
+    projectId?: number;
+    agentId?: number;
+    executionId?: number;
+    query?: string;
+    limit?: number;
+  }) => {
+    const search = new URLSearchParams({
+      organizationId: String(params.organizationId),
+      ...(params.projectId ? { projectId: String(params.projectId) } : {}),
+      ...(params.agentId ? { agentId: String(params.agentId) } : {}),
+      ...(params.executionId ? { executionId: String(params.executionId) } : {}),
+      ...(params.query ? { query: params.query } : {}),
+      ...(params.limit ? { limit: String(params.limit) } : {}),
+    });
+    return api.get<MemoryHistoryResponse>(`/api/v1/memory/history/search?${search.toString()}`);
+  },
+};
+
 // Live View API
 export const liveViewApi = {
   createSession: (data: CreateLiveSessionRequest) =>
     api.post<LiveSessionResponse>("/api/v1/live-view/sessions", data),
+  ensureDirectAgentSession: (agentId: number) =>
+    api.post<LiveSessionResponse>(`/api/v1/live-view/agents/${agentId}/direct-session`),
   joinSession: (code: string) =>
     api.post<LiveSessionResponse>("/api/v1/live-view/sessions/join", { code }),
   startSession: (sessionId: number) =>
@@ -456,6 +748,17 @@ export const liveViewApi = {
 // Squad Types
 export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" | "COORDINATOR" | "DATABASE";
 
+// Runtime adapter: native LangGraph loop vs an external coding-agent CLI
+export type AgentRuntimeKind = "NATIVE" | "EXTERNAL_CLI";
+export type CliProvider = "CLAUDE_CODE" | "CODEX" | "GEMINI_CLI";
+
+export interface SquadAgentSummary {
+  id: number;
+  name: string;
+  agent_type: string;
+  is_active: boolean;
+}
+
 export interface SquadResponse {
   id: number;
   name: string;
@@ -465,19 +768,99 @@ export interface SquadResponse {
   organization_name: string;
   agents_count: number;
   active_agents_count: number;
+  projects_count?: number;
+  leader_agent_id?: number | null;
+  leader_agent_name?: string;
+  agents?: SquadAgentSummary[];
   created_at: string;
   updated_at?: string;
+}
+
+export interface MemoryPolicyResponse {
+  enabled: boolean;
+  memoryScope: string;
+  proceduralMemoryEnabled: boolean;
+  proceduralLimit: number;
+  tenantMode: string;
+  tenantId?: string;
+}
+
+export interface MemoryRecord {
+  id: string;
+  content?: string;
+  summary?: string;
+  category?: string;
+  importance?: string;
+  memory_type?: string;
+  tags: string[];
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+  source_type?: string;
+  source_reference?: string;
+  created_by?: string;
+}
+
+export interface MemorySkill extends MemoryRecord {
+  organization_id?: number;
+  project_id?: number;
+  agent_id?: number;
+  agent_type?: string;
+  steps?: string[];
+  files_modified?: string[];
+  antipattern?: boolean;
+  /** True for human-authored skills; false for BrainSentry-learned procedural memory. */
+  authored?: boolean;
+}
+
+export interface ExecutionHistoryRecord {
+  execution_id: number;
+  task_id: number;
+  task_title: string;
+  agent_id?: number;
+  agent_name?: string;
+  status: string;
+  brain_sentry_session_id?: string;
+  started_at?: string;
+  completed_at?: string;
+  summary?: string;
+}
+
+export interface MemoryHistoryResponse {
+  query?: string;
+  memories: MemoryRecord[];
+  skills: MemorySkill[];
+  executions: ExecutionHistoryRecord[];
+  active_sessions: Array<Record<string, unknown>>;
+  session?: Record<string, unknown>;
+  session_cache?: Array<Record<string, unknown>>;
+  profile?: Record<string, unknown>;
+}
+
+export interface CreateMemorySkillRequest {
+  organization_id: number;
+  project_id?: number;
+  agent_id?: number;
+  agent_type?: string;
+  title: string;
+  summary: string;
+  content?: string;
+  antipattern?: boolean;
+  steps?: string[];
+  files_modified?: string[];
 }
 
 export interface CreateSquadRequest {
   name: string;
   description?: string;
   organization_id: number;
+  leader_agent_id?: number | null;
 }
 
 export interface UpdateSquadRequest {
   name?: string;
   description?: string;
+  leader_agent_id?: number | null;
 }
 
 // Agent Types
@@ -485,6 +868,8 @@ export interface AgentResponse {
   id: number;
   name: string;
   type: AgentType;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
   model: string;
   system_prompt?: string;
@@ -499,9 +884,12 @@ export interface AgentResponse {
 
 export interface CreateAgentRequest {
   name: string;
-  type: AgentType;
+  // Field names match the backend AgentRequest JSON (agent_type / model_id).
+  agent_type: AgentType;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
-  model?: string;
+  model_id?: string;
   system_prompt?: string;
   temperature?: number;
   max_tokens?: number;
@@ -510,8 +898,10 @@ export interface CreateAgentRequest {
 
 export interface UpdateAgentRequest {
   name?: string;
+  runtime_kind?: AgentRuntimeKind;
+  cli_provider?: CliProvider | null;
   description?: string;
-  model?: string;
+  model_id?: string;
   system_prompt?: string;
   temperature?: number;
   max_tokens?: number;
@@ -548,8 +938,11 @@ export type LiveSessionStatus = "PENDING" | "ACTIVE" | "PAUSED" | "ENDED";
 export interface LiveSessionResponse {
   id: number;
   code: string;
-  task_id: number;
-  task_title: string;
+  task_id?: number;
+  task_title?: string;
+  agent_id?: number;
+  agent_name?: string;
+  session_mode?: "TASK" | "DIRECT_AGENT";
   host_user_id: number;
   host_user_name: string;
   container_id?: string;

@@ -16,6 +16,7 @@ public class IntegrationConfig {
 
     private BrainSentryConfig brainsentry = new BrainSentryConfig();
     private LiveConfig live = new LiveConfig();
+    private LinktorConfig linktor = new LinktorConfig();
     private String serviceSecret;
 
     @Getter
@@ -36,5 +37,18 @@ public class IntegrationConfig {
     public static class LiveConfig {
         private String url = "http://localhost:3100";
         private boolean enabled = false;
+    }
+
+    @Getter
+    @Setter
+    public static class LinktorConfig {
+        private String url = "http://localhost:8081";
+        private boolean enabled = false;
+        private String email;
+        private String password;
+        private String defaultConversationId;
+        private String channelId;
+        private String contactId;
+        private boolean autoCreateConversation = false;
     }
 }

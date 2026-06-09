@@ -21,6 +21,8 @@ public interface LiveSessionRepository extends JpaRepository<LiveSession, Long> 
 
     Optional<LiveSession> findByTaskIdAndStatus(Long taskId, LiveSessionStatus status);
 
+    Optional<LiveSession> findByAgentIdAndStatus(Long agentId, LiveSessionStatus status);
+
     Optional<LiveSession> findByExternalSessionId(String externalSessionId);
 
     boolean existsByCode(String code);
@@ -34,10 +36,19 @@ public interface LiveSessionRepository extends JpaRepository<LiveSession, Long> 
     @Query("SELECT s FROM LiveSession s WHERE s.hostUser.id = :userId")
     Page<LiveSession> findByHostUserId(Long userId, Pageable pageable);
 
-    @Query("SELECT s FROM LiveSession s WHERE s.task.project.organization.id = :organizationId")
+    @Query("""
+            SELECT s FROM LiveSession s
+            WHERE (s.task IS NOT NULL AND s.task.project.organization.id = :organizationId)
+               OR (s.agent IS NOT NULL AND s.agent.squad.organization.id = :organizationId)
+            """)
     Page<LiveSession> findByOrganizationId(Long organizationId, Pageable pageable);
 
-    @Query("SELECT s FROM LiveSession s WHERE s.task.project.organization.id = :organizationId AND s.status = 'ACTIVE'")
+    @Query("""
+            SELECT s FROM LiveSession s
+            WHERE s.status = 'ACTIVE'
+              AND ((s.task IS NOT NULL AND s.task.project.organization.id = :organizationId)
+                OR (s.agent IS NOT NULL AND s.agent.squad.organization.id = :organizationId))
+            """)
     List<LiveSession> findActiveByOrganizationId(Long organizationId);
 
     int deleteByEndedAtBefore(Instant threshold);

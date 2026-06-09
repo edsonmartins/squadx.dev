@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ public class ExecutionService {
     private final WebSocketEventService webSocketEventService;
     private final BrainSentryClient brainSentryClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final SquadAgentResolver squadAgentResolver;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -61,6 +63,12 @@ public class ExecutionService {
                     .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
         } else if (task.getAssignedAgent() != null) {
             agent = task.getAssignedAgent();
+        } else if (task.getAssignedSquad() != null) {
+            // Squad leader-delegation: resolve the squad's leader (or an online member).
+            agent = squadAgentResolver.resolve(task.getAssignedSquad());
+            if (agent == null) {
+                throw new BadRequestException("No agent available in the assigned squad");
+            }
         } else {
             throw new BadRequestException("No agent specified for execution");
         }
@@ -238,6 +246,38 @@ public class ExecutionService {
         webSocketEventService.sendExecutionLog(executionId, level, message);
     }
 
+    /**
+     * Pending executions the client can claim by polling — a resilience fallback for
+     * when the STOMP push was missed (NAT/firewall, reconnect gaps). Returns the same
+     * payload shape as the {@code task_assigned} push, scoped to the user's orgs.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getPendingAssignments(User currentUser) {
+        return executionRepository
+                .findPendingForUser(ExecutionStatus.PENDING, currentUser.getId(), PageRequest.of(0, 100))
+                .stream()
+                .map(e -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("task_id", e.getTask().getId());
+                    item.put("task", buildTaskAssignmentPayload(e.getTask(), e));
+                    return item;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Atomically claim a pending execution so only one polling client runs it.
+     * Returns true if this caller won the claim (PENDING -> RUNNING).
+     */
+    @Transactional
+    public boolean claimPending(Long executionId, User currentUser) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
+        validateUserAccess(execution.getTask().getProject().getOrganization().getId(), currentUser.getId());
+        return executionRepository.claimExecution(
+                executionId, ExecutionStatus.RUNNING, ExecutionStatus.PENDING, Instant.now()) > 0;
+    }
+
     public Map<String, Object> getOrganizationMetrics(Long organizationId, User currentUser) {
         validateUserAccess(organizationId, currentUser.getId());
 
@@ -331,8 +371,15 @@ public class ExecutionService {
         payload.put("project_name", task.getProject().getName());
         payload.put("assigned_agent_id", task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null);
         payload.put("assigned_agent_name", task.getAssignedAgent() != null ? task.getAssignedAgent().getName() : null);
-        payload.put("agent_id", execution.getAgent() != null ? execution.getAgent().getId() : null);
-        payload.put("agent_name", execution.getAgent() != null ? execution.getAgent().getName() : null);
+        Agent execAgent = execution.getAgent();
+        payload.put("agent_id", execAgent != null ? execAgent.getId() : null);
+        payload.put("agent_name", execAgent != null ? execAgent.getName() : null);
+        payload.put("agent_type", execAgent != null && execAgent.getAgentType() != null
+                ? execAgent.getAgentType().name() : null);
+        payload.put("runtime_kind", execAgent != null && execAgent.getRuntimeKind() != null
+                ? execAgent.getRuntimeKind().name() : "NATIVE");
+        payload.put("cli_provider", execAgent != null && execAgent.getCliProvider() != null
+                ? execAgent.getCliProvider().name() : null);
         payload.put("execution_id", execution.getId());
         payload.put("brain_sentry_session_id", execution.getBrainSentrySessionId());
         payload.put("tags", task.getTags());

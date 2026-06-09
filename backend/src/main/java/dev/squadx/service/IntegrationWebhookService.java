@@ -2,6 +2,7 @@ package dev.squadx.service;
 
 import dev.squadx.model.LiveSession;
 import dev.squadx.model.enums.LiveSessionStatus;
+import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.repository.LiveSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,9 @@ public class IntegrationWebhookService {
     private final LiveSessionRepository liveSessionRepository;
     private final RecordingService recordingService;
     private final AuditService auditService;
+    private final WebSocketEventService webSocketEventService;
+    private final DirectAgentChatService directAgentChatService;
+    private final SquadxLiveClient squadxLiveClient;
 
     public void handleBrainSentryWebhook(Map<String, Object> payload) {
         String eventType = asString(payload.getOrDefault("event", "unknown"));
@@ -57,16 +61,111 @@ public class IntegrationWebhookService {
         switch (eventType) {
             case "session.ended" -> handleLiveSessionEnded(payload);
             case "recording.ready" -> handleRecordingReady(payload);
-            case "participant.joined" -> auditService.log(
+            case "participant.joined" -> handleParticipantJoined(payload);
+            case "message.created" -> handleMessageCreated(payload);
+            default -> log.debug("Unhandled Live webhook event: {}", eventType);
+        }
+    }
+
+    private void handleMessageCreated(Map<String, Object> payload) {
+        resolveSession(payload).ifPresentOrElse(session -> {
+            auditService.log(
                     null,
-                    "LIVE_PARTICIPANT_JOINED",
+                    "LIVE_CHAT_MESSAGE_CREATED",
                     "LIVE_SESSION",
-                    resolveSession(payload).map(LiveSession::getId).orElse(null),
+                    session.getId(),
                     stringify(payload),
                     null
             );
-            default -> log.debug("Unhandled Live webhook event: {}", eventType);
+
+            if (session.getAgent() == null) {
+                return;
+            }
+            if (session.getExternalSessionId() == null || session.getExternalAgentParticipantId() == null) {
+                return;
+            }
+            if (session.getStatus() != LiveSessionStatus.ACTIVE) {
+                return;
+            }
+
+            String participantId = asString(payload.get("participantId"));
+            if (session.getExternalAgentParticipantId().equals(participantId)) {
+                return;
+            }
+
+            String messageType = asString(payload.getOrDefault("messageType", payload.get("message_type")));
+            if (messageType != null && !"text".equalsIgnoreCase(messageType)) {
+                return;
+            }
+
+            String recipientId = asString(payload.get("recipientId"));
+            if (recipientId != null && !recipientId.isBlank()
+                    && !recipientId.equals(session.getExternalAgentParticipantId())) {
+                return;
+            }
+
+            String content = asString(payload.get("content"));
+            String displayName = asString(payload.get("displayName"));
+
+            directAgentChatService.generateReply(session, content, displayName).ifPresent(reply ->
+                    squadxSafeSendAgentReply(session, participantId, recipientId, reply, payload)
+            );
+        }, () -> log.warn("Received message.created webhook for unknown live session: {}", payload.get("sessionId")));
+    }
+
+    private void squadxSafeSendAgentReply(
+            LiveSession session,
+            String participantId,
+            String recipientId,
+            String reply,
+            Map<String, Object> payload
+    ) {
+        String replyRecipient = recipientId != null && !recipientId.isBlank() ? participantId : null;
+
+        try {
+            squadxLiveClient.sendChatMessage(
+                    session.getExternalSessionId(),
+                    reply,
+                    session.getExternalAgentParticipantId(),
+                    replyRecipient
+            );
+            auditService.log(
+                    null,
+                    "LIVE_AGENT_AUTO_REPLIED",
+                    "LIVE_SESSION",
+                    session.getId(),
+                    stringify(payload),
+                    null
+            );
+        } catch (Exception e) {
+            log.warn("Failed to auto-reply in live session {}: {}", session.getId(), e.getMessage());
         }
+    }
+
+    private void handleParticipantJoined(Map<String, Object> payload) {
+        resolveSession(payload).ifPresentOrElse(session -> {
+            auditService.log(
+                    null,
+                    "LIVE_PARTICIPANT_JOINED",
+                    "LIVE_SESSION",
+                    session.getId(),
+                    stringify(payload),
+                    null
+            );
+            webSocketEventService.sendExternalParticipantJoined(
+                    session.getCode(),
+                    asString(payload.get("participantId")),
+                    asString(payload.get("displayName")),
+                    asString(payload.get("role"))
+            );
+        }, () -> auditService.log(
+                null,
+                "LIVE_PARTICIPANT_JOINED",
+                "LIVE_SESSION",
+                null,
+                stringify(payload),
+                null
+        ));
     }
 
     private void handleLiveSessionEnded(Map<String, Object> payload) {

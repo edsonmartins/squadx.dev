@@ -2,6 +2,8 @@ package dev.squadx.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.squadx.dto.liveview.JoinSessionRequest;
+import dev.squadx.dto.liveview.LiveChatMessageRequest;
+import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
 import dev.squadx.exception.GlobalExceptionHandler;
@@ -125,6 +127,41 @@ class LiveViewControllerTest {
     }
 
     @Nested
+    @DisplayName("POST /api/v1/live-view/agents/{agentId}/direct-session")
+    class EnsureDirectAgentSessionEndpoint {
+
+        @Test
+        @DisplayName("should ensure direct agent session and return 201")
+        void shouldEnsureDirectAgentSessionSuccessfully() throws Exception {
+            LiveSessionResponse response = LiveSessionResponse.builder()
+                    .id(2L)
+                    .code("DIRECT01")
+                    .agentId(9L)
+                    .agentName("Builder")
+                    .sessionMode("DIRECT_AGENT")
+                    .status(LiveSessionStatus.ACTIVE)
+                    .hostUserId(1L)
+                    .hostUserName("Test User")
+                    .maxViewers(25)
+                    .currentViewers(1)
+                    .resolution("1280x720")
+                    .createdAt(Instant.now())
+                    .build();
+
+            when(liveViewService.ensureDirectAgentSession(eq(9L), nullable(User.class)))
+                    .thenReturn(response);
+
+            mockMvc.perform(post("/api/v1/live-view/agents/9/direct-session")
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.agentId").value(9))
+                    .andExpect(jsonPath("$.data.sessionMode").value("DIRECT_AGENT"))
+                    .andExpect(jsonPath("$.message").value("Direct agent session ready"));
+        }
+    }
+
+    @Nested
     @DisplayName("POST /api/v1/live-view/sessions/join")
     class JoinSessionEndpoint {
 
@@ -198,6 +235,55 @@ class LiveViewControllerTest {
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.success").value(false))
                     .andExpect(jsonPath("$.message").value("Session not found"));
+        }
+    }
+
+    @Nested
+    @DisplayName("live chat endpoints")
+    class LiveChatEndpoints {
+
+        @Test
+        @DisplayName("should return chat history with 200")
+        void shouldReturnChatHistory() throws Exception {
+            LiveChatMessageResponse message = LiveChatMessageResponse.builder()
+                    .id("msg-1")
+                    .content("Hello")
+                    .messageType("text")
+                    .build();
+
+            when(liveViewService.getChatHistory(eq(1L), eq(100), nullable(String.class), nullable(String.class), nullable(User.class)))
+                    .thenReturn(List.of(message));
+
+            mockMvc.perform(get("/api/v1/live-view/sessions/1/chat")
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data[0].id").value("msg-1"));
+        }
+
+        @Test
+        @DisplayName("should send agent live message with 201")
+        void shouldSendAgentLiveMessage() throws Exception {
+            LiveChatMessageRequest request = new LiveChatMessageRequest();
+            request.setContent("Agent online");
+
+            LiveChatMessageResponse response = LiveChatMessageResponse.builder()
+                    .id("msg-1")
+                    .content("Agent online")
+                    .messageType("text")
+                    .build();
+
+            when(liveViewService.sendAgentMessage(eq(1L), any(LiveChatMessageRequest.class), nullable(User.class)))
+                    .thenReturn(response);
+
+            mockMvc.perform(post("/api/v1/live-view/sessions/1/chat/agent-message")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))
+                            .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.id").value("msg-1"))
+                    .andExpect(jsonPath("$.message").value("Agent live message sent"));
         }
     }
 }

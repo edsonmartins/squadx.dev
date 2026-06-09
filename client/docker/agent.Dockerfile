@@ -67,6 +67,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g pnpm@latest yarn@latest typescript ts-node \
     && npm cache clean --force
 
+# Install external coding-agent CLIs for the runtime adapter (BYO agent).
+# When an agent's runtime_kind=EXTERNAL_CLI, the daemon shells out to one of
+# these binaries inside the sandbox instead of the native LangGraph loop.
+# Provider API keys are injected at runtime via the sandbox environment.
+# NOTE: the daemon streams the CLI's stdout back as live execution logs. Showing
+# the CLI in a visible VNC terminal (live-view) is a follow-up — it needs the
+# exec to run inside an xterm on DISPLAY=:99 while preserving stdout capture.
+RUN npm install -g \
+        @anthropic-ai/claude-code \
+        @openai/codex \
+        @google/gemini-cli \
+    && npm cache clean --force
+
 # Install Java 21 (Temurin/Adoptium)
 RUN curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main" > /etc/apt/sources.list.d/adoptium.list \

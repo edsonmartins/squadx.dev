@@ -57,6 +57,12 @@ public class TaskResponse {
     @JsonProperty("assigned_agent_name")
     private String assignedAgentName;
 
+    @JsonProperty("assigned_squad_id")
+    private Long assignedSquadId;
+
+    @JsonProperty("assigned_squad_name")
+    private String assignedSquadName;
+
     @JsonProperty("execution_id")
     private Long executionId;
 

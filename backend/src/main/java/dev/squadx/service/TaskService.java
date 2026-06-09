@@ -33,6 +33,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final AgentRepository agentRepository;
+    private final SquadRepository squadRepository;
     private final OrganizationMemberRepository memberRepository;
     private final TaskDependencyRepository taskDependencyRepository;
     private final ExecutionRepository executionRepository;
@@ -69,6 +70,10 @@ public class TaskService {
             Agent agent = agentRepository.findById(request.getAssignedAgentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
             task.setAssignedAgent(agent);
+        }
+
+        if (request.getAssignedSquadId() != null) {
+            task.setAssignedSquad(resolveSquadForProject(request.getAssignedSquadId(), project));
         }
 
         task = taskRepository.save(task);
@@ -153,6 +158,9 @@ public class TaskService {
             Agent agent = agentRepository.findById(request.getAssignedAgentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
             task.setAssignedAgent(agent);
+        }
+        if (request.getAssignedSquadId() != null) {
+            task.setAssignedSquad(resolveSquadForProject(request.getAssignedSquadId(), task.getProject()));
         }
 
         task = taskRepository.save(task);
@@ -406,6 +414,15 @@ public class TaskService {
         }
     }
 
+    private Squad resolveSquadForProject(Long squadId, Project project) {
+        Squad squad = squadRepository.findById(squadId)
+                .orElseThrow(() -> new ResourceNotFoundException("Squad not found"));
+        if (!squad.getOrganization().getId().equals(project.getOrganization().getId())) {
+            throw new BadRequestException("Squad does not belong to this organization");
+        }
+        return squad;
+    }
+
     private void validateUserAccess(Long organizationId, Long userId) {
         if (!memberRepository.existsByOrganizationIdAndUserId(organizationId, userId)) {
             throw new ForbiddenException("User does not have access to this organization");
@@ -446,6 +463,8 @@ public class TaskService {
                 .projectName(task.getProject().getName())
                 .assignedAgentId(task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null)
                 .assignedAgentName(task.getAssignedAgent() != null ? task.getAssignedAgent().getName() : null)
+                .assignedSquadId(task.getAssignedSquad() != null ? task.getAssignedSquad().getId() : null)
+                .assignedSquadName(task.getAssignedSquad() != null ? task.getAssignedSquad().getName() : null)
                 .executionId(latestExecution != null ? latestExecution.getId() : null)
                 .brainSentrySessionId(latestExecution != null ? latestExecution.getBrainSentrySessionId() : null)
                 .parentTaskId(task.getParentTask() != null ? task.getParentTask().getId() : null)

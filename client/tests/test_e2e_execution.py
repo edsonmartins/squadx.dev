@@ -308,6 +308,7 @@ class TestEndToEndFlow:
         mock_sandbox.start = AsyncMock(return_value=True)
         mock_sandbox.cleanup = AsyncMock(return_value=True)
         mock_sandbox.status = "running"
+        mock_sandbox.live_join_code = None  # list[str] state field rejects a MagicMock
 
         # Mock GitManager
         mock_git_manager = MagicMock()

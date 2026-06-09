@@ -1,6 +1,7 @@
 package dev.squadx.service;
 
 import dev.squadx.integration.BrainSentryClient;
+import dev.squadx.integration.LinktorClient;
 import dev.squadx.integration.SquadxLiveClient;
 import dev.squadx.model.NotificationChannel;
 import dev.squadx.notification.NotificationProvider;
@@ -29,6 +30,9 @@ class CapabilityRegistryServiceTest {
     private SquadxLiveClient squadxLiveClient;
 
     @Mock
+    private LinktorClient linktorClient;
+
+    @Mock
     private NotificationProvider slackProvider;
 
     @Mock
@@ -39,6 +43,7 @@ class CapabilityRegistryServiceTest {
     void shouldExposeIntegrationsAndNotificationProviders() {
         when(brainSentryClient.healthCheck()).thenReturn(Map.of("status", "UP", "enabled", true));
         when(squadxLiveClient.healthCheck()).thenReturn(Map.of("status", "DISABLED", "enabled", false));
+        when(linktorClient.healthCheck()).thenReturn(Map.of("status", "UP", "enabled", true));
         when(memoryPolicyService.describePolicy()).thenReturn(Map.of(
                 "status", "ACTIVE",
                 "enabled", true,
@@ -52,6 +57,7 @@ class CapabilityRegistryServiceTest {
         CapabilityRegistryService service = new CapabilityRegistryService(
                 brainSentryClient,
                 squadxLiveClient,
+                linktorClient,
                 new NotificationProviderRegistry(List.of(slackProvider)),
                 memoryPolicyService
         );
@@ -59,7 +65,7 @@ class CapabilityRegistryServiceTest {
         Map<String, Object> capabilities = service.getCapabilities();
 
         assertThat(capabilities).containsKeys("summary", "integrations", "notifications");
-        assertThat((Map<String, Object>) capabilities.get("integrations")).containsKeys("brainsentry", "live", "memoryPolicy");
+        assertThat((Map<String, Object>) capabilities.get("integrations")).containsKeys("brainsentry", "live", "linktor", "memoryPolicy");
         assertThat(((Map<String, Object>) capabilities.get("summary")).get("proceduralMemoryEnabled")).isEqualTo(true);
         assertThat((List<Map<String, Object>>) capabilities.get("notifications"))
                 .anySatisfy(item -> {

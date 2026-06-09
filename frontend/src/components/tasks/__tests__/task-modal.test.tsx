@@ -19,6 +19,7 @@ vi.mock('@/hooks/use-toast', () => ({
 vi.mock('@/lib/api', () => ({
   tasksApi: {},
   agentsApi: { listByOrganization: vi.fn().mockResolvedValue({ content: [] }) },
+  squadsApi: { list: vi.fn().mockResolvedValue({ content: [] }) },
 }))
 
 function renderWithProviders(ui: React.ReactElement) {

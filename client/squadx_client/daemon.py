@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import aiohttp
 import structlog
 
 from squadx_client.config import settings
@@ -97,6 +98,7 @@ class SquadXDaemon:
         self.orchestrator = create_orchestrator()
         self.running = False
         self.current_tasks: dict[int, asyncio.Task] = {}
+        self._bg_tasks: set[asyncio.Task] = set()
         self._task_handler = TaskMessageHandler(self)
 
     @staticmethod
@@ -139,8 +141,17 @@ class SquadXDaemon:
             # Register client
             await self._register_client()
 
-            # Run with automatic reconnection
-            await self.stomp.run()
+            # Optional HTTP polling fallback (resilience behind NAT/firewall)
+            poll_task = None
+            if settings.poll_fallback_interval_seconds > 0:
+                poll_task = asyncio.create_task(self._poll_fallback_loop())
+
+            try:
+                # Run with automatic reconnection
+                await self.stomp.run()
+            finally:
+                if poll_task is not None:
+                    poll_task.cancel()
 
         except asyncio.CancelledError:
             logger.info("daemon_cancelled")
@@ -149,6 +160,70 @@ class SquadXDaemon:
             raise
         finally:
             await self.stop()
+
+    async def _poll_fallback_loop(self) -> None:
+        """Periodically claim pending tasks over HTTP as a STOMP-push fallback."""
+        interval = settings.poll_fallback_interval_seconds
+        logger.info("poll_fallback_started", interval=interval)
+        try:
+            while self.running:
+                await asyncio.sleep(interval)
+                try:
+                    await self._poll_pending_once()
+                except Exception as e:  # noqa: BLE001 - keep the loop alive
+                    logger.warning("poll_fallback_error", error=str(e))
+        except asyncio.CancelledError:
+            logger.info("poll_fallback_stopped")
+
+    async def _poll_pending_once(self) -> None:
+        """Fetch pending assignments and process any not already in flight.
+
+        Each candidate is atomically claimed on the backend (PENDING -> RUNNING)
+        before processing, so concurrent daemons / a racing STOMP push cannot
+        double-dispatch the same task.
+        """
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(f"{self.api_url}/api/v1/executions/pending") as resp:
+                if resp.status != 200:
+                    logger.warning("poll_fallback_http_error", status=resp.status)
+                    return
+                body = await resp.json()
+
+            items = body.get("data") or []
+            for item in items:
+                task_id = item.get("task_id")
+                if task_id is None or task_id in self.current_tasks:
+                    continue
+                execution_id = (item.get("task") or {}).get("execution_id")
+                if execution_id is not None and not await self._claim_execution(
+                    session, execution_id
+                ):
+                    continue  # another client won the claim
+                logger.info("poll_fallback_claiming_task", task_id=task_id)
+                await self._handle_task_assigned(item)
+
+    async def _claim_execution(self, session: aiohttp.ClientSession, execution_id: Any) -> bool:
+        """Atomically claim a pending execution; returns True if this client won."""
+        try:
+            async with session.post(
+                f"{self.api_url}/api/v1/executions/{execution_id}/claim"
+            ) as resp:
+                if resp.status != 200:
+                    return False
+                body = await resp.json()
+                return bool(body.get("data"))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("poll_fallback_claim_error", execution_id=execution_id, error=str(e))
+            return False
+
+    def _on_bg_task_done(self, task: "asyncio.Task") -> None:
+        """Discard a finished background task and surface (not swallow) its error."""
+        self._bg_tasks.discard(task)
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.warning("background_task_failed", error=str(exc))
 
     async def _register_client(self) -> None:
         """Register this client with the backend."""
@@ -224,17 +299,28 @@ class SquadXDaemon:
                     agent_id=str(task_data.get("assigned_agent_id") or task_data.get("agent_id") or ""),
                 )
 
-            # Run the orchestrator
-            result = await self.orchestrator.ainvoke(
-                {
-                    "task_id": task_id,
-                    "task": task_data,
-                    "execution_id": execution_id,
-                    "brainsentry_session_id": brainsentry_session_id,
-                    "project_path": task_data.get("project_path", settings.workspace_path),
-                    "messages": [],
-                }
-            )
+            runtime_kind = str(task_data.get("runtime_kind") or "NATIVE").upper()
+
+            if settings.smoke_execution_mode:
+                result = await self._run_smoke_execution(task_id, task_data, execution_id)
+            elif runtime_kind == "EXTERNAL_CLI":
+                # Runtime adapter: drive an external coding CLI in the sandbox
+                # instead of the native LangGraph loop.
+                result = await self._run_external_cli_task(
+                    task_id, task_data, execution_id, brainsentry_session_id
+                )
+            else:
+                # Run the orchestrator
+                result = await self.orchestrator.ainvoke(
+                    {
+                        "task_id": task_id,
+                        "task": task_data,
+                        "execution_id": execution_id,
+                        "brainsentry_session_id": brainsentry_session_id,
+                        "project_path": task_data.get("project_path", settings.workspace_path),
+                        "messages": [],
+                    }
+                )
 
             logger.info("task_execution_completed", task_id=task_id)
             await brainsentry_client.end_session(
@@ -260,6 +346,123 @@ class SquadXDaemon:
             if "brainsentry_client" in locals():
                 await brainsentry_client.close()
             self.current_tasks.pop(task_id, None)
+
+    async def _run_external_cli_task(
+        self,
+        task_id: int,
+        task_data: dict[str, Any],
+        execution_id: int | str,
+        brainsentry_session_id: str | None,
+    ) -> dict[str, Any]:
+        """Drive an external coding CLI (Claude Code/Codex/Gemini) in the sandbox."""
+        from squadx_client.agents.factory import create_agent
+        from squadx_client.docker.sandbox import AgentSandbox
+
+        title = task_data.get("title") or f"Task {task_id}"
+        description = task_data.get("description") or title
+        cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
+        workspace_path = task_data.get("project_path") or settings.workspace_path
+
+        # Inject provider API keys into the sandbox environment (BYO key).
+        environment: dict[str, str] = {}
+        if settings.anthropic_api_key:
+            environment["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        if settings.openai_api_key:
+            environment["OPENAI_API_KEY"] = settings.openai_api_key
+        if getattr(settings, "google_api_key", None):
+            environment["GOOGLE_API_KEY"] = settings.google_api_key
+
+        sandbox = AgentSandbox(
+            task_id=task_id,
+            agent_type="external_cli",
+            workspace_path=workspace_path,
+        )
+        started = await sandbox.start(
+            image=settings.agent_image,
+            memory_limit=settings.agent_memory_limit,
+            cpu_limit=settings.agent_cpu_limit,
+            enable_vnc=settings.enable_vnc,
+            environment=environment,
+        )
+        if not started:
+            raise RuntimeError("Failed to start sandbox for external CLI agent")
+
+        try:
+            agent = create_agent(
+                "external_cli",
+                sandbox=sandbox,
+                brainsentry_session_id=brainsentry_session_id,
+                runtime_kind="EXTERNAL_CLI",
+                cli_provider=cli_provider,
+            )
+
+            def _progress(chunk: str) -> None:
+                stripped = chunk.strip()
+                if not stripped:
+                    return
+                step = stripped.splitlines()[-1][:200]
+                # Retain a reference so the task isn't GC'd before it runs, and log
+                # (not swallow) any send failure.
+                t = asyncio.create_task(
+                    self._send_task_status(
+                        task_id, "running", progress=50, current_step=step
+                    )
+                )
+                self._bg_tasks.add(t)
+                t.add_done_callback(self._on_bg_task_done)
+
+            result = await agent.execute(
+                task_title=title,
+                task_description=description,
+                context={
+                    "main_task": task_data,
+                    "execution_id": execution_id,
+                    "progress_callback": _progress,
+                },
+            )
+
+            live_codes = [sandbox.live_join_code] if sandbox.live_join_code else []
+            branch = await sandbox.execute(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=30
+            )
+            commit = await sandbox.execute(["git", "rev-parse", "HEAD"], timeout=30)
+
+            return {
+                "final_result": result.get("output", ""),
+                "files_modified": result.get("files_modified", []),
+                "git_branch": branch.output.strip() if branch.success else None,
+                "git_commit": commit.output.strip() if commit.success else None,
+                "live_session_codes": live_codes,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "total_cost": 0.0,
+            }
+        finally:
+            await sandbox.stop()
+
+    async def _run_smoke_execution(
+        self,
+        task_id: int,
+        task_data: dict[str, Any],
+        execution_id: int | str,
+    ) -> dict[str, Any]:
+        """Run a deterministic local execution for real smoke tests.
+
+        This preserves the real backend/STOMP/BrainSentry flow without requiring
+        an external LLM provider during E2E validation.
+        """
+        await asyncio.sleep(max(settings.smoke_execution_delay_seconds, 0))
+        summary = settings.smoke_execution_summary
+        title = str(task_data.get("title") or f"Task {task_id}")
+        return {
+            "final_result": f"{summary} {title}",
+            "git_branch": f"smoke/execution-{execution_id}",
+            "git_commit": "smoke-commit",
+            "live_session_codes": [],
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cost": 0.0,
+        }
 
     async def _handle_task_cancelled(self, data: dict[str, Any]) -> None:
         """Handle task cancellation.

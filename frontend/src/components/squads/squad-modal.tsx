@@ -18,11 +18,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 const squadSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),
+  leader_agent_id: z.number().nullable().optional(),
 });
 
 type SquadFormData = z.infer<typeof squadSchema>;
@@ -43,14 +51,20 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<SquadFormData>({
     resolver: zodResolver(squadSchema),
     defaultValues: {
       name: "",
       description: "",
+      leader_agent_id: null,
     },
   });
+
+  const leaderAgentId = watch("leader_agent_id");
+  const squadAgents = squad?.agents ?? [];
 
   // Reset form when modal opens/closes or squad changes
   useEffect(() => {
@@ -59,11 +73,13 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
         reset({
           name: squad.name,
           description: squad.description || "",
+          leader_agent_id: squad.leader_agent_id ?? null,
         });
       } else {
         reset({
           name: "",
           description: "",
+          leader_agent_id: null,
         });
       }
     }
@@ -161,6 +177,33 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
                 <p className="text-sm text-destructive">{errors.description.message}</p>
               )}
             </div>
+
+            {isEditing && squadAgents.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="leader">Leader agent</Label>
+                <Select
+                  value={leaderAgentId ? leaderAgentId.toString() : "none"}
+                  onValueChange={(value) =>
+                    setValue("leader_agent_id", value === "none" ? null : parseInt(value))
+                  }
+                >
+                  <SelectTrigger id="leader">
+                    <SelectValue placeholder="No leader" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No leader</SelectItem>
+                    {squadAgents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id.toString()}>
+                        {agent.name} ({agent.agent_type})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Work routed to this squad prefers the leader (when online).
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

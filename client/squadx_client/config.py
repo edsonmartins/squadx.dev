@@ -21,7 +21,19 @@ class Settings(BaseSettings):
     # LLM Configuration
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    google_api_key: str | None = Field(default=None, alias="GOOGLE_API_KEY")
     default_model: str = Field(default="gpt-4o", alias="SQUADX_DEFAULT_MODEL")
+
+    # External CLI runtime adapter (Claude Code / Codex / Gemini CLI in the sandbox)
+    external_cli_timeout_seconds: int = Field(
+        default=1800, alias="SQUADX_EXTERNAL_CLI_TIMEOUT_SECONDS"
+    )
+
+    # Resilience: periodically claim pending tasks over HTTP as a fallback when the
+    # STOMP push is missed (NAT/firewall, reconnect gaps). 0 disables polling.
+    poll_fallback_interval_seconds: int = Field(
+        default=0, alias="SQUADX_POLL_FALLBACK_INTERVAL_SECONDS"
+    )
 
     # Docker Configuration
     docker_host: str | None = Field(default=None, alias="DOCKER_HOST")
@@ -99,6 +111,14 @@ class Settings(BaseSettings):
     turn_credential: str | None = Field(default=None, alias="TURN_CREDENTIAL")
     # Alternative: Cloudflare TURN (free tier available)
     cloudflare_turn_token: str | None = Field(default=None, alias="CLOUDFLARE_TURN_TOKEN")
+
+    # Real smoke / local deterministic execution mode
+    smoke_execution_mode: bool = Field(default=False, alias="SQUADX_SMOKE_EXECUTION_MODE")
+    smoke_execution_delay_seconds: float = Field(default=0.5, alias="SQUADX_SMOKE_EXECUTION_DELAY_SECONDS")
+    smoke_execution_summary: str = Field(
+        default="Smoke execution completed successfully.",
+        alias="SQUADX_SMOKE_EXECUTION_SUMMARY"
+    )
 
     @property
     def expanded_data_dir(self) -> str:

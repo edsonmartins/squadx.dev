@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Bot, Power, Pencil, Trash2, MoreVertical, Cpu, Brain } from "lucide-react";
-import { agentsApi, SquadResponse, AgentResponse, AgentType } from "@/lib/api";
+import { Plus, Bot, Power, Pencil, Trash2, MoreVertical, Cpu, Brain, MessageSquare } from "lucide-react";
+import { agentsApi, SquadResponse, AgentResponse, AgentType, liveViewApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -121,6 +121,22 @@ export function SquadDetailSheet({ squad, onClose, organizationId }: SquadDetail
     setSelectedAgent(null);
   };
 
+  const directChatMutation = useMutation({
+    mutationFn: (agentId: number) => liveViewApi.ensureDirectAgentSession(agentId),
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to open direct agent session.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleOpenDirectChat = async (agent: AgentResponse) => {
+    const session = await directChatMutation.mutateAsync(agent.id);
+    window.open(session.viewer_url || `/live/${session.code}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <>
       <Sheet open={!!squad} onOpenChange={onClose}>
@@ -193,6 +209,7 @@ export function SquadDetailSheet({ squad, onClose, organizationId }: SquadDetail
                       onEdit={() => handleEditAgent(agent)}
                       onDelete={() => setAgentToDelete(agent)}
                       onToggleActive={() => toggleActiveMutation.mutate(agent.id)}
+                      onOpenDirectChat={() => handleOpenDirectChat(agent)}
                     />
                   ))}
                 </div>
@@ -228,9 +245,10 @@ interface AgentCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onToggleActive: () => void;
+  onOpenDirectChat: () => void;
 }
 
-function AgentCard({ agent, onEdit, onDelete, onToggleActive }: AgentCardProps) {
+function AgentCard({ agent, onEdit, onDelete, onToggleActive, onOpenDirectChat }: AgentCardProps) {
   return (
     <div
       className={cn(
@@ -253,6 +271,15 @@ function AgentCard({ agent, onEdit, onDelete, onToggleActive }: AgentCardProps) 
             <p className="text-sm text-muted-foreground">
               {agentTypeLabels[agent.type]}
             </p>
+            <Button
+              variant="link"
+              className="h-auto p-0 mt-2 text-sm"
+              onClick={onOpenDirectChat}
+              data-testid={`agent-direct-chat-${agent.id}`}
+            >
+              <MessageSquare className="h-4 w-4 mr-1" />
+              Chat anytime
+            </Button>
           </div>
         </div>
         <DropdownMenu>

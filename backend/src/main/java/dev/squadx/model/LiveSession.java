@@ -29,6 +29,10 @@ public class LiveSession extends BaseEntity {
     private Execution execution;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agent_id")
+    private Agent agent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "host_user_id")
     private User hostUser;
 
@@ -62,6 +66,12 @@ public class LiveSession extends BaseEntity {
 
     @Column(name = "external_join_url")
     private String externalJoinUrl;
+
+    @Column(name = "external_agent_participant_id")
+    private String externalAgentParticipantId;
+
+    @Column(name = "external_agent_display_name")
+    private String externalAgentDisplayName;
 
     @Column(name = "ended_at")
     private LocalDateTime endedAt;

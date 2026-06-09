@@ -9,6 +9,7 @@ import logging
 import os
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -48,7 +49,9 @@ class CheckpointManager:
         os.makedirs(self._data_dir, exist_ok=True)
 
     def save(self, execution_id: str, state: dict, workspace_path: Optional[str] = None, description: str = "") -> CheckpointMetadata:
-        checkpoint_id = f"ckpt-{int(time.time())}-{execution_id[:8]}"
+        # Include a short random suffix so multiple checkpoints saved within the
+        # same second for the same execution don't collide (and overwrite).
+        checkpoint_id = f"ckpt-{int(time.time())}-{execution_id[:8]}-{uuid.uuid4().hex[:6]}"
 
         snapshot = {
             "metadata": {

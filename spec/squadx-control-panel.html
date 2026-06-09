@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SquadX.dev · Control Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1A1D23; --surface:#22262E; --surface-2:#2A2F38; --surface-3:#333944;
+    --border:rgba(255,255,255,.10); --border-2:rgba(255,255,255,.17);
+    --text:#EEF0F3; --dim:#B2B8C2; --faint:#828A95;
+    --accent:#8C7CF0; --accent-soft:rgba(140,124,240,.14); --accent-line:rgba(140,124,240,.4);
+    --done:#5BD6A0; --done-bg:rgba(91,214,160,.13);
+    --doing:#F0B254; --doing-bg:rgba(240,178,84,.14);
+    --review:#6FB7F0; --review-bg:rgba(111,183,240,.14);
+    --blocked:#F0726A; --blocked-bg:rgba(240,114,106,.14);
+    --todo:#7C8593; --todo-bg:rgba(124,133,147,.12);
+    --revise:#E27FB8; --revise-bg:rgba(226,127,184,.14);
+    --added:#5BD6A0; --modified:#6FB7F0;
+    --mono:'JetBrains Mono',monospace; --sans:'Hanken Grotesk',sans-serif;
+    --r:10px; --r-lg:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 18% -10%,rgba(140,124,240,.06),transparent 40%);
+    min-height:100vh}
+  ::selection{background:var(--accent-soft)}
+  button{font-family:inherit;cursor:pointer}
+  .mono{font-family:var(--mono)}
+
+  /* top bar */
+  .topbar{display:flex;align-items:center;gap:20px;height:58px;padding:0 22px;
+    border-bottom:1px solid var(--border);background:rgba(26,29,35,.85);backdrop-filter:blur(10px);
+    position:sticky;top:0;z-index:40}
+  .brand{display:flex;align-items:baseline;gap:8px;font-weight:700;letter-spacing:-.02em;font-size:16px}
+  .brand .x{color:var(--accent)}
+  .brand .tld{color:var(--dim);font-weight:500}
+  .brand small{font-weight:400;letter-spacing:.04em;font-size:11px;color:var(--faint);text-transform:uppercase}
+  .brand .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);align-self:center;margin:0 2px}
+
+  .switcher{position:relative;margin-left:6px}
+  .switcher>button{display:flex;align-items:center;gap:10px;background:var(--surface-2);
+    border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:var(--r);font-size:13px;font-weight:500}
+  .switcher>button:hover{border-color:var(--border-2)}
+  .switcher .chev{color:var(--faint);font-size:11px}
+  .proj-dot{width:7px;height:7px;border-radius:2px;background:var(--accent)}
+  .menu{position:absolute;top:46px;left:0;min-width:230px;background:var(--surface-2);
+    border:1px solid var(--border-2);border-radius:var(--r);padding:6px;display:none;
+    box-shadow:0 18px 40px rgba(0,0,0,.5);z-index:50}
+  .menu.open{display:block;animation:pop .14s ease}
+  .menu .label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:8px 10px 4px}
+  .menu button{display:flex;width:100%;align-items:center;gap:10px;background:none;border:none;color:var(--text);
+    padding:9px 10px;border-radius:7px;font-size:13px;text-align:left}
+  .menu button:hover{background:var(--surface-3)}
+  .menu button.active{color:var(--accent)}
+  .menu button .meta{margin-left:auto;font-size:11px;color:var(--faint)}
+
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .live{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);
+    border:1px solid var(--border);padding:5px 11px;border-radius:20px}
+  .pulse{width:7px;height:7px;border-radius:50%;background:var(--done);position:relative}
+  .pulse::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--done);
+    animation:ring 2s ease-out infinite;opacity:0}
+  @keyframes ring{0%{transform:scale(.6);opacity:.8}100%{transform:scale(1.8);opacity:0}}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#8C7CF0,#5BD6A0);
+    display:grid;place-items:center;font-size:12px;font-weight:600;color:#101216}
+
+  /* shell */
+  .shell{display:grid;grid-template-columns:218px 1fr;min-height:calc(100vh - 58px)}
+  .side{border-right:1px solid var(--border);padding:18px 14px;display:flex;flex-direction:column;gap:3px}
+  .side .grp{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:14px 10px 6px}
+  .nav{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:var(--dim);
+    font-size:13.5px;font-weight:500;border:none;background:none;width:100%;text-align:left;transition:.13s}
+  .nav:hover{background:var(--surface);color:var(--text)}
+  .nav.active{background:var(--accent-soft);color:#fff}
+  .nav.active .ic{color:var(--accent)}
+  .ic{width:16px;text-align:center;color:var(--faint);font-size:14px}
+  .nav .count{margin-left:auto;font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .side-foot{margin-top:auto;font-size:11px;color:var(--faint);padding:10px;line-height:1.6}
+
+  .main{padding:30px 38px 60px;max-width:none;min-width:0}
+  .crumb{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--faint);margin-bottom:18px}
+  .crumb a{color:var(--dim);cursor:pointer}.crumb a:hover{color:var(--accent)}
+  .crumb .sep{color:var(--faint);opacity:.5}
+
+  .page-h{display:flex;align-items:flex-start;gap:14px;margin-bottom:26px}
+  .page-h h1{font-size:25px;font-weight:600;letter-spacing:-.02em}
+  .page-h .sub{color:var(--dim);font-size:13.5px;margin-top:3px}
+  .tag{font-size:11px;font-weight:500;padding:3px 9px;border-radius:6px;font-family:var(--mono);letter-spacing:.01em}
+  .tag.mod{background:var(--review-bg);color:var(--modified)}
+  .tag.added{background:var(--done-bg);color:var(--added)}
+  .tag.phase{background:var(--surface-3);color:var(--dim)}
+  .tag.module{background:var(--accent-soft);color:var(--accent)}
+
+  /* metric cards */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
+  .metric .k{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
+  .metric .v{font-size:30px;font-weight:600;letter-spacing:-.02em;margin-top:7px;font-variant-numeric:tabular-nums}
+  .metric .v small{font-size:15px;color:var(--faint);font-weight:400}
+  .metric.warn .v{color:var(--blocked)}
+  .ring{width:9px;height:9px;border-radius:50%}
+
+  .segbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--surface-3);margin-bottom:15px}
+  .segbar i{display:block;height:100%;transition:width .9s cubic-bezier(.2,.7,.2,1)}
+  .leg{display:flex;flex-wrap:wrap;gap:12px 22px}
+  .legi{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim)}
+  .legi .sw{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+  .legi b{color:var(--text);font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+  .panel-h{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border);
+    font-size:13px;font-weight:600;letter-spacing:.01em}
+  .panel-h .more{margin-left:auto;font-size:12px;color:var(--faint)}
+  .cols{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
+  .cols>*{min-width:0}
+
+  /* change rows */
+  .crow{display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid var(--border);
+    cursor:pointer;transition:.12s}
+  .crow:last-child{border-bottom:none}
+  .crow:hover{background:var(--surface-2)}
+  .crow .nm{font-family:var(--mono);font-size:13px;font-weight:500}
+  .crow .ds{font-size:12px;color:var(--faint);margin-top:2px}
+  .crow .right{margin-left:auto;display:flex;align-items:center;gap:18px}
+  .bar{width:120px;height:6px;border-radius:4px;background:var(--surface-3);overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#A99BF6);border-radius:4px;
+    transition:width .9s cubic-bezier(.2,.7,.2,1)}
+  .pct{font-family:var(--mono);font-size:12.5px;color:var(--dim);width:34px;text-align:right}
+  .tcount{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+
+  /* activity */
+  .feed{padding:6px 0}
+  .ev{display:flex;gap:12px;padding:10px 18px;align-items:flex-start}
+  .ev .when{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;padding-top:1px}
+  .ev .body{font-size:12.8px;color:var(--dim);line-height:1.45}
+  .ev .body b{color:var(--text);font-weight:500}
+  .ev .body .id{font-family:var(--mono);color:var(--accent)}
+  .ev .body .via{font-size:11px;color:var(--faint)}
+  .ev .marker{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+
+  /* status now bar */
+  .nowbar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:22px}
+  .nowbar .toprow{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .nowbar .next{display:flex;align-items:center;gap:11px;background:var(--accent-soft);
+    border:1px solid var(--accent-line);border-radius:var(--r);padding:11px 14px;font-size:13.5px}
+  .nowbar .next .arr{color:var(--accent)}
+  .nowbar .next .id{font-family:var(--mono);color:var(--accent);font-weight:500}
+  .nowbar .blk{display:flex;align-items:center;gap:11px;background:var(--blocked-bg);
+    border:1px solid rgba(240,114,106,.3);border-radius:var(--r);padding:11px 14px;font-size:13px;color:#F4978F;margin-top:10px}
+  .nowbar .blk .id{font-family:var(--mono);font-weight:500}
+
+  /* requirement card */
+  .req{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden}
+  .req-h{display:flex;align-items:center;gap:11px;padding:16px 18px 8px}
+  .req-h .title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .req-h .cmt{margin-left:auto;font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .req .desc{padding:0 18px 14px;color:var(--dim);font-size:12.8px}
+  .tasks{border-top:1px solid var(--border)}
+  .task{display:flex;align-items:center;gap:13px;padding:12px 18px;border-bottom:1px solid var(--border);
+    cursor:pointer;transition:.12s;position:relative}
+  .task:last-child{border-bottom:none}
+  .task:hover{background:var(--surface-2)}
+  .task::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent}
+  .task:hover::before{background:var(--accent-line)}
+  .task .tid{font-family:var(--mono);font-size:12px;color:var(--faint);width:30px}
+  .task .tt{font-size:13.5px;flex:1}
+  .dotmark{font-size:14px;width:16px;text-align:center}
+  .pill{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;white-space:nowrap}
+  .pill.done{background:var(--done-bg);color:var(--done)}
+  .pill.doing{background:var(--doing-bg);color:var(--doing)}
+  .pill.review{background:var(--review-bg);color:var(--review)}
+  .pill.revise{background:var(--revise-bg);color:var(--revise)}
+  .pill.blocked{background:var(--blocked-bg);color:var(--blocked)}
+  .pill.todo{background:var(--todo-bg);color:var(--todo)}
+
+  /* task detail */
+  .tdetail{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+  .tdetail>*{min-width:0}
+  .section-t{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+  .briefing{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px;margin-bottom:18px}
+  .scenario{border-left:2px solid var(--accent-line);padding:4px 0 4px 15px;margin:14px 0}
+  .scenario .nm{font-size:12.5px;font-weight:500;margin-bottom:7px}
+  .gwt{font-family:var(--mono);font-size:12px;line-height:1.85;color:var(--dim)}
+  .gwt .kw{color:var(--accent);font-weight:600}
+  .constraint{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--dim);padding:5px 0}
+  .constraint .ic{color:var(--doing);margin-top:1px}
+
+  .timeline{position:relative;padding-left:8px}
+  .tl{display:flex;gap:13px;position:relative;padding-bottom:18px}
+  .tl:last-child{padding-bottom:0}
+  .tl .line{position:absolute;left:5px;top:14px;bottom:-4px;width:1px;background:var(--border-2)}
+  .tl:last-child .line{display:none}
+  .tl .node{width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:3px;z-index:1;border:2px solid var(--bg)}
+  .tl .c{font-size:12.8px}
+  .tl .c .t{font-weight:500}
+  .tl .c .m{font-size:11px;color:var(--faint);font-family:var(--mono);margin-top:2px}
+
+  .aside-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;margin-bottom:16px}
+  .kv{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;border-bottom:1px solid var(--border)}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--dim);font-size:12.5px}
+  .kv .v{font-family:var(--mono);font-size:12.5px}
+  .gate{display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:var(--r);font-size:13px}
+  .gate.pass{background:var(--done-bg);color:var(--done)}
+  .gate.pending{background:var(--doing-bg);color:var(--doing)}
+  .gate.fail{background:var(--revise-bg);color:var(--revise)}
+  .commit{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:11.5px;color:var(--dim);padding:6px 0}
+  .commit .sha{color:var(--accent)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;background:var(--accent);
+    color:#0F1014;border:none;border-radius:var(--r);padding:12px;font-size:13.5px;font-weight:600;transition:.13s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--border-2)}
+  .btn.ghost:hover{background:var(--surface-3)}
+  .blk-note{background:var(--blocked-bg);border:1px solid rgba(240,114,106,.3);border-radius:var(--r);
+    padding:13px 15px;font-size:13px;color:#F4978F;margin-bottom:18px;line-height:1.5}
+  .rev-note{background:var(--revise-bg);border:1px solid rgba(226,127,184,.32);border-radius:var(--r);
+    padding:13px 15px;font-size:13px;color:#EEA6D0;margin-bottom:18px;line-height:1.5}
+
+  .vrow{display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid var(--border)}
+  .vrow:last-child{border-bottom:none}
+  .vtag{font-family:var(--mono);font-size:11.5px;padding:3px 9px;border-radius:6px;background:var(--surface-3);color:var(--dim);white-space:nowrap}
+  .vtag.cur{background:var(--accent-soft);color:var(--accent)}
+  .vsum{flex:1;font-size:13px}
+  .vwho{font-size:11.5px;color:var(--faint);margin-top:2px}
+  .vright{display:flex;align-items:center;gap:14px;margin-left:auto}
+  .vmat{font-family:var(--mono);font-size:11.5px;color:var(--done)}
+  .vwhen{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap}
+
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .seg button{background:none;border:none;color:var(--dim);padding:6px 14px;border-radius:7px;font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:7px}
+  .seg button:hover{color:var(--text)}
+  .seg button.active{background:var(--surface-3);color:var(--text)}
+  .kanban{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px}
+  .kcol{flex:0 0 218px;display:flex;flex-direction:column;gap:10px}
+  .kcol-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:4px 2px 8px;color:var(--dim);
+    border-bottom:1px solid var(--border)}
+  .kcol-h .dot{width:8px;height:8px;border-radius:3px;flex-shrink:0}
+  .kcol-h .n{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .kcard{background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--border-2);
+    border-radius:var(--r);padding:12px 13px;cursor:pointer;transition:.12s}
+  .kcard:hover{background:var(--surface-2);border-color:var(--border-2)}
+  .kcard .kid{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .kcard .kt{font-size:13px;margin-top:4px;line-height:1.4}
+  .kcard .knote{font-size:11px;color:var(--faint);margin-top:8px;line-height:1.4}
+  .kcol-empty{font-size:12px;color:var(--faint);padding:14px;border:1px dashed var(--border);border-radius:var(--r);text-align:center}
+
+  .av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--surface-3)}
+  .av img{width:100%;height:100%;object-fit:cover;display:block}
+  .av-fb{align-items:center;justify-content:center;width:100%;height:100%;font-size:10px;font-weight:600;color:var(--dim);background:var(--surface-3)}
+  .av.agent{background:var(--accent-soft);color:var(--accent)}
+  .assignee{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-size:12.5px;color:var(--dim);white-space:nowrap}
+  .assignee .nm{font-weight:500;color:var(--text)}
+  .assignee .kind{font-size:9.5px;font-weight:600;letter-spacing:.06em;color:var(--accent);background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+
+  .filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);
+    color:var(--dim);padding:5px 12px;border-radius:20px;font-size:12.5px;font-weight:500}
+  .chip:hover{border-color:var(--border-2);color:var(--text)}
+  .chip.active{background:var(--accent-soft);border-color:var(--accent-line);color:#fff}
+  .chip .cn{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .chip.active .cn{color:var(--accent)}
+  .avchip{padding:4px 12px 4px 4px}
+  .fsep{width:1px;height:22px;background:var(--border);margin:0 4px}
+
+  .genbtn{background:var(--surface-2);border:1px solid var(--border-2);color:var(--dim);font-size:11.5px;font-weight:500;
+    padding:5px 11px;border-radius:7px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .genbtn:hover{color:var(--text);border-color:var(--accent-line)}
+  .modal-wrap{position:fixed;inset:0;background:rgba(8,9,12,.62);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding:46px 20px;overflow-y:auto}
+  .modal{background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-lg);max-width:760px;width:100%;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);animation:pop .16s ease}
+  .modal-h{display:flex;align-items:center;gap:11px;padding:16px 22px;border-bottom:1px solid var(--border)}
+  .modal-h h2{font-size:16px;font-weight:600}
+  .modal-h .close{margin-left:auto;background:none;border:none;color:var(--faint);font-size:15px}
+  .modal-h .close:hover{color:var(--text)}
+  .modal-b{padding:20px 22px}
+  .code{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:16px;font-family:var(--mono);
+    font-size:12px;line-height:1.6;color:var(--dim);overflow-x:auto;white-space:pre;margin:0}
+  .cov{display:inline-flex;align-items:center;gap:9px;background:var(--done-bg);color:var(--done);border-radius:var(--r);padding:9px 14px;font-size:13px;font-weight:500}
+  .maprow{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .maprow:last-child{border-bottom:none}
+  .maprow .mdot{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:6px;flex-shrink:0}
+  .maprow .mmethod{font-family:var(--mono);font-size:11.5px;color:var(--accent);margin-top:2px}
+  .empty{color:var(--dim);font-size:13.5px;line-height:1.6}
+  .hint{font-size:12px;color:var(--faint);margin-top:12px;line-height:1.5}
+
+  .hgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .hcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px}
+  .hh{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .hav{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .hname{font-size:15px;font-weight:600}
+  .hvendor{font-size:12px;color:var(--faint)}
+  .hstatus{margin-left:auto;font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px}
+  .hstatus.on{background:var(--done-bg);color:var(--done)}
+  .hstatus.off{background:var(--todo-bg);color:var(--todo)}
+  .hrow{display:flex;align-items:center;gap:12px;padding:11px 0 0;border-top:1px solid var(--border)}
+  .hk{font-size:12.5px;color:var(--dim);min-width:78px}
+  .hrow select{flex:1;background:var(--surface-2);border:1px solid var(--border-2);color:var(--text);border-radius:8px;padding:8px 10px;font-family:var(--sans);font-size:13px}
+  .hmcp{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:10px}
+
+  .vq{display:flex;align-items:center;gap:13px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s}
+  .vq:last-child{border-bottom:none}
+  .vq:hover{background:var(--surface-2)}
+  .vq-sub{font-size:12px;color:var(--faint);margin-top:2px;font-family:var(--mono)}
+  .vq-find{font-size:12px;color:#EEA6D0;margin-top:6px}
+  .covgrp{padding:14px 18px;border-bottom:1px solid var(--border)}
+  .covgrp:last-child{border-bottom:none}
+  .covhd{font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .covmeta{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .covsc{display:flex;align-items:center;gap:11px;font-size:13px;padding:5px 0;color:var(--dim)}
+  .ck{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+  .ck.ok{background:var(--done-bg);color:var(--done)}
+  .ck.no{background:var(--revise-bg);color:var(--revise)}
+  .cklab{font-size:11px;font-weight:500}
+  .cklab.ok{color:var(--done)}
+  .cklab.no{color:var(--revise)}
+
+  .fade{animation:fadeUp .4s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.fade,.menu.open{animation:none}.bar i{transition:none}}
+  @media(max-width:880px){.shell{grid-template-columns:1fr}.side{display:none}.metrics{grid-template-columns:repeat(2,1fr)}
+    .cols,.tdetail{grid-template-columns:1fr}.hgrid{grid-template-columns:1fr}.main{padding:22px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">Squad<span class="x">X</span><span class="tld">.dev</span><span class="dot"></span><small>Control Panel</small></div>
+  <div class="switcher">
+    <button onclick="toggleMenu(event)"><span class="proj-dot"></span><span id="sw-name">Gestor-RQ</span><span class="chev">▾</span></button>
+    <div class="menu" id="projMenu">
+      <div class="label">Projetos</div>
+      <div id="projList"></div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="live"><span class="pulse"></span> Sincronizado · MCP ativo</div>
+    <div class="avatar">EM</div>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="side">
+    <div class="grp">Projeto</div>
+    <button class="nav" data-view="dashboard" onclick="go({view:'dashboard'})"><span class="ic">◈</span> Dashboard</button>
+    <button class="nav" data-view="changes" onclick="go({view:'changes'})"><span class="ic">❏</span> Specs &amp; mudanças <span class="count" id="nav-ch"></span></button>
+    <button class="nav" data-view="tasks" onclick="go({view:'tasks'})"><span class="ic">≣</span> Tarefas <span class="count" id="nav-tk"></span></button>
+    <div class="grp">Plataforma</div>
+    <button class="nav" data-view="connectors" onclick="go({view:'connectors'})"><span class="ic">⚙</span> Conectores</button>
+    <button class="nav" data-view="validation" onclick="go({view:'validation'})"><span class="ic">◐</span> Validação · Pass 5</button>
+    <div class="side-foot">SquadX.dev · Control Plane<br>spec-native · v0.1 preview</div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="modal" class="modal-wrap" style="display:none" onclick="if(event.target===this)closeModal()"></div>
+
+<script>
+const STATUS={
+  feito:{label:'concluída',cls:'done',mark:'●',c:'var(--done)'},
+  em_validacao:{label:'em validação',cls:'review',mark:'◑',c:'var(--review)'},
+  implementado:{label:'implementado',cls:'review',mark:'◒',c:'var(--review)'},
+  ajustes:{label:'ajustes necessários',cls:'revise',mark:'⟲',c:'var(--revise)'},
+  em_curso:{label:'em execução',cls:'doing',mark:'◐',c:'var(--doing)'},
+  bloqueado:{label:'bloqueada',cls:'blocked',mark:'▲',c:'var(--blocked)'},
+  a_fazer:{label:'a fazer',cls:'todo',mark:'○',c:'var(--todo)'},
+};
+const SEG=['a_fazer','em_curso','em_validacao','ajustes','bloqueado','feito'];
+const HARNESSES={
+  'claude-code':{name:'Claude Code',vendor:'Anthropic',status:'conectado',model:'Claude Opus 4.8',models:['Claude Opus 4.8','Claude Sonnet 4.6','Claude Haiku 4.5']},
+  'codex':{name:'Codex',vendor:'OpenAI',status:'conectado',model:'GPT-5.1 Codex',models:['GPT-5.1 Codex','GPT-5.1']},
+  'gemini-cli':{name:'Gemini CLI',vendor:'Google',status:'disponível',model:'Gemini 2.5 Pro',models:['Gemini 2.5 Pro','Gemini 2.5 Flash']},
+  'cursor':{name:'Cursor',vendor:'Anysphere',status:'disponível',model:'Auto',models:['Auto','Claude Opus 4.8','GPT-5.1']}
+};
+let taskMode='lista';
+function setTaskMode(m){taskMode=m;render();}
+let taskFilter='all';
+function setTaskFilter(f){taskFilter=f;render();}
+function filterTasks(all){
+  if(taskFilter==='all')return all;
+  if(taskFilter==='human')return all.filter(t=>t.who.k==='human');
+  if(taskFilter==='agent')return all.filter(t=>t.who.k==='agent');
+  return all.filter(t=>whoName(t.who)===taskFilter);
+}
+
+const AISVG='<svg viewBox="0 0 24 24" width="62%" height="62%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/><path d="M12 8.4l1.3 2.3 2.3 1.3-2.3 1.3L12 15.6l-1.3-2.3L8.4 12l2.3-1.3z"/></svg>';
+function whoName(w){return w.k==='agent'?HARNESSES[w.harness].name:w.name;}
+function avatar(w,s){s=s||22;
+  if(w.k==='agent'){const h=HARNESSES[w.harness];return `<span class="av agent" style="width:${s}px;height:${s}px" title="${h.name} · ${h.model}">${AISVG}</span>`;}
+  const ini=w.name.split(' ').map(x=>x[0]).slice(0,2).join('');
+  return `<span class="av" style="width:${s}px;height:${s}px" title="${w.name}"><img src="${w.img}" alt="${w.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="av-fb" style="display:none">${ini}</span></span>`;}
+function assignee(w,s){return `<span class="assignee">${avatar(w,s)}<span class="nm">${whoName(w)}</span>${w.k==='agent'?'<span class="kind">IA</span>':''}</span>`;}
+
+function deburr(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function methodName(s){const w=deburr(s).toLowerCase().replace(/[^a-z0-9 ]/g,'').split(/\s+/).filter(Boolean);
+  return (w.map((x,i)=>i===0?x:x.charAt(0).toUpperCase()+x.slice(1)).join('')||'cenario').slice(0,46);}
+function className(s){const w=deburr(s).replace(/[^a-zA-Z0-9 ]/g,'').split(/\s+/).filter(Boolean);
+  return w.map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join('')+'Test';}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function openTests(p,cid,rid){const ch=DATA[p].changes.find(c=>c.id===cid);const r=ch.requirements.find(x=>x.id===rid);
+  const mo=document.getElementById('modal');mo.innerHTML=testsModal(ch,r);mo.style.display='flex';}
+function closeModal(){const mo=document.getElementById('modal');if(mo){mo.style.display='none';mo.innerHTML='';}}
+function copyCode(){const el=document.getElementById('genCode');if(!el)return;const t=el.textContent;
+  const ok=()=>{const m=document.getElementById('copyMsg');if(m){m.textContent='copiado ✓';setTimeout(()=>m.textContent='',1600);}};
+  try{navigator.clipboard.writeText(t).then(ok,ok);}catch(e){ok();}}
+function materializeTests(cls){alert('Materializaria '+cls+'.java no repo (via workspace.scaffold_tests) e registraria a cobertura cenário↔teste no Pass 5.');}
+function setHarnessModel(k,v){HARNESSES[k].model=v;render();}
+function viewValidation(){
+  const p=DATA[cur.proj];const all=allTasks(cur.proj);
+  const emVal=all.filter(t=>t.status==='em_validacao').length;
+  const aprov=all.filter(t=>t.status==='feito').length;
+  const ajust=all.filter(t=>t.status==='ajustes').length;
+  let scs=[];p.changes.forEach(ch=>ch.requirements.forEach(r=>r.scenarios.forEach(sc=>scs.push(sc))));
+  const tot=scs.length,cov=scs.filter(s=>s.cov).length;const covPct=tot?Math.round(cov/tot*100):0;
+  const ord={em_validacao:0,ajustes:1,feito:2};
+  const queue=all.filter(t=>['em_validacao','ajustes','feito'].includes(t.status)).sort((a,b)=>ord[a.status]-ord[b.status]);
+  const rpill=st=>st==='feito'?'<span class="pill done">aprovado</span>':st==='ajustes'?'<span class="pill revise">reprovado</span>':'<span class="pill review">em análise</span>';
+  return `<div class="fade">
+    <div class="page-h"><div><h1>Validação · Pass 5</h1><div class="sub">confere o código contra os cenários de aceite da spec — e exige um teste por cenário</div></div></div>
+    <div class="metrics">
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--review)"></span>Em validação</div><div class="v">${emVal}</div></div>
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--done)"></span>Aprovados</div><div class="v">${aprov}</div></div>
+      <div class="metric ${ajust?'warn':''}"><div class="k"><span class="ring" style="background:var(--revise)"></span>Em ajuste</div><div class="v">${ajust}</div></div>
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--accent)"></span>Cobertura de cenários</div><div class="v">${covPct}<small>%</small></div></div>
+    </div>
+    <div class="panel" style="margin-bottom:22px">
+      <div class="panel-h">◐ Fila de validação <span class="more">PRs no portão Pass 5</span></div>
+      ${queue.length?queue.map(t=>{const req=t.change.requirements.find(r=>r.id===t.req);const s=STATUS[t.status];
+        return `<div class="vq" onclick="go({view:'task',change:'${t.change.id}',task:'${t.id}'})">
+          <span class="dotmark" style="color:${s.c}">${s.mark}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px"><span class="mono" style="color:var(--faint);font-size:12px">${t.id}</span> ${t.t}</div>
+            <div class="vq-sub">${t.change.id} · ${req?req.title:''}</div>
+            ${t.status==='ajustes'&&t.revise?`<div class="vq-find">⟲ ${t.revise.split('.')[0]}.</div>`:''}
+          </div>
+          ${assignee(t.who,20)}${rpill(t.status)}
+        </div>`}).join(''):`<div class="kcol-empty" style="margin:16px 18px">Nada na fila de validação.</div>`}
+    </div>
+    <div class="panel" style="margin-bottom:22px">
+      <div class="panel-h">≣ Cobertura cenário → teste <span class="more">${cov}/${tot} cenários cobertos</span></div>
+      ${tot?p.changes.map(ch=>ch.requirements.filter(r=>r.scenarios.length).map(r=>`
+        <div class="covgrp">
+          <div class="covhd"><span class="tag ${r.type==='ADDED'?'added':'mod'}">${r.id}</span> ${r.title} <span class="covmeta">${ch.id}</span></div>
+          ${r.scenarios.map(sc=>`<div class="covsc"><span class="ck ${sc.cov?'ok':'no'}">${sc.cov?'✓':'✕'}</span><span style="flex:1">${sc.nm}</span><span class="cklab ${sc.cov?'ok':'no'}">${sc.cov?'coberto':'sem teste'}</span></div>`).join('')}
+        </div>`).join('')).join(''):`<div class="kcol-empty" style="margin:16px 18px">Nenhum requisito com cenários definidos ainda.</div>`}
+    </div>
+    <div class="panel">
+      <div class="panel-h">⚖ Critérios de reprovação</div>
+      <div style="padding:14px 18px;display:flex;flex-direction:column;gap:9px">
+        <div class="covsc"><span class="ck" style="background:var(--accent-soft);color:var(--accent)">1</span><span>Algum cenário de aceite sem teste correspondente.</span></div>
+        <div class="covsc"><span class="ck" style="background:var(--accent-soft);color:var(--accent)">2</span><span>Algum teste derivado da spec falhando.</span></div>
+        <div class="covsc"><span class="ck" style="background:var(--accent-soft);color:var(--accent)">3</span><span>Código diverge do comportamento descrito nos cenários.</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+function viewConnectors(){
+  return `<div class="fade">
+    <div class="page-h"><div><h1>Conectores</h1><div class="sub">harnesses de execução · cada um fala MCP com o workspace, sem lock-in</div></div></div>
+    <div class="hgrid">
+    ${Object.entries(HARNESSES).map(([k,h])=>`
+      <div class="hcard">
+        <div class="hh"><span class="hav">${AISVG}</span><div><div class="hname">${h.name}</div><div class="hvendor">${h.vendor}</div></div>
+          <span class="hstatus ${h.status==='conectado'?'on':'off'}">${h.status}</span></div>
+        <div class="hrow"><span class="hk">Modelo LLM</span>
+          <select onchange="setHarnessModel('${k}',this.value)">${h.models.map(m=>`<option ${m===h.model?'selected':''}>${m}</option>`).join('')}</select></div>
+        <div class="hmcp">↳ workspace MCP · contexto + status + scaffold_tests</div>
+      </div>`).join('')}
+    </div>
+    <div class="hint" style="margin-top:18px">O modelo escolhido aqui é o que o harness usa ao abrir uma sessão de tarefa. Como a integração é via MCP (padrão), trocar de harness não muda o contrato — todos consomem o mesmo briefing e reportam o mesmo status.</div>
+  </div>`;
+}
+function testsModal(ch,r){
+  if(!r.scenarios.length){
+    return '<div class="modal"><div class="modal-h"><h2>Gerar testes — '+r.title+'</h2><button class="close" onclick="closeModal()">✕</button></div>'+
+      '<div class="modal-b"><div class="empty">Este requisito ainda não tem cenários de aceite no spec.md. Adicione cenários (WHEN/THEN) para gerar os testes — é deles que os testes nascem.</div></div></div>';
+  }
+  const cls=className(r.title);const n=r.scenarios.length;
+  const methods=r.scenarios.map(sc=>({sc,mn:methodName(sc.nm)}));
+  let code='import org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.fail;\n\n';
+  code+='// Gerado por workspace.scaffold_tests a partir de '+ch.id+' · requisito '+r.id+'\n';
+  code+='// Cada cenário de aceite da spec vira um teste rastreável.\n';
+  code+='@DisplayName("'+r.title+'")\nclass '+cls+' {\n';
+  methods.forEach(m=>{
+    code+='\n    @Test\n    @DisplayName("'+r.id+' · '+m.sc.nm+'")\n    void '+m.mn+'() {\n';
+    code+='        // WHEN '+m.sc.g+'\n        // THEN '+m.sc.t+'\n';
+    code+='        fail("TODO: implementar conforme cenário da spec");\n    }\n';
+  });
+  code+='}\n';
+  const mapping=methods.map(m=>'<div class="maprow"><span class="mdot"></span><div><div>'+m.sc.nm+'</div><div class="mmethod">'+m.mn+'()</div></div></div>').join('');
+  return '<div class="modal">'+
+    '<div class="modal-h"><span class="tag '+(r.type==='ADDED'?'added':'mod')+'">'+r.id+'</span><h2>Testes gerados — '+r.title+'</h2><button class="close" onclick="closeModal()">✕</button></div>'+
+    '<div class="modal-b">'+
+      '<div class="cov">✓ '+n+' cenário(s) → '+n+' teste(s) · cobertura 100%</div>'+
+      '<p class="section-t" style="margin-top:18px">mapeamento cenário → teste</p>'+mapping+
+      '<p class="section-t" style="margin-top:18px">arquivo gerado · '+cls+'.java</p>'+
+      '<pre class="code" id="genCode">'+esc(code)+'</pre>'+
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:16px">'+
+        '<button class="btn" style="flex:1" onclick="materializeTests(\''+cls+'\')">⎘ Materializar no repo</button>'+
+        '<button class="btn ghost" onclick="copyCode()">Copiar</button>'+
+        '<span id="copyMsg" style="font-size:12px;color:var(--done)"></span>'+
+      '</div>'+
+      '<div class="hint">Saída da capability workspace.scaffold_tests. Ao materializar, o arquivo entra no repo e o Pass 5 passa a exigir cobertura cenário↔teste.</div>'+
+    '</div></div>';
+}
+
+const DATA={
+  'gestor-rq':{name:'Gestor-RQ',client:'Rio Quality',changes:[
+    {id:'add-alerta-saldo-verba',module:'M1 · Verba de Coordenador',phase:'implementação',
+     versions:[
+      {v:'v3',cur:true,sum:'Avaliação de alerta integrada à transação (MODIFIED R1)',who:'refinado no painel',when:'há 5h',commit:'c1d8fa'},
+      {v:'v2',sum:'Threshold configurável por coordenador + fallback global',who:'refinado no painel',when:'há 2 dias',commit:'a3f91c'},
+      {v:'v1',sum:'Proposta inicial — alerta ao cruzar 80%',who:'proposta',when:'há 3 dias',commit:'9c2e1a'}
+     ],
+     requirements:[
+      {id:'R1',type:'MODIFIED',title:'Validação de lançamento de verba',
+       desc:'Bloqueio a 100% preservado · avaliação de alerta integrada à aprovação.',
+       scenarios:[
+        {nm:'Lançamento dentro do limite (preservado)',g:'consumo após o lançamento ≤ 100%',t:'o lançamento é aceito',cov:true},
+        {nm:'Avaliação de alerta na aprovação',g:'um lançamento é aceito',t:'a avaliação de threshold ocorre na mesma transação',cov:true}
+       ],tasks:['3.1','3.2','4.3']},
+      {id:'R2',type:'ADDED',title:'Alerta de proximidade do limite',
+       desc:'Dispara uma vez por competência ao cruzar o threshold (default 80%).',cmt:2,
+       scenarios:[
+        {nm:'Cruza o threshold pela primeira vez',g:'o consumo passa de abaixo para ≥ o threshold',t:'um evento VerbaThresholdAtingido é publicado uma única vez',cov:true},
+        {nm:'Lançamentos subsequentes acima',g:'o consumo já está acima do threshold',t:'nenhum novo alerta é emitido na mesma competência',cov:true},
+        {nm:'Threshold não configurado',g:'o coordenador não possui threshold próprio',t:'o sistema usa o threshold global (80%)',cov:false}
+       ],tasks:['1.1','1.2','1.3','2.1','2.2','2.3','4.1']}
+     ],
+     tasks:{
+      '1.1':{t:'Coluna threshold_alerta_percentual',req:'R2',status:'feito',
+        events:[['há 3h','em_curso','Claude Code'],['há 3h','implementado','Claude Code'],['há 2h','feito','Pass 5']],
+        commits:[['a3f91c','feat(verba): coluna threshold [1.1]']],pass5:'pass'},
+      '1.2':{t:'Coluna alerta_threshold_emitido',req:'R2',status:'feito',
+        events:[['há 3h','em_curso','Claude Code'],['há 3h','implementado','Claude Code'],['há 2h','feito','Pass 5']],
+        commits:[['a3f91c','feat(verba): coluna emitido [1.2]']],pass5:'pass'},
+      '1.3':{t:'Threshold global default 80%',req:'R2',status:'feito',
+        events:[['há 2h','em_curso','Claude Code'],['há 2h','implementado','Claude Code'],['há 1h','feito','Pass 5']],
+        commits:[['b7e22d','feat(verba): default global [1.3]']],pass5:'pass'},
+      '2.1':{t:'Avaliação de cruzamento de threshold',req:'R2',status:'em_curso',
+        events:[['há 8min','em_curso','Claude Code']],
+        commits:[['—','sessão em andamento']],pass5:'pending'},
+      '2.2':{t:'Idempotência por competência',req:'R2',status:'bloqueado',
+        blocker:'Decisão pendente: idempotência por competência ou por lançamento. Aguarda definição no design (ADR-019).',
+        events:[['há 22min','bloqueado','Claude Code']],commits:[],pass5:'pending'},
+      '2.3':{t:'Fallback para threshold global',req:'R2',status:'a_fazer',events:[],commits:[],pass5:'pending'},
+      '3.1':{t:'Publicar evento na transação',req:'R1',status:'em_validacao',
+        events:[['há 40min','em_curso','Claude Code'],['há 12min','implementado','Claude Code'],['há 10min','em_validacao','Pullwise · Pass 5']],
+        commits:[['c1d8fa','feat(verba): publish event [3.1]']],pass5:'pending'},
+      '3.2':{t:'Listener AFTER_COMMIT → canal assíncrono',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'},
+      '4.1':{t:'Teste: cruza threshold uma vez → 1 evento',req:'R2',status:'a_fazer',events:[],commits:[],pass5:'pending'},
+      '4.3':{t:'Teste: bloqueio a 100% preservado',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'}
+     }},
+    {id:'add-export-fechamento',module:'M1 · Verba de Coordenador',phase:'spec',
+     requirements:[{id:'R1',type:'ADDED',title:'Exportação do fechamento mensal',
+       desc:'Gera arquivo consolidado por coordenador ao fechar a competência.',scenarios:[],tasks:['1.1','1.2']}],
+     tasks:{'1.1':{t:'Definir formato do arquivo',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'},
+            '1.2':{t:'Endpoint de exportação',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'}}}
+  ]},
+  'nutrindo':{name:'Nutrindo Digital',client:'APPAI / Rio Quality',changes:[
+    {id:'add-rastreabilidade-voucher',module:'Core · Voucher',phase:'implementação',
+     requirements:[{id:'R1',type:'ADDED',title:'Rastreabilidade dos 9 estados do voucher',
+       desc:'Transparência radical: cada transição de estado é auditável.',scenarios:[
+        {nm:'Transição registra evento auditável',g:'um voucher muda de estado',t:'um registro imutável é criado com timestamp e ator',cov:false}
+       ],tasks:['1.1','1.2','2.1']}],
+     tasks:{'1.1':{t:'Máquina de estados (9 estados)',req:'R1',status:'feito',
+        events:[['ontem','feito','Pass 5']],commits:[['d4a0','feat: state machine [1.1]']],pass5:'pass'},
+       '1.2':{t:'Trilha de auditoria imutável',req:'R1',status:'ajustes',
+        revise:'Pass 5: o registro de auditoria não cobre a transição para o estado "cancelado por fraude" exigida pelo cenário de aceite. Reprovado pelo Pullwise — ajustar antes de novo PR.',
+        events:[['há 2h','em_curso','Dev + IDE'],['há 1h','implementado','Dev + IDE'],['há 50min','em_validacao','Pullwise · Pass 5'],['há 48min','ajustes','Pullwise · Pass 5']],
+        commits:[['e9b1','feat: audit trail [1.2]']],pass5:'fail'},
+       '2.1':{t:'Endpoint de consulta de histórico',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'}}}
+  ]},
+  'bluevix':{name:'BlueVix App',client:'projeto pessoal',changes:[
+    {id:'add-ciclo-menstrual',module:'Wellness · Tracking',phase:'spec',
+     requirements:[{id:'R1',type:'ADDED',title:'Rastreamento de ciclo menstrual',
+       desc:'Integra o ciclo ao plano trimestral e às notificações.',scenarios:[],tasks:['1.1']}],
+     tasks:{'1.1':{t:'Modelo de dados do ciclo',req:'R1',status:'a_fazer',events:[],commits:[],pass5:'pending'}}}
+  ]}
+};
+
+const CC={k:'agent',harness:'claude-code'};
+const CDX={k:'agent',harness:'codex'};
+const ALE={k:'human',name:'Alexandre',img:'https://randomuser.me/api/portraits/men/32.jpg'};
+const MAY={k:'human',name:'Mayker',img:'https://randomuser.me/api/portraits/men/75.jpg'};
+const EDS={k:'human',name:'Edson',img:'https://randomuser.me/api/portraits/men/45.jpg'};
+const ASSIGN={
+  'gestor-rq':{
+    'add-alerta-saldo-verba':{'1.1':CC,'1.2':CC,'1.3':CC,'2.1':CC,'2.2':CC,'2.3':MAY,'3.1':CC,'3.2':ALE,'4.1':MAY,'4.3':ALE},
+    'add-export-fechamento':{'1.1':ALE,'1.2':CC}},
+  'nutrindo':{'add-rastreabilidade-voucher':{'1.1':CC,'1.2':ALE,'2.1':CDX}},
+  'bluevix':{'add-ciclo-menstrual':{'1.1':EDS}}
+};
+Object.entries(DATA).forEach(([p,proj])=>proj.changes.forEach(ch=>Object.entries(ch.tasks).forEach(([id,t])=>{
+  t.who=(ASSIGN[p]&&ASSIGN[p][ch.id]&&ASSIGN[p][ch.id][id])||CC;})));
+
+let cur={proj:'gestor-rq',view:'dashboard',change:null,task:null};
+
+function allTasks(p){let out=[];DATA[p].changes.forEach(c=>{Object.entries(c.tasks).forEach(([id,t])=>out.push({...t,id,change:c}))});return out;}
+function countStatus(p){const c={feito:0,em_curso:0,em_validacao:0,implementado:0,ajustes:0,bloqueado:0,a_fazer:0};allTasks(p).forEach(t=>c[t.status]++);return c;}
+function progress(c){const ts=Object.values(c.tasks);if(!ts.length)return 0;return Math.round(ts.filter(t=>t.status==='feito').length/ts.length*100);}
+
+function toggleMenu(e){e.stopPropagation();document.getElementById('projMenu').classList.toggle('open');}
+document.addEventListener('click',()=>document.getElementById('projMenu').classList.remove('open'));
+
+function go(s){closeModal();Object.assign(cur,s);if(s.view&&s.view!=='task'){cur.change=s.change||cur.change;}render();window.scrollTo(0,0);}
+function pickProj(p){cur={proj:p,view:'dashboard',change:null,task:null};taskFilter='all';render();}
+
+function renderProjMenu(){
+  document.getElementById('projList').innerHTML=Object.entries(DATA).map(([id,p])=>
+    `<button class="${id===cur.proj?'active':''}" onclick="pickProj('${id}')"><span class="proj-dot" style="background:${id===cur.proj?'var(--accent)':'var(--faint)'}"></span>${p.name}<span class="meta">${p.changes.length} mud.</span></button>`).join('');
+  document.getElementById('sw-name').textContent=DATA[cur.proj].name;
+}
+
+function setNav(){document.querySelectorAll('.nav[data-view]').forEach(n=>n.classList.toggle('active',n.dataset.view===cur.view||(cur.view==='workspace'&&n.dataset.view==='changes')||(cur.view==='task'&&n.dataset.view==='tasks')));
+  document.getElementById('nav-ch').textContent=DATA[cur.proj].changes.length;
+  document.getElementById('nav-tk').textContent=allTasks(cur.proj).length;}
+
+function render(){
+  renderProjMenu();setNav();
+  const m=document.getElementById('main');
+  if(cur.view==='dashboard')m.innerHTML=viewDashboard();
+  else if(cur.view==='changes')m.innerHTML=viewChanges();
+  else if(cur.view==='tasks')m.innerHTML=viewTasks();
+  else if(cur.view==='workspace')m.innerHTML=viewWorkspace();
+  else if(cur.view==='task')m.innerHTML=viewTask();
+  else if(cur.view==='connectors')m.innerHTML=viewConnectors();
+  else if(cur.view==='validation')m.innerHTML=viewValidation();
+  m.querySelectorAll('.bar i,.segbar i').forEach(b=>{const w=b.style.width;b.style.width='0';requestAnimationFrame(()=>requestAnimationFrame(()=>b.style.width=w));});
+}
+
+function viewDashboard(){
+  const p=DATA[cur.proj];const c=countStatus(cur.proj);const all=allTasks(cur.proj);
+  const overall=Math.round(all.filter(t=>t.status==='feito').length/all.length*100);
+  const feed=[
+    ['há 8min',STATUS.em_curso.c,'<b>Avaliação de cruzamento</b> <span class="id">2.1</span> marcada <b>em curso</b> <span class="via">· via Claude Code</span>'],
+    ['há 12min',STATUS.em_validacao.c,'<span class="id">3.1</span> em <b>validação</b> <span class="via">· Pullwise · Pass 5</span>'],
+    ['há 22min',STATUS.bloqueado.c,'<span class="id">2.2</span> <b>bloqueada</b> — idempotência por competência <span class="via">· via Claude Code</span>'],
+    ['há 1h',STATUS.feito.c,'<span class="id">1.3</span> <b>feito</b> <span class="via">· Pass 5 ✓</span>'],
+    ['há 2h',STATUS.feito.c,'<span class="id">1.1</span> <span class="id">1.2</span> <b>feito</b> <span class="via">· Pass 5 ✓</span>'],
+  ];
+  return `<div class="fade">
+    <div class="page-h"><div><h1>${p.name}</h1><div class="sub">${p.client} · ${p.changes.length} mudança(s) ativa(s)</div></div></div>
+    <div class="metrics">
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--accent)"></span>Progresso geral</div><div class="v">${overall}<small>%</small></div></div>
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--done)"></span>Tarefas concluídas</div><div class="v">${c.feito}<small>/${all.length}</small></div></div>
+      <div class="metric"><div class="k"><span class="ring" style="background:var(--doing)"></span>Em andamento</div><div class="v">${c.em_curso+c.em_validacao}</div></div>
+      <div class="metric ${c.bloqueado?'warn':''}"><div class="k"><span class="ring" style="background:var(--blocked)"></span>Bloqueios</div><div class="v">${c.bloqueado}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:28px">
+      <div class="panel-h">≣ Distribuição por status <span class="more">${all.length} tarefas no total</span></div>
+      <div style="padding:16px 18px">
+        <div class="segbar">${SEG.filter(k=>c[k]>0).map(k=>`<i style="width:${(c[k]/all.length*100).toFixed(1)}%;background:${STATUS[k].c}" title="${STATUS[k].label}: ${c[k]}"></i>`).join('')}</div>
+        <div class="leg">${SEG.map(k=>`<span class="legi"><span class="sw" style="background:${STATUS[k].c}"></span>${STATUS[k].label} <b>${c[k]}</b></span>`).join('')}</div>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="panel">
+        <div class="panel-h">❏ Mudanças <span class="more">clique para abrir a spec</span></div>
+        ${p.changes.map(ch=>{const pr=progress(ch);const ts=Object.values(ch.tasks);const done=ts.filter(t=>t.status==='feito').length;
+          return `<div class="crow" onclick="go({view:'workspace',change:'${ch.id}'})">
+            <div><div class="nm">${ch.id}</div><div class="ds">${ch.module}</div></div>
+            <div class="right">
+              <span class="tag phase">${ch.phase}</span>
+              <span class="tcount">${done}/${ts.length}</span>
+              <div class="bar"><i style="width:${pr}%"></i></div>
+              <span class="pct">${pr}%</span>
+            </div></div>`}).join('')}
+      </div>
+      <div class="panel">
+        <div class="panel-h"><span class="pulse" style="width:6px;height:6px"></span> Atividade ao vivo</div>
+        <div class="feed">${feed.map(f=>`<div class="ev"><span class="marker" style="background:${f[1]}"></span><div style="flex:1"><div class="body">${f[2]}</div></div><div class="when">${f[0]}</div></div>`).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function viewChanges(){
+  const p=DATA[cur.proj];
+  return `<div class="fade"><div class="page-h"><div><h1>Specs &amp; mudanças</h1><div class="sub">cada mudança é um change folder · proposal, spec, design, tasks</div></div></div>
+   <div class="panel">${p.changes.map(ch=>{const pr=progress(ch);const ts=Object.values(ch.tasks);const done=ts.filter(t=>t.status==='feito').length;
+    return `<div class="crow" onclick="go({view:'workspace',change:'${ch.id}'})">
+      <div><div class="nm">${ch.id}</div><div class="ds">${ch.module} · ${ch.requirements.length} requisito(s)</div></div>
+      <div class="right"><span class="tag phase">${ch.phase}</span><span class="tcount">${done}/${ts.length}</span>
+      <div class="bar"><i style="width:${pr}%"></i></div><span class="pct">${pr}%</span></div></div>`}).join('')}</div></div>`;
+}
+
+function viewTasks(){
+  const all=allTasks(cur.proj);
+  const shown=filterTasks(all);
+  return `<div class="fade">
+    <div class="page-h"><div><h1>Tarefas</h1><div class="sub">${all.length} tarefas · estado vindo do MCP e do Pass 5</div></div>
+      <div class="seg" style="margin-left:auto;align-self:center">
+        <button class="${taskMode==='lista'?'active':''}" onclick="setTaskMode('lista')">≣ Lista</button>
+        <button class="${taskMode==='kanban'?'active':''}" onclick="setTaskMode('kanban')">▦ Kanban</button>
+      </div></div>
+    ${tasksFilterBar(all)}
+    ${taskMode==='lista'?tasksList(shown):tasksKanban(shown)}
+  </div>`;
+}
+function tasksFilterBar(all){
+  const humans=all.filter(t=>t.who.k==='human').length;
+  const agents=all.filter(t=>t.who.k==='agent').length;
+  const seen={},people=[];
+  all.forEach(t=>{const n=whoName(t.who);if(!seen[n]){seen[n]=true;people.push(t.who);}});
+  const chip=(f,label,n)=>`<button class="chip ${taskFilter===f?'active':''}" onclick="setTaskFilter('${f}')">${label} <span class="cn">${n}</span></button>`;
+  return `<div class="filterbar">
+    ${chip('all','Todos',all.length)}
+    ${chip('human','Humanos',humans)}
+    ${chip('agent','IA',agents)}
+    <span class="fsep"></span>
+    ${people.map(w=>`<button class="chip avchip ${taskFilter===whoName(w)?'active':''}" onclick="setTaskFilter('${whoName(w)}')">${avatar(w,20)}<span>${whoName(w)}</span></button>`).join('')}
+  </div>`;
+}
+function tasksList(all){
+  const order=['bloqueado','ajustes','em_validacao','em_curso','a_fazer','feito'];
+  const sorted=all.slice().sort((a,b)=>order.indexOf(a.status)-order.indexOf(b.status));
+  return `<div class="panel"><div class="tasks">${sorted.map(t=>{const s=STATUS[t.status];
+    return `<div class="task" onclick="go({view:'task',change:'${t.change.id}',task:'${t.id}'})">
+      <span class="dotmark" style="color:${s.c}">${s.mark}</span>
+      <span class="tid">${t.id}</span><span class="tt">${t.t}</span>
+      ${assignee(t.who,20)}
+      <span class="tcount" style="color:var(--faint)">${t.change.id}</span>
+      <span class="pill ${s.cls}">${s.label}</span></div>`}).join('')}</div></div>`;
+}
+function tasksKanban(all){
+  return `<div class="kanban">${SEG.map(k=>{const items=all.filter(t=>t.status===k);const s=STATUS[k];
+    return `<div class="kcol">
+      <div class="kcol-h"><span class="dot" style="background:${s.c}"></span>${s.label}<span class="n">${items.length}</span></div>
+      ${items.length?items.map(t=>`<div class="kcard" style="border-left-color:${s.c}" onclick="go({view:'task',change:'${t.change.id}',task:'${t.id}'})">
+        <div class="kid">${t.id} · ${t.change.id}</div>
+        <div class="kt">${t.t}</div>
+        ${t.blocker?`<div class="knote">${t.blocker.split('.')[0]}.</div>`:t.revise?`<div class="knote">${t.revise.split('.')[0]}.</div>`:''}
+        <div style="margin-top:9px">${assignee(t.who,18)}</div>
+      </div>`).join(''):`<div class="kcol-empty">—</div>`}
+    </div>`}).join('')}</div>`;
+}
+
+function curChange(){return DATA[cur.proj].changes.find(c=>c.id===cur.change);}
+
+function viewWorkspace(){
+  const ch=curChange();const pr=progress(ch);const ts=Object.values(ch.tasks);
+  const c=ts.reduce((a,t)=>{a[t.status]=(a[t.status]||0)+1;return a},{});
+  const nextEntry=Object.entries(ch.tasks).find(([id,t])=>t.status==='em_curso');const blk=Object.entries(ch.tasks).find(([id,t])=>t.status==='bloqueado');
+  return `<div class="fade">
+    <div class="crumb"><a onclick="go({view:'dashboard'})">${DATA[cur.proj].name}</a><span class="sep">/</span><a onclick="go({view:'changes'})">mudanças</a><span class="sep">/</span><span class="mono">${ch.id}</span></div>
+    <div class="page-h"><div><h1 class="mono" style="font-size:21px">${ch.id}</h1><div class="sub">${ch.module}</div></div>
+      <span class="tag module" style="margin-left:auto;align-self:center">${ch.phase}</span></div>
+    <div class="nowbar">
+      <div class="toprow">
+        <span class="section-t" style="margin:0">onde estamos</span>
+        <span class="pill done" style="background:transparent;color:var(--dim);border:1px solid var(--border)">${c.feito||0} feito</span>
+        <span class="pill doing" style="background:transparent;color:var(--dim);border:1px solid var(--border)">${(c.em_curso||0)+(c.em_validacao||0)} em andamento</span>
+        <span class="pill blocked" style="background:transparent;color:var(--dim);border:1px solid var(--border)">${c.bloqueado||0} bloqueio</span>
+        <span class="pct" style="margin-left:auto;font-size:14px;color:var(--text)">${pr}%</span>
+        <div class="bar" style="width:160px"><i style="width:${pr}%"></i></div>
+      </div>
+      ${nextEntry?`<div class="next"><span class="arr">→</span> Próxima ação: concluir <span class="id">${nextEntry[0]}</span> — ${nextEntry[1].t}</div>`:''}
+      ${blk?`<div class="blk"><span>▲</span> Bloqueio em <span class="id">${blk[0]}</span> — ${blk[1].blocker.split('.')[0]}.</div>`:''}
+    </div>
+    ${ch.versions?`<div class="panel" style="margin-bottom:22px">
+      <div class="panel-h">⎇ Histórico da spec <span class="more">versionado no painel · materializado no repo</span></div>
+      ${ch.versions.map(v=>`<div class="vrow">
+        <span class="vtag ${v.cur?'cur':''}">${v.v}${v.cur?' · atual':''}</span>
+        <div class="vsum"><div>${v.sum}</div><div class="vwho">${v.who}</div></div>
+        <div class="vright"><span class="vmat">↳ ${v.commit}</span><span class="vwhen">${v.when}</span></div>
+      </div>`).join('')}
+    </div>`:''}
+    <div class="section-t">spec · requisitos → tarefas vinculadas</div>
+    ${ch.requirements.map(r=>`
+      <div class="req">
+        <div class="req-h"><span class="tag ${r.type==='ADDED'?'added':'mod'}">${r.type}</span><span class="title">${r.title}</span><span style="margin-left:auto;display:flex;align-items:center;gap:12px">${r.cmt?`<span class="cmt">◌ ${r.cmt}</span>`:''}<button class="genbtn" onclick="openTests('${cur.proj}','${ch.id}','${r.id}')">⚙ Gerar testes</button></span></div>
+        <div class="desc">${r.desc}</div>
+        <div class="tasks">${r.tasks.map(tid=>{const t=ch.tasks[tid];const s=STATUS[t.status];
+          return `<div class="task" onclick="go({view:'task',change:'${ch.id}',task:'${tid}'})">
+            <span class="dotmark" style="color:${s.c}">${s.mark}</span>
+            <span class="tid">${tid}</span><span class="tt">${t.t}</span>
+            ${assignee(t.who,18)}
+            <span class="pill ${s.cls}">${s.label}</span></div>`}).join('')}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function viewTask(){
+  const ch=curChange();const t=ch.tasks[cur.task];const s=STATUS[t.status];
+  const req=ch.requirements.find(r=>r.id===t.req);
+  return `<div class="fade">
+    <div class="crumb"><a onclick="go({view:'dashboard'})">${DATA[cur.proj].name}</a><span class="sep">/</span>
+      <a onclick="go({view:'workspace',change:'${ch.id}'})" class="mono">${ch.id}</a><span class="sep">/</span><span class="mono">${cur.task}</span></div>
+    <div class="page-h"><div>
+      <div style="display:flex;align-items:center;gap:12px"><span class="mono" style="font-size:15px;color:var(--faint)">${cur.task}</span><h1 style="font-size:22px">${t.t}</h1></div>
+      <div class="sub">vinculada a <span class="tag ${req.type==='ADDED'?'added':'mod'}" style="margin-left:4px">${req.type}</span> ${req.title}</div></div>
+      <span class="pill ${s.cls}" style="margin-left:auto;align-self:center;font-size:12px;padding:5px 14px">${s.label}</span></div>
+
+    ${t.status==='bloqueado'?`<div class="blk-note">▲ <b>Bloqueada.</b> ${t.blocker}</div>`:''}
+    ${t.status==='ajustes'?`<div class="rev-note">⟲ <b>Ajustes necessários.</b> ${t.revise}</div>`:''}
+
+    <div class="tdetail">
+      <div>
+        <div class="briefing">
+          <p class="section-t">briefing · contexto entregue à sessão</p>
+          <div style="font-size:13.5px;color:var(--dim);margin-bottom:6px">${req.desc}</div>
+          ${req.scenarios.length?`<p class="section-t" style="margin-top:18px">cenários de aceite</p>`:''}
+          ${req.scenarios.map(sc=>`<div class="scenario"><div class="nm">${sc.nm}</div>
+            <div class="gwt"><span class="kw">WHEN</span> ${sc.g}<br><span class="kw">THEN</span> ${sc.t}</div></div>`).join('')}
+          <p class="section-t" style="margin-top:18px">restrições do projeto</p>
+          <div class="constraint"><span class="ic">▸</span> PostgreSQL sem prefixo de tabela.</div>
+          <div class="constraint"><span class="ic">▸</span> Toda tarefa referencia o requisito de origem (${req.id}).</div>
+        </div>
+        <p class="section-t">histórico de execução</p>
+        <div class="aside-card">
+          ${t.events.length?`<div class="timeline">${t.events.map(e=>{const es=STATUS[e[1]];
+            return `<div class="tl"><span class="line"></span><span class="node" style="background:${es.c}"></span>
+              <div class="c"><div class="t">${es.label}</div><div class="m">${e[0]} · via ${e[2]}</div></div></div>`}).join('')}</div>`
+            :`<div style="color:var(--faint);font-size:13px">Sem eventos. A tarefa ainda não foi iniciada.</div>`}
+        </div>
+      </div>
+
+      <div>
+        <div class="aside-card">
+          <p class="section-t">situação</p>
+          <div class="kv"><span class="k">Responsável</span><span class="v">${assignee(t.who,22)}</span></div>
+          <div class="kv"><span class="k">Requisito</span><span class="v" style="color:var(--accent)">${req.id}</span></div>
+          <div class="kv"><span class="k">Mudança</span><span class="v">${ch.id}</span></div>
+          <div class="kv"><span class="k">Estado</span><span class="v" style="color:${s.c}">${s.label}</span></div>
+        </div>
+        ${t.who.k==='agent'?`<div class="aside-card">
+          <p class="section-t">execução do agente</p>
+          <div class="kv"><span class="k">Harness</span><span class="v">${HARNESSES[t.who.harness].name}</span></div>
+          <div class="kv"><span class="k">Modelo LLM</span><span class="v" style="color:var(--accent)">${HARNESSES[t.who.harness].model}</span></div>
+        </div>`:''}
+        <div class="aside-card">
+          <p class="section-t">validação · Pass 5</p>
+          ${t.pass5==='pass'?`<div class="gate pass">✓ Spec compliance aprovado</div>`
+            :t.pass5==='fail'?`<div class="gate fail">⟲ Reprovado — não satisfaz a spec</div>`
+            :`<div class="gate pending">◐ Aguardando · só vira "concluída" após o Pass 5</div>`}
+        </div>
+        <div class="aside-card">
+          <p class="section-t">commits · ref [${cur.task}]</p>
+          ${t.commits.length?t.commits.map(co=>`<div class="commit"><span class="sha">${co[0]}</span> ${co[1]}</div>`).join('')
+            :`<div style="color:var(--faint);font-size:12.5px">Nenhum commit ainda.</div>`}
+        </div>
+        ${(t.status==='a_fazer'||t.status==='em_curso')?(t.who.k==='agent'
+            ?`<button class="btn" onclick="alert('Abriria uma sessão no ${HARNESSES[t.who.harness].name} usando ${HARNESSES[t.who.harness].model}, com o briefing injetado via MCP.')">▶ Abrir sessão no ${HARNESSES[t.who.harness].name}</button>`
+            :`<button class="btn" onclick="alert('Abriria o briefing no IDE para o dev e criaria a branch task/${cur.task}.')">▶ Abrir no IDE</button>`)
+          :t.status==='ajustes'?`<button class="btn" onclick="alert('Reabriria a execução com a crítica do Pass 5 injetada no contexto.')">↺ Reabrir com a crítica do Pass 5</button>`
+          :t.status==='em_validacao'?`<button class="btn ghost" onclick="alert('Abriria a revisão do Pullwise (Pass 5) para esta tarefa.')">Ver revisão do Pullwise</button>`
+          :t.status==='bloqueado'?`<button class="btn ghost" onclick="alert('Levaria à decisão de design pendente (ADR-019).')">Resolver bloqueio</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+render();
+</script>
+</body>
+</html>

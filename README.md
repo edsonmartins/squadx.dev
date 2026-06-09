@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Java](https://img.shields.io/badge/java-21+-orange.svg)](https://openjdk.org)
 [![Next.js](https://img.shields.io/badge/next.js-16+-black.svg)](https://nextjs.org)
-[![Tests](https://img.shields.io/badge/tests-772%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1000%2B-brightgreen.svg)]()
 
 ---
 
@@ -46,11 +46,46 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 
 ---
 
+## Control Panel — SquadX.dev Spec
+
+O **Control Panel** é a camada *spec-native* da plataforma: a **especificação é a unidade de
+trabalho**. Requisitos com cenários de aceite (WHEN/THEN) geram as tarefas, humanos e agentes
+implementam lado a lado, e **nada é dado como pronto sem passar pelo Pass 5** — o portão de
+conformidade que confere o código contra a spec.
+
+```
+spec (requisitos + cenários) ──▶ tarefas ──▶ branch/PR ──▶ merge ──▶ Pass 5 ──▶ concluída │ ajustes
+        │                                        ▲                      │
+        └── materializada no Git (auto-PR) ──────┘      cobertura cenário↔teste + Pullwise
+```
+
+- **Modelo de trabalho**: projeto → mudança → requisito → tarefa; board de 6 estados
+  (`a_fazer → em_curso → em_validação → concluída`, com `bloqueada`/`ajustes`). `concluída` e
+  `ajustes` são **exclusivos do Pass 5** — o estado é projeção de eventos (webhooks Git + MCP),
+  nunca digitado à mão.
+- **Versionamento + materialização**: cada versão aprovada da spec vira **commit no repositório**
+  (GitHub Git Data API, branch `spec/<módulo>`, **PR aberto automaticamente**) — sem drift, sem
+  lock-in; o PR carrega spec + código no mesmo diff.
+- **Pass 5 (Pullwise)**: cobertura cenário↔teste obrigatória (scan automático do diff do PR por
+  convenção de nome `R<ref>_<slug>`) + revisão semântica via [Pullwise](https://github.com/edsonmartins/pullwise.ai)
+  (endpoint stateless de conformidade).
+- **MCP `workspace`**: contrato único e harness-agnóstico (Claude Code, Codex, Gemini CLI, Cursor)
+  com as tools `get_change`, `get_tasks`, `update_task_status`, `report_blocker`,
+  `materialize_change`, `scaffold_tests` — exposto via HTTP e via bridge **`squadx-workspace-mcp`**
+  (stdio/SSE, no client Python).
+- **Conectores de harness**: cadastro por organização, seleção de modelo LLM por harness e status
+  `conectado` derivado de sessões reais (handshake vivo).
+- **Governança**: [CONSTITUTION.md](CONSTITUTION.md) (princípios), [openspec/](openspec/) (specs
+  OpenSpec com cenários WHEN/THEN), [docs/adr/](docs/adr/) (6 ADRs em MADR) e
+  [docs/rfc/](docs/rfc/) (4 RFCs com contratos e algoritmos).
+
+---
+
 ## Stack Tecnológico
 
 | Camada | Tecnologia |
 |--------|-----------|
-| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (18 migrations) |
+| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (V1–V38) |
 | **Frontend** | Next.js 16, React 19, TypeScript 5.7, Tailwind CSS, Zustand, TanStack Query |
 | **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
 | **Mobile** | Expo 52, React Native, expo-router 4 |
@@ -62,6 +97,21 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 ---
 
 ## Features
+
+### Control Panel (SquadX.dev Spec)
+- **Dashboard "Onde estamos"** — progresso e contagem por status derivados de eventos (projeção)
+- **Workspace da mudança** — requisitos + cenários WHEN/THEN (com cobertura ✓/✕), board de tarefas
+  por status com transições válidas vindas do servidor, validação Pass 5 por tarefa, histórico de
+  versões + materialização
+- **Event sourcing** — `spec_events` append-only; webhooks Git (HMAC) e chamadas MCP viram eventos;
+  estado reprocessável e auditável (LGPD)
+- **Materialização Git real** — versão da spec → commit na branch `spec/<módulo>` + auto-PR
+  (idempotente por content-hash; detecção de conflito não-fast-forward)
+- **Pass 5 automatizado** — disparo no merge, scan de cobertura no diff do PR, revisão semântica
+  Pullwise plugável (fail-open), desfecho `concluída`/`ajustes` com crítica
+- **Workspace MCP** — sessões escopadas por token JWT (org/projeto/mudança/assignee), 6 tools,
+  bridge `squadx-workspace-mcp` (stdio/SSE) para CLIs reais
+- **Conectores** — registry de harnesses com seleção de modelo e status conectado real
 
 ### Core Platform
 - **Kanban Board** com drag-and-drop para gestão de tasks
@@ -236,7 +286,26 @@ RESEND_API_KEY=re_...
 # Google Calendar (opcional)
 GOOGLE_CALENDAR_CLIENT_ID=...
 GOOGLE_CALENDAR_CLIENT_SECRET=...
+
+# Control Panel — materialização da spec no Git (opcional; sem isso fica "pendente")
+SQUADX_GIT_ENABLED=true
+SQUADX_GIT_TOKEN=ghp_...                 # PAT com escopo de repo
+SQUADX_GIT_BRANCH_PREFIX=spec/
+
+# Control Panel — Pass 5 via Pullwise (opcional; sem isso o reviewer é no-op)
+SQUADX_PULLWISE_ENABLED=true
+SQUADX_PULLWISE_URL=http://localhost:8081
+SQUADX_PULLWISE_API_KEY=...              # casa com conformance.api-key do Pullwise
+
+# Webhook Git do Control Panel (HMAC do GitHub)
+SQUADX_GIT_WEBHOOK_SECRET=...
 ```
+
+> **Dev sem credenciais externas**: o backend sobe sem S3/SSO reais usando
+> `AWS_ACCESS_KEY_ID=dev-dummy AWS_SECRET_ACCESS_KEY=dev-dummy` e
+> `SPRING_AUTOCONFIGURE_EXCLUDE=org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration`
+> (login por e-mail/senha continua funcionando). Use `SERVER_PORT=8082` se a 8080 estiver ocupada
+> (e aponte o frontend com `NEXT_PUBLIC_API_URL`).
 
 ### Frontend
 ```bash
@@ -265,13 +334,28 @@ SQUADX_NETWORK_POLICY=package-managers  # none | package-managers | full
 SQUADX_SANDBOX_TTL=3600                 # seconds
 SQUADX_AGENT_MEMORY_LIMIT=2g
 SQUADX_AGENT_CPU_LIMIT=2.0
+
+# Workspace MCP bridge (Control Panel)
+SQUADX_WORKSPACE_TOKEN=...              # token de sessão (POST /api/v1/workspace/sessions)
+```
+
+#### Conectar um CLI ao Control Panel (MCP)
+
+```bash
+# 1. Abra uma sessão de workspace (UI ou API) e copie o token
+# 2. Registre o bridge no harness — ex.: Claude Code:
+claude mcp add squadx-workspace \
+  -e SQUADX_API_URL=http://localhost:8080 \
+  -e SQUADX_WORKSPACE_TOKEN=<token> \
+  -- squadx-workspace-mcp
+# Harness remoto: squadx-workspace-mcp --transport sse --port 8765
 ```
 
 ---
 
 ## Testes
 
-O projeto possui **772+ testes** distribuídos em 96 arquivos:
+O projeto possui **1.000+ testes**:
 
 ### Backend (Java - JUnit 5 + Mockito)
 ```bash
@@ -297,13 +381,13 @@ pytest tests/ -v
 # 28 arquivos = ~266 testes
 ```
 
-| Área | Arquivos | Testes | Cobertura |
-|------|----------|--------|-----------|
-| Backend Services | 25 | ~246 | 100% dos services |
-| Backend Controllers | 23 | ~119 | 100% dos controllers |
-| Frontend | 20 | 141 | ~60% componentes |
-| Python Client | 28 | ~266 | ~70% módulos |
-| **Total** | **96** | **~772** | |
+| Área | Testes | Observações |
+|------|--------|-------------|
+| Backend Services + Controllers | ~365 | 100% dos services/controllers do core |
+| Backend Control Panel | 93 | work-model, eventos/projeção, Pass 5, MCP, materialização, harnesses |
+| Frontend (Vitest) | ~147 | componentes + stores + Control Panel UI |
+| Python Client (pytest) | ~485 | agentes, sandbox, daemon, bridge MCP |
+| **Total** | **~1.090** | |
 
 ---
 
@@ -354,17 +438,29 @@ docker run \
 
 ```
 squadx.dev/
+├── CONSTITUTION.md             # Princípios invioláveis do projeto
+├── openspec/                   # Specs OpenSpec (project.md, AGENTS.md, changes/)
+├── docs/
+│   ├── adr/                    # 6 ADRs (MADR) — decisões arquiteturais
+│   └── rfc/                    # 4 RFCs — contratos e algoritmos
 ├── backend/                    # Spring Boot 3.4 API
 │   ├── src/main/java/dev/squadx/
 │   │   ├── config/             # Security, OAuth2, Region, WebSocket
-│   │   ├── controller/         # 23 REST controllers
+│   │   ├── controller/         # REST controllers (core)
+│   │   ├── controlpanel/       # Bounded context Control Panel:
+│   │   │   ├── model/          #   Change, Requirement, Scenario, SpecTask,
+│   │   │   │                   #   SpecEvent, SpecVersion, Pass5Run, Harness
+│   │   │   ├── service/        #   state machine, projeção, Pass 5, versões
+│   │   │   ├── mcp/            #   workspace MCP (sessões + tools)
+│   │   │   ├── materialization/#   render determinístico + GitHub Git Data API
+│   │   │   └── validation/     #   ConformanceReviewer (Pullwise) + naming
 │   │   ├── dto/                # Request/Response DTOs
 │   │   ├── model/              # 25+ JPA entities
-│   │   ├── repository/         # 26 Spring Data JPA repos
+│   │   ├── repository/         # Spring Data JPA repos
 │   │   ├── security/           # JWT, PermissionChecker
-│   │   └── service/            # 25 business services
+│   │   └── service/            # business services (core)
 │   └── src/main/resources/
-│       └── db/migration/       # V1-V18 Flyway migrations
+│       └── db/migration/       # V1-V38 Flyway migrations
 ├── frontend/                   # Next.js 16 Dashboard
 │   ├── src/
 │   │   ├── app/(dashboard)/    # Dashboard pages
@@ -383,6 +479,7 @@ squadx.dev/
 │   │   │                       #   file_ops, metrics, network_policy
 │   │   ├── git/                # Git manager + worktree isolation
 │   │   ├── live/               # Session management
+│   │   ├── mcp/                # Workspace MCP bridge (squadx-workspace-mcp)
 │   │   ├── messaging/          # Inter-agent mailbox
 │   │   ├── orchestrator/       # LangGraph state machine + waiter
 │   │   ├── streaming/          # VNC + WebRTC bridge
@@ -463,6 +560,22 @@ squadx.dev/
 | CRUD | `/api/v1/tasks/{id}/dependencies` | Task dependencies |
 | POST | `/api/v1/agents/{id}/heartbeat` | Agent heartbeat |
 
+### Control Panel (SquadX.dev Spec)
+| Method | Endpoint | Descrição |
+|--------|----------|-----------|
+| CRUD | `/api/v1/changes` | Mudanças (+ `/project/{id}/where-we-are`) |
+| CRUD | `/api/v1/requirements` | Requisitos + cenários WHEN/THEN |
+| CRUD | `/api/v1/spec-tasks` | Tarefas spec-driven (+ `PATCH /{id}/transition`) |
+| GET/POST | `/api/v1/spec-tasks/{id}/pass5` | Status / reexecução do Pass 5 |
+| GET | `/api/v1/changes/{id}/pass5` | Pass 5 de todas as tarefas (batch) |
+| PATCH | `/api/v1/scenarios/{id}/coverage` | Cobertura cenário↔teste (manual) |
+| POST/GET | `/api/v1/changes/{id}/versions` | Versões da spec |
+| POST | `/api/v1/changes/{id}/materialize` | Materializar no Git (commit + auto-PR) |
+| CRUD | `/api/v1/harnesses` | Conectores de harness (+ `PATCH /{id}/model`) |
+| POST | `/api/v1/workspace/sessions` | Sessão MCP escopada (token) |
+| GET/POST | `/api/v1/workspace/tools/*` | Tools do contrato `workspace` (6) |
+| POST | `/api/v1/webhooks/git` | Webhook Git (HMAC) → eventos de tarefa |
+
 ---
 
 ## Roadmap
@@ -513,7 +626,21 @@ squadx.dev/
 - [x] Checkpoint/restore (snapshot sandbox state)
 - [x] Waiter pattern (agent coordination primitives)
 
+### Phase 5 - Control Panel / SquadX.dev Spec (Completed)
+- [x] Governança: CONSTITUTION.md, openspec/, 6 ADRs (MADR), 4 RFCs
+- [x] Work model: mudança → requisito → tarefa, board de 6 estados, rastreabilidade
+- [x] Event sourcing: spec_events append-only + projeção determinística + webhook Git (HMAC)
+- [x] Pass 5: cobertura cenário↔teste (scan automático do diff) + Pullwise (revisão semântica)
+- [x] Versionamento + materialização Git real (Git Data API, branch spec/<key>, auto-PR, conflito)
+- [x] MCP workspace: sessões escopadas + 6 tools + bridge stdio/SSE (squadx-workspace-mcp)
+- [x] Conectores de harness com seleção de modelo e handshake vivo
+- [x] UI: dashboard "onde estamos", workspace (requisitos/board/validação/versões), conectores
+
 ### Future
+- [ ] Apply/archive OpenSpec automatizado (promover deltas para openspec/specs/)
+- [ ] Drag-and-drop no board do Control Panel, diff entre versões da spec
+- [ ] Scan de cobertura além do diff (árvore completa do repo / CI)
+- [ ] Token Git por organização (hoje: token único squadx.git)
 - [ ] SFU mode para 100+ viewers
 - [ ] Marketplace de agentes
 - [ ] API pública + SDKs

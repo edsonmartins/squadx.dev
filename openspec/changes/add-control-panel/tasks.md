@@ -22,14 +22,14 @@ identificadores em EN.
 
 ## 2. Versionamento + materialização (spec-versioning-materialization)
 
-- [ ] 2.1 Migração Flyway: `spec_versions` (version/current/summary/author/commit; FK change). — vm:R1 · ADR-0001
-- [ ] 2.2 Serviço de versionamento semântico (nova versão ao aprovar; `current` único). — vm:R1 · ADR-0001
-- [ ] 2.3 Render determinístico do change folder (ordenação estável, sem voláteis). — vm:R3 · RFC-0002
-- [ ] 2.4 Materializador: branch da mudança + commit; registrar sha em `SpecVersion`. — vm:R2 · RFC-0002
-- [ ] 2.5 Idempotência: diff vazio → no-op retornando o commit existente. — vm:R3 · RFC-0002
-- [ ] 2.6 Detecção de conflito de materialização (não sobrescrever cegamente). — vm:R5 · RFC-0002
-- [ ] 2.7 Garantir spec materializada como markdown OpenSpec legível (sem lock-in). — vm:R4 · ADR-0001
-- [ ] 2.8 Histórico de versões na UI (com commit). — vm:R1, vm:R2
+- [x] 2.1 Migração Flyway `V36`: `spec_versions` (version/current/summary/author/commit/content_hash; UNIQUE(change,version)). — vm:R1 · ADR-0001
+- [x] 2.2 `SpecVersionService` (nova versão ao aprovar; `current` único; histórico). — vm:R1 · ADR-0001
+- [x] 2.3 `ChangeFolderRenderer` determinístico (ordenação estável, sem voláteis; markdown OpenSpec). — vm:R3 · RFC-0002
+- [x] 2.4 `DefaultSpecMaterializer`: render → `GitCommitGateway` (porta) → registra sha em `SpecVersion`. — vm:R2 · RFC-0002 _(commit/push Git real: integração externa)_
+- [x] 2.5 Idempotência por content-hash: conteúdo igual + commit → no-op. — vm:R3 · RFC-0002
+- [~] 2.6 Detecção de conflito de materialização — contrato no `GitCommitGateway`; aplicada pela impl real. — vm:R5 · RFC-0002
+- [x] 2.7 Spec materializada como markdown OpenSpec legível (sem lock-in). — vm:R4 · ADR-0001
+- [~] 2.8 Histórico de versões: endpoint `GET /changes/{id}/versions` feito; **UI pendente**. — vm:R1, vm:R2
 
 ## 3. MCP server `workspace` (workspace-mcp-server)
 

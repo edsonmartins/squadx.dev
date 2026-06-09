@@ -548,14 +548,23 @@ class ExecutionServiceTest {
 
     @Test
     void getPendingAssignmentsReturnsPayloadsForMemberOrgs() {
-        when(executionRepository.findTop100ByStatusOrderByCreatedAtAsc(ExecutionStatus.PENDING))
+        when(executionRepository.findPendingForUser(eq(ExecutionStatus.PENDING), eq(1L), any()))
                 .thenReturn(java.util.List.of(testExecution));
-        when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
 
         var pending = executionService.getPendingAssignments(testUser);
 
         assertThat(pending).hasSize(1);
         assertThat(pending.get(0).get("task_id")).isEqualTo(1L);
         assertThat(pending.get(0)).containsKey("task");
+    }
+
+    @Test
+    void claimPendingReturnsTrueWhenRowUpdated() {
+        when(executionRepository.findById(1L)).thenReturn(java.util.Optional.of(testExecution));
+        when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+        when(executionRepository.claimExecution(eq(1L), eq(ExecutionStatus.RUNNING),
+                eq(ExecutionStatus.PENDING), any())).thenReturn(1);
+
+        assertThat(executionService.claimPending(1L, testUser)).isTrue();
     }
 }

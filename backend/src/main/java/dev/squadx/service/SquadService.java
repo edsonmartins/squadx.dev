@@ -143,6 +143,9 @@ public class SquadService {
                 .organizationId(squad.getOrganization().getId())
                 .organizationName(squad.getOrganization().getName())
                 .agentsCount(squad.getAgents() != null ? squad.getAgents().size() : 0)
+                .activeAgentsCount(squad.getAgents() != null
+                        ? (int) squad.getAgents().stream().filter(dev.squadx.model.Agent::isActive).count()
+                        : 0)
                 .projectsCount(squad.getProjects() != null ? squad.getProjects().size() : 0)
                 .leaderAgentId(squad.getLeaderAgent() != null ? squad.getLeaderAgent().getId() : null)
                 .leaderAgentName(squad.getLeaderAgent() != null ? squad.getLeaderAgent().getName() : null)

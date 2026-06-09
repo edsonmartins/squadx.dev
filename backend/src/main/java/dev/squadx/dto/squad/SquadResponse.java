@@ -31,6 +31,9 @@ public class SquadResponse {
     @JsonProperty("agents_count")
     private Integer agentsCount;
 
+    @JsonProperty("active_agents_count")
+    private Integer activeAgentsCount;
+
     @JsonProperty("projects_count")
     private Integer projectsCount;
 

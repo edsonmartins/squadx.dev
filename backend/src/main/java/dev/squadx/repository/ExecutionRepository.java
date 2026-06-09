@@ -5,9 +5,11 @@ import dev.squadx.model.enums.ExecutionStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,7 +20,22 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
     List<Execution> findByTaskIdAndStatus(Long taskId, ExecutionStatus status);
 
-    List<Execution> findTop100ByStatusOrderByCreatedAtAsc(ExecutionStatus status);
+    /** Pending executions in organizations the user belongs to (limit applied by Pageable). */
+    @Query("""
+            SELECT e FROM Execution e
+            WHERE e.status = :status
+              AND EXISTS (SELECT 1 FROM OrganizationMember m
+                          WHERE m.organization.id = e.task.project.organization.id
+                            AND m.user.id = :userId)
+            ORDER BY e.createdAt ASC
+            """)
+    List<Execution> findPendingForUser(ExecutionStatus status, Long userId, Pageable pageable);
+
+    /** Atomically claim a PENDING execution (PENDING -> RUNNING). Returns rows updated (0 or 1). */
+    @Modifying
+    @Query("UPDATE Execution e SET e.status = :running, e.startedAt = :now "
+            + "WHERE e.id = :id AND e.status = :pending")
+    int claimExecution(Long id, ExecutionStatus running, ExecutionStatus pending, Instant now);
 
     Optional<Execution> findTopByTaskIdOrderByCreatedAtDesc(Long taskId);
 

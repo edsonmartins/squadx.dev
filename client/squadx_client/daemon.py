@@ -98,6 +98,7 @@ class SquadXDaemon:
         self.orchestrator = create_orchestrator()
         self.running = False
         self.current_tasks: dict[int, asyncio.Task] = {}
+        self._bg_tasks: set[asyncio.Task] = set()
         self._task_handler = TaskMessageHandler(self)
 
     @staticmethod
@@ -175,23 +176,54 @@ class SquadXDaemon:
             logger.info("poll_fallback_stopped")
 
     async def _poll_pending_once(self) -> None:
-        """Fetch pending assignments and process any not already in flight."""
-        url = f"{self.api_url}/api/v1/executions/pending"
+        """Fetch pending assignments and process any not already in flight.
+
+        Each candidate is atomically claimed on the backend (PENDING -> RUNNING)
+        before processing, so concurrent daemons / a racing STOMP push cannot
+        double-dispatch the same task.
+        """
         headers = {"Authorization": f"Bearer {self.token}"}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as resp:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(f"{self.api_url}/api/v1/executions/pending") as resp:
                 if resp.status != 200:
                     logger.warning("poll_fallback_http_error", status=resp.status)
                     return
                 body = await resp.json()
 
-        items = body.get("data") or []
-        for item in items:
-            task_id = item.get("task_id")
-            if task_id is None or task_id in self.current_tasks:
-                continue
-            logger.info("poll_fallback_claiming_task", task_id=task_id)
-            await self._handle_task_assigned(item)
+            items = body.get("data") or []
+            for item in items:
+                task_id = item.get("task_id")
+                if task_id is None or task_id in self.current_tasks:
+                    continue
+                execution_id = (item.get("task") or {}).get("execution_id")
+                if execution_id is not None and not await self._claim_execution(
+                    session, execution_id
+                ):
+                    continue  # another client won the claim
+                logger.info("poll_fallback_claiming_task", task_id=task_id)
+                await self._handle_task_assigned(item)
+
+    async def _claim_execution(self, session: aiohttp.ClientSession, execution_id: Any) -> bool:
+        """Atomically claim a pending execution; returns True if this client won."""
+        try:
+            async with session.post(
+                f"{self.api_url}/api/v1/executions/{execution_id}/claim"
+            ) as resp:
+                if resp.status != 200:
+                    return False
+                body = await resp.json()
+                return bool(body.get("data"))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("poll_fallback_claim_error", execution_id=execution_id, error=str(e))
+            return False
+
+    def _on_bg_task_done(self, task: "asyncio.Task") -> None:
+        """Discard a finished background task and surface (not swallow) its error."""
+        self._bg_tasks.discard(task)
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.warning("background_task_failed", error=str(exc))
 
     async def _register_client(self) -> None:
         """Register this client with the backend."""
@@ -369,11 +401,15 @@ class SquadXDaemon:
                 if not stripped:
                     return
                 step = stripped.splitlines()[-1][:200]
-                asyncio.create_task(
+                # Retain a reference so the task isn't GC'd before it runs, and log
+                # (not swallow) any send failure.
+                t = asyncio.create_task(
                     self._send_task_status(
                         task_id, "running", progress=50, current_step=step
                     )
                 )
+                self._bg_tasks.add(t)
+                t.add_done_callback(self._on_bg_task_done)
 
             result = await agent.execute(
                 task_title=title,

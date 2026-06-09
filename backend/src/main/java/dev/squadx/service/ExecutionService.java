@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -252,9 +253,9 @@ public class ExecutionService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getPendingAssignments(User currentUser) {
-        return executionRepository.findTop100ByStatusOrderByCreatedAtAsc(ExecutionStatus.PENDING).stream()
-                .filter(e -> memberRepository.existsByOrganizationIdAndUserId(
-                        e.getTask().getProject().getOrganization().getId(), currentUser.getId()))
+        return executionRepository
+                .findPendingForUser(ExecutionStatus.PENDING, currentUser.getId(), PageRequest.of(0, 100))
+                .stream()
                 .map(e -> {
                     Map<String, Object> item = new HashMap<>();
                     item.put("task_id", e.getTask().getId());
@@ -262,6 +263,19 @@ public class ExecutionService {
                     return item;
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Atomically claim a pending execution so only one polling client runs it.
+     * Returns true if this caller won the claim (PENDING -> RUNNING).
+     */
+    @Transactional
+    public boolean claimPending(Long executionId, User currentUser) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
+        validateUserAccess(execution.getTask().getProject().getOrganization().getId(), currentUser.getId());
+        return executionRepository.claimExecution(
+                executionId, ExecutionStatus.RUNNING, ExecutionStatus.PENDING, Instant.now()) > 0;
     }
 
     public Map<String, Object> getOrganizationMetrics(Long organizationId, User currentUser) {

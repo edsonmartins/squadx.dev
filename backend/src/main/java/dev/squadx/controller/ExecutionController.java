@@ -49,6 +49,15 @@ public class ExecutionController {
         return ResponseEntity.ok(ApiResponse.success(executionService.getPendingAssignments(user)));
     }
 
+    @PostMapping("/{id}/claim")
+    @Operation(summary = "Atomically claim a pending execution (polling fallback)")
+    public ResponseEntity<ApiResponse<Boolean>> claim(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(executionService.claimPending(id, user)));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get execution by ID")
     public ResponseEntity<ApiResponse<ExecutionResponse>> getById(

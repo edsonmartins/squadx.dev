@@ -141,8 +141,11 @@ class ExternalCliAgent(BaseAgent):
     async def _collect_changed_files(self) -> list[str]:
         """Derive the list of changed files from git working-tree status."""
         try:
+            # core.quotepath=false keeps non-ASCII paths unquoted; we still strip
+            # the quotes git adds for paths containing spaces/special chars.
             status = await self.sandbox.execute(
-                ["git", "status", "--porcelain"], timeout=30
+                ["git", "-c", "core.quotepath=false", "status", "--porcelain"],
+                timeout=30,
             )
         except Exception as exc:  # noqa: BLE001
             self.logger.warning("git_status_failed", error=str(exc))
@@ -153,10 +156,15 @@ class ExternalCliAgent(BaseAgent):
 
         files: list[str] = []
         for line in status.output.splitlines():
-            # Porcelain format: 2-char status, a space, then the path.
-            path = line[3:].strip() if len(line) > 3 else line.strip()
-            if "->" in path:  # renamed: "old -> new"
-                path = path.split("->")[-1].strip()
+            if not line.strip():
+                continue
+            # Porcelain v1: 2-char status (XY) + space + path.
+            path = line[3:] if len(line) > 3 else line.strip()
+            if " -> " in path:  # rename/copy: "old -> new"
+                path = path.split(" -> ", 1)[1]
+            path = path.strip()
+            if len(path) >= 2 and path.startswith('"') and path.endswith('"'):
+                path = path[1:-1]  # unquote git-quoted path
             if path:
                 files.append(path)
         return files

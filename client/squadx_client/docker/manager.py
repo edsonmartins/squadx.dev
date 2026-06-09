@@ -357,7 +357,13 @@ class DockerManager:
                     break
                 yield item
         finally:
-            await worker
+            # Do NOT block on the worker thread on the abnormal path: if the
+            # consumer closes this generator early (e.g. execute_streaming hit its
+            # timeout), awaiting the still-running blocking Docker stream would
+            # defeat the timeout. The thread exits on its own when the exec stream
+            # ends — which the caller forces by stopping the sandbox/container.
+            if worker.done():
+                worker.result()
 
     async def get_vnc_port(self, container_id: str) -> Optional[int]:
         """Get the mapped VNC port for a container."""

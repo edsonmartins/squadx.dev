@@ -40,7 +40,8 @@ const agentSchema = z
     runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]),
     cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
     description: z.string().max(500).optional(),
-    model: z.string().min(1, "Model is required"),
+    // Model only applies to native agents; external CLIs manage their own model.
+    model: z.string().optional(),
     system_prompt: z.string().max(4000).optional(),
     temperature: z.number().min(0).max(2),
     max_tokens: z.number().min(100).max(128000),
@@ -48,6 +49,10 @@ const agentSchema = z
   .refine(
     (data) => data.runtime_kind !== "EXTERNAL_CLI" || !!data.cli_provider,
     { message: "Select a CLI provider", path: ["cli_provider"] }
+  )
+  .refine(
+    (data) => data.runtime_kind !== "NATIVE" || !!(data.model && data.model.length > 0),
+    { message: "Model is required", path: ["model"] }
   );
 
 type AgentFormData = z.infer<typeof agentSchema>;

@@ -140,6 +140,31 @@ export class ApiError extends Error {
 
 export const api = new ApiClient(API_URL);
 
+/**
+ * GET a paginated endpoint and validate it against `item`'s schema, falling back
+ * to an empty page on drift (parse, don't cast — see schema.ts / CLAUDE.md).
+ */
+function getPage<T>(endpoint: string, item: z.ZodTypeAny): Promise<PageResponse<T>> {
+  return api.get<unknown>(endpoint).then((d) =>
+    parseWithFallback<PageResponse<T>>(
+      pageSchema(item) as unknown as z.ZodType<PageResponse<T>>,
+      d,
+      emptyPage<T>()
+    )
+  );
+}
+
+/** GET an array endpoint and validate it, falling back to [] on drift. */
+function getList<T>(endpoint: string, item: z.ZodTypeAny): Promise<T[]> {
+  return api.get<unknown>(endpoint).then((d) =>
+    parseWithFallback<T[]>(
+      z.array(item).catch([]) as unknown as z.ZodType<T[]>,
+      d,
+      []
+    )
+  );
+}
+
 // Auth API
 export const authApi = {
   login: (email: string, password: string) =>
@@ -246,7 +271,7 @@ const autopilotResponseSchema = z.object({
 const autopilotRunResponseSchema = z.object({
   id: z.number(),
   autopilot_id: z.number(),
-  trigger_type: z.enum(["CRON", "MANUAL"]).catch("CRON"),
+  trigger_type: z.enum(["CRON", "MANUAL", "WEBHOOK"]).catch("CRON"),
   status: z.enum(["SUCCESS", "SKIPPED", "FAILED"]).catch("FAILED"),
   created_task_id: z.number().optional(),
   execution_id: z.number().optional(),
@@ -257,17 +282,10 @@ const autopilotRunResponseSchema = z.object({
 // Autopilots API
 export const autopilotsApi = {
   list: (organizationId: number) =>
-    api
-      .get<unknown>(`/api/v1/autopilots/organization/${organizationId}`)
-      .then((d) =>
-        parseWithFallback<PageResponse<AutopilotResponse>>(
-          pageSchema(autopilotResponseSchema) as unknown as z.ZodType<
-            PageResponse<AutopilotResponse>
-          >,
-          d,
-          emptyPage<AutopilotResponse>()
-        )
-      ),
+    getPage<AutopilotResponse>(
+      `/api/v1/autopilots/organization/${organizationId}`,
+      autopilotResponseSchema
+    ),
   get: (id: number) => api.get<AutopilotResponse>(`/api/v1/autopilots/${id}`),
   create: (data: CreateAutopilotRequest) =>
     api.post<AutopilotResponse>("/api/v1/autopilots", data),
@@ -280,23 +298,16 @@ export const autopilotsApi = {
   rotateWebhook: (id: number) =>
     api.post<AutopilotResponse>(`/api/v1/autopilots/${id}/webhook/rotate`),
   runs: (id: number) =>
-    api
-      .get<unknown>(`/api/v1/autopilots/${id}/runs`)
-      .then((d) =>
-        parseWithFallback<PageResponse<AutopilotRunResponse>>(
-          pageSchema(autopilotRunResponseSchema) as unknown as z.ZodType<
-            PageResponse<AutopilotRunResponse>
-          >,
-          d,
-          emptyPage<AutopilotRunResponse>()
-        )
-      ),
+    getPage<AutopilotRunResponse>(
+      `/api/v1/autopilots/${id}/runs`,
+      autopilotRunResponseSchema
+    ),
   delete: (id: number) => api.delete(`/api/v1/autopilots/${id}`),
 };
 
 // Autopilot types
 export type AutopilotExecutionMode = "CREATE_TASK" | "RUN_TASK";
-export type AutopilotTriggerType = "CRON" | "MANUAL";
+export type AutopilotTriggerType = "CRON" | "MANUAL" | "WEBHOOK";
 export type AutopilotRunStatus = "SUCCESS" | "SKIPPED" | "FAILED";
 
 export interface AutopilotResponse {
@@ -532,15 +543,10 @@ export interface UpdateTaskRequest {
 // Squads API
 export const squadsApi = {
   list: (organizationId: number) =>
-    api
-      .get<unknown>(`/api/v1/squads/organization/${organizationId}`)
-      .then((d) =>
-        parseWithFallback<PageResponse<SquadResponse>>(
-          pageSchema(squadResponseSchema) as unknown as z.ZodType<PageResponse<SquadResponse>>,
-          d,
-          emptyPage<SquadResponse>()
-        )
-      ),
+    getPage<SquadResponse>(
+      `/api/v1/squads/organization/${organizationId}`,
+      squadResponseSchema
+    ),
   get: (id: number) => api.get<SquadResponse>(`/api/v1/squads/${id}`),
   create: (data: CreateSquadRequest) =>
     api.post<SquadResponse>("/api/v1/squads", data),
@@ -552,25 +558,45 @@ export const squadsApi = {
 };
 
 // Agent / Squad response schemas — parse, don't cast (see schema.ts / CLAUDE.md).
-const agentResponseSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  type: z
-    .enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"])
-    .catch("FULLSTACK"),
-  runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]).optional(),
-  cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
-  description: z.string().optional(),
-  model: z.string().catch(""),
-  system_prompt: z.string().optional(),
-  temperature: z.number().catch(0.7),
-  max_tokens: z.number().catch(4096),
-  is_active: z.boolean().catch(true),
-  squad_id: z.number(),
-  squad_name: z.string().catch(""),
-  created_at: z.string().catch(""),
-  updated_at: z.string().optional(),
-});
+// The backend serializes agent_type / model_id (see AgentResponse.java @JsonProperty);
+// map them onto the frontend's `type` / `model` so the real values survive.
+const agentResponseSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    agent_type: z
+      .enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"])
+      .catch("FULLSTACK"),
+    runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]).optional(),
+    cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
+    description: z.string().optional(),
+    model_id: z.string().catch(""),
+    system_prompt: z.string().optional(),
+    temperature: z.number().catch(0.7),
+    max_tokens: z.number().catch(4096),
+    is_active: z.boolean().catch(true),
+    squad_id: z.number(),
+    squad_name: z.string().catch(""),
+    created_at: z.string().catch(""),
+    updated_at: z.string().optional(),
+  })
+  .transform((o) => ({
+    id: o.id,
+    name: o.name,
+    type: o.agent_type,
+    runtime_kind: o.runtime_kind,
+    cli_provider: o.cli_provider,
+    description: o.description,
+    model: o.model_id,
+    system_prompt: o.system_prompt,
+    temperature: o.temperature,
+    max_tokens: o.max_tokens,
+    is_active: o.is_active,
+    squad_id: o.squad_id,
+    squad_name: o.squad_name,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+  }));
 
 const squadResponseSchema = z.object({
   id: z.number(),
@@ -581,6 +607,7 @@ const squadResponseSchema = z.object({
   organization_name: z.string().catch(""),
   agents_count: z.number().catch(0),
   active_agents_count: z.number().catch(0),
+  projects_count: z.number().catch(0),
   leader_agent_id: z.number().nullable().optional(),
   leader_agent_name: z.string().optional(),
   agents: z
@@ -600,35 +627,14 @@ const squadResponseSchema = z.object({
 // Agents API
 export const agentsApi = {
   list: (squadId: number) =>
-    api
-      .get<unknown>(`/api/v1/agents/squad/${squadId}`)
-      .then((d) =>
-        parseWithFallback<PageResponse<AgentResponse>>(
-          pageSchema(agentResponseSchema) as unknown as z.ZodType<PageResponse<AgentResponse>>,
-          d,
-          emptyPage<AgentResponse>()
-        )
-      ),
+    getPage<AgentResponse>(`/api/v1/agents/squad/${squadId}`, agentResponseSchema),
   listByOrganization: (organizationId: number) =>
-    api
-      .get<unknown>(`/api/v1/agents/organization/${organizationId}`)
-      .then((d) =>
-        parseWithFallback<PageResponse<AgentResponse>>(
-          pageSchema(agentResponseSchema) as unknown as z.ZodType<PageResponse<AgentResponse>>,
-          d,
-          emptyPage<AgentResponse>()
-        )
-      ),
+    getPage<AgentResponse>(
+      `/api/v1/agents/organization/${organizationId}`,
+      agentResponseSchema
+    ),
   listActive: (squadId: number) =>
-    api
-      .get<unknown>(`/api/v1/agents/squad/${squadId}/active`)
-      .then((d) =>
-        parseWithFallback<AgentResponse[]>(
-          z.array(agentResponseSchema).catch([]) as unknown as z.ZodType<AgentResponse[]>,
-          d,
-          []
-        )
-      ),
+    getList<AgentResponse>(`/api/v1/agents/squad/${squadId}/active`, agentResponseSchema),
   get: (id: number) => api.get<AgentResponse>(`/api/v1/agents/${id}`),
   create: (data: CreateAgentRequest) =>
     api.post<AgentResponse>("/api/v1/agents", data),
@@ -762,6 +768,7 @@ export interface SquadResponse {
   organization_name: string;
   agents_count: number;
   active_agents_count: number;
+  projects_count?: number;
   leader_agent_id?: number | null;
   leader_agent_name?: string;
   agents?: SquadAgentSummary[];

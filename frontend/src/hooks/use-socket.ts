@@ -106,11 +106,17 @@ export function useControlPanelSocket(projectId: number | null | undefined) {
     if (!projectId) return;
 
     const handleEvent = (data: unknown) => {
-      const event = data as { type?: string };
+      const event = data as { type?: string; change_id?: number };
       if (event?.type === "spec_task_updated") {
         queryClient.invalidateQueries({ queryKey: ["cp-where-we-are", projectId] });
-        queryClient.invalidateQueries({ queryKey: ["cp-tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["cp-pass5"] });
+        // Scope to the affected change when known (avoids broad refetch storms).
+        if (event.change_id != null) {
+          queryClient.invalidateQueries({ queryKey: ["cp-tasks", event.change_id] });
+          queryClient.invalidateQueries({ queryKey: ["cp-pass5-change", event.change_id] });
+        } else {
+          queryClient.invalidateQueries({ queryKey: ["cp-tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["cp-pass5-change"] });
+        }
       }
     };
 

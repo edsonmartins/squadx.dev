@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { controlPanelChangesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -16,6 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
+const schema = z.object({ module: z.string().max(255).optional() });
+type FormData = z.infer<typeof schema>;
+
 interface ChangeModalProps {
   open: boolean;
   onClose: () => void;
@@ -25,14 +31,21 @@ interface ChangeModalProps {
 export function ChangeModal({ open, onClose, projectId }: ChangeModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [module, setModule] = useState("");
+  const { register, handleSubmit, reset } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { module: "" },
+  });
+
+  useEffect(() => {
+    if (open) reset({ module: "" });
+  }, [open, reset]);
 
   const createMutation = useMutation({
-    mutationFn: () => controlPanelChangesApi.create({ project_id: projectId, module: module || undefined }),
+    mutationFn: (data: FormData) =>
+      controlPanelChangesApi.create({ project_id: projectId, module: data.module || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cp-changes", projectId] });
       toast({ title: "Mudança criada", description: "A mudança foi criada com sucesso." });
-      setModule("");
       onClose();
     },
     onError: () => {
@@ -47,21 +60,11 @@ export function ChangeModal({ open, onClose, projectId }: ChangeModalProps) {
           <DialogTitle>Nova mudança</DialogTitle>
           <DialogDescription>Crie uma mudança (change) para começar a especificar.</DialogDescription>
         </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate();
-          }}
-        >
+        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="module">Módulo</Label>
-              <Input
-                id="module"
-                placeholder="ex.: auth, billing"
-                value={module}
-                onChange={(e) => setModule(e.target.value)}
-              />
+              <Input id="module" placeholder="ex.: auth, billing" {...register("module")} />
             </div>
           </div>
           <DialogFooter>

@@ -52,4 +52,12 @@ public class SpecTaskStateMachine {
     public boolean isPass5Only(SpecTaskStatus to) {
         return PASS5_ONLY.contains(to);
     }
+
+    /** Alvos que um humano/agente pode acionar a partir de {@code from} (exclui os do Pass 5). */
+    public Set<SpecTaskStatus> manualTargets(SpecTaskStatus from) {
+        Set<SpecTaskStatus> targets = EnumSet.noneOf(SpecTaskStatus.class);
+        targets.addAll(allowedTargets(from));
+        targets.removeAll(PASS5_ONLY);
+        return targets;
+    }
 }

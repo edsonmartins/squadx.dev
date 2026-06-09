@@ -1176,6 +1176,7 @@ export interface SpecTaskResponse {
   pass5: Pass5Result;
   blocker_reason?: string;
   revise_reason?: string;
+  available_transitions?: SpecTaskStatus[];
   created_at: string;
   updated_at?: string;
 }
@@ -1302,6 +1303,8 @@ export const specTasksApi = {
 export const pass5Api = {
   status: (taskId: number) =>
     api.get<Pass5StatusResponse>(`/api/v1/spec-tasks/${taskId}/pass5`),
+  byChange: (changeId: number) =>
+    api.get<Pass5StatusResponse[]>(`/api/v1/changes/${changeId}/pass5`),
   run: (taskId: number) =>
     api.post<Pass5StatusResponse>(`/api/v1/spec-tasks/${taskId}/pass5/run`),
   setCoverage: (scenarioId: number, covered: boolean) =>

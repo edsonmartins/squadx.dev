@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { specTasksApi, SpecTaskResponse, SpecTaskStatus } from "@/lib/api";
-import { manualTransitions, transitionActionLabel } from "@/lib/control-panel";
+import { transitionActionLabel } from "@/lib/control-panel";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,7 @@ export function TransitionControls({ task }: { task: SpecTaskResponse }) {
     },
   });
 
-  const targets = manualTransitions(task.status);
+  const targets = task.available_transitions ?? [];
   if (targets.length === 0) {
     return null;
   }

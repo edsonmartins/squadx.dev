@@ -15,12 +15,18 @@ function renderWithProviders(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+const AVAILABLE: Record<string, SpecTaskResponse["status"][]> = {
+  A_FAZER: ["EM_CURSO", "BLOQUEADA"],
+  EM_VALIDACAO: ["BLOQUEADA"],
+};
+
 const task = (status: SpecTaskResponse["status"]): SpecTaskResponse => ({
   id: 1,
   title: "T",
   status,
   change_id: 5,
   pass5: "PENDING",
+  available_transitions: AVAILABLE[status] ?? [],
   created_at: "2026-06-09T00:00:00Z",
 });
 

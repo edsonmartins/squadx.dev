@@ -1,7 +1,7 @@
 "use client";
 
 import { SpecTaskResponse } from "@/lib/api";
-import { PASS5_LABEL } from "@/lib/control-panel";
+import { PASS5_LABEL, PASS5_OUTCOME_CLASS } from "@/lib/control-panel";
 import { Bot, User } from "lucide-react";
 import { TransitionControls } from "./transition-controls";
 
@@ -22,9 +22,7 @@ export function SpecTaskCard({ task }: { task: SpecTaskResponse }) {
           </span>
         )}
         {task.pass5 !== "PENDING" && (
-          <span className={task.pass5 === "PASS" ? "text-emerald-600" : "text-red-600"}>
-            Pass 5: {PASS5_LABEL[task.pass5]}
-          </span>
+          <span className={PASS5_OUTCOME_CLASS[task.pass5]}>Pass 5: {PASS5_LABEL[task.pass5]}</span>
         )}
       </div>
       {task.blocker_reason && (

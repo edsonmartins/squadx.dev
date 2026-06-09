@@ -54,6 +54,10 @@ public class SpecTaskResponse {
     @JsonProperty("revise_reason")
     private String reviseReason;
 
+    /** Transições manuais válidas a partir do estado atual (data-driven; CONCLUIDA/AJUSTES só via Pass 5). */
+    @JsonProperty("available_transitions")
+    private java.util.List<SpecTaskStatus> availableTransitions;
+
     @JsonProperty("created_at")
     private Instant createdAt;
 

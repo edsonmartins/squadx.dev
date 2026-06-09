@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Plus } from "lucide-react";
-import { controlPanelChangesApi, requirementsApi, specTasksApi } from "@/lib/api";
+import { controlPanelChangesApi, pass5Api, requirementsApi, specTasksApi } from "@/lib/api";
 import { CHANGE_PHASE_LABEL } from "@/lib/control-panel";
 import { useControlPanelSocket } from "@/hooks/use-socket";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,11 @@ export default function ChangeDetailPage() {
   const { data: tasks } = useQuery({
     queryKey: ["cp-tasks", changeId],
     queryFn: () => specTasksApi.byChange(changeId),
+  });
+
+  const { data: pass5Statuses } = useQuery({
+    queryKey: ["cp-pass5-change", changeId],
+    queryFn: () => pass5Api.byChange(changeId),
   });
 
   const [reqModalOpen, setReqModalOpen] = useState(false);
@@ -94,7 +99,13 @@ export default function ChangeDetailPage() {
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {tasks!.map((task) => (
-                <Pass5Panel key={task.id} task={task} />
+                <Pass5Panel
+                  key={task.id}
+                  taskId={task.id}
+                  title={task.title}
+                  changeId={changeId}
+                  status={pass5Statuses?.find((s) => s.spec_task_id === task.id)}
+                />
               ))}
             </div>
           )}

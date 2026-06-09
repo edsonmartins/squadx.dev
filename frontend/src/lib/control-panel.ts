@@ -43,23 +43,15 @@ export const PASS5_LABEL: Record<Pass5Result, string> = {
   FAIL: "Reprovado",
 };
 
-/** Alvos atribuídos exclusivamente pelo Pass 5 (não há botão manual). */
-export const PASS5_ONLY: SpecTaskStatus[] = ["CONCLUIDA", "AJUSTES"];
-
-/** Transições válidas da máquina de estados (espelha o backend; fonte de verdade é o servidor). */
-const TRANSITIONS: Record<SpecTaskStatus, SpecTaskStatus[]> = {
-  A_FAZER: ["EM_CURSO", "BLOQUEADA"],
-  EM_CURSO: ["EM_VALIDACAO", "BLOQUEADA"],
-  EM_VALIDACAO: ["CONCLUIDA", "AJUSTES", "BLOQUEADA"],
-  AJUSTES: ["EM_CURSO", "BLOQUEADA"],
-  BLOQUEADA: ["A_FAZER", "EM_CURSO"],
-  CONCLUIDA: [],
+/** Cor do desfecho do Pass 5. */
+export const PASS5_OUTCOME_CLASS: Record<Pass5Result, string> = {
+  PENDING: "text-muted-foreground",
+  PASS: "text-emerald-600",
+  FAIL: "text-red-600",
 };
 
-/** Transições que um humano/agente pode acionar (exclui as do Pass 5). */
-export function manualTransitions(from: SpecTaskStatus): SpecTaskStatus[] {
-  return (TRANSITIONS[from] ?? []).filter((s) => !PASS5_ONLY.includes(s));
-}
+// As transições válidas são data-driven: o backend envia `available_transitions` em SpecTaskResponse
+// (única fonte de verdade — a máquina de estados vive em SpecTaskStateMachine no servidor).
 
 /** Rótulo de ação para uma transição manual. */
 export function transitionActionLabel(to: SpecTaskStatus): string {

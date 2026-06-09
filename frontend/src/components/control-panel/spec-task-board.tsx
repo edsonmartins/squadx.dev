@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { SpecTaskResponse } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { SpecTaskResponse, SpecTaskStatus } from "@/lib/api";
 import { SPEC_TASK_STATUS_ORDER, SPEC_TASK_STATUS_LABEL } from "@/lib/control-panel";
 import { Button } from "@/components/ui/button";
 import { SpecTaskCard } from "./spec-task-card";
@@ -11,7 +11,18 @@ type AssigneeFilter = "ALL" | "HUMAN" | "AGENT";
 export function SpecTaskBoard({ tasks }: { tasks: SpecTaskResponse[] }) {
   const [filter, setFilter] = useState<AssigneeFilter>("ALL");
 
-  const filtered = tasks.filter((t) => filter === "ALL" || t.assignee_type === filter);
+  // Group once per (tasks, filter) instead of re-filtering per column on every render.
+  const grouped = useMemo(() => {
+    const byStatus = Object.fromEntries(
+      SPEC_TASK_STATUS_ORDER.map((s) => [s, [] as SpecTaskResponse[]])
+    ) as Record<SpecTaskStatus, SpecTaskResponse[]>;
+    for (const task of tasks) {
+      if (filter === "ALL" || task.assignee_type === filter) {
+        byStatus[task.status].push(task);
+      }
+    }
+    return byStatus;
+  }, [tasks, filter]);
 
   return (
     <div className="space-y-3">
@@ -30,7 +41,7 @@ export function SpecTaskBoard({ tasks }: { tasks: SpecTaskResponse[] }) {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {SPEC_TASK_STATUS_ORDER.map((status) => {
-          const columnTasks = filtered.filter((t) => t.status === status);
+          const columnTasks = grouped[status];
           return (
             <div key={status} className="rounded-lg border bg-muted/30 p-2">
               <div className="mb-2 flex items-center justify-between px-1">

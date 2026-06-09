@@ -41,6 +41,13 @@ class SpecTaskStateMachineTest {
     }
 
     @Test
+    void manualTargetsExcludePass5Only() {
+        assertThat(sm.manualTargets(EM_VALIDACAO)).containsExactly(BLOQUEADA);
+        assertThat(sm.manualTargets(A_FAZER)).containsExactlyInAnyOrder(EM_CURSO, BLOQUEADA);
+        assertThat(sm.manualTargets(CONCLUIDA)).isEmpty();
+    }
+
+    @Test
     void marksPass5OnlyTargets() {
         assertThat(sm.isPass5Only(CONCLUIDA)).isTrue();
         assertThat(sm.isPass5Only(AJUSTES)).isTrue();

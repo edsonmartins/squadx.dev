@@ -4,8 +4,10 @@ import dev.squadx.controlpanel.dto.pass5.Pass5StatusResponse;
 import dev.squadx.controlpanel.model.Pass5Run;
 import dev.squadx.controlpanel.model.Requirement;
 import dev.squadx.controlpanel.model.Scenario;
+import dev.squadx.controlpanel.model.Change;
 import dev.squadx.controlpanel.model.SpecTask;
 import dev.squadx.controlpanel.model.enums.Pass5Result;
+import dev.squadx.controlpanel.repository.ChangeRepository;
 import dev.squadx.controlpanel.repository.Pass5RunRepository;
 import dev.squadx.controlpanel.repository.ScenarioRepository;
 import dev.squadx.controlpanel.repository.SpecTaskRepository;
@@ -20,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +40,7 @@ public class Pass5Service {
     private final Pass5RunRepository pass5RunRepository;
     private final ConformanceReviewer reviewer;
     private final SpecTaskService specTaskService;
+    private final ChangeRepository changeRepository;
     private final OrganizationMemberRepository memberRepository;
 
     /**
@@ -98,11 +103,57 @@ public class Pass5Service {
     public Pass5StatusResponse getStatus(Long specTaskId, User currentUser) {
         SpecTask task = loadTask(specTaskId);
         validateUserAccess(task, currentUser);
-        List<Scenario> scenarios = scenariosOf(task);
-        Pass5Run last = pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(specTaskId).orElse(null);
+        return buildStatus(task);
+    }
 
+    /** Status do Pass 5 de todas as tarefas de uma mudança (uma requisição; lookups em lote, sem N+1). */
+    @Transactional(readOnly = true)
+    public List<Pass5StatusResponse> getStatusesForChange(Long changeId, User currentUser) {
+        Change change = changeRepository.findById(changeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Change not found"));
+        Long orgId = change.getProject().getOrganization().getId();
+        if (!memberRepository.existsByOrganizationIdAndUserId(orgId, currentUser.getId())) {
+            throw new ForbiddenException("User does not have access to this organization");
+        }
+
+        List<SpecTask> tasks = specTaskRepository.findByChangeId(changeId);
+        if (tasks.isEmpty()) {
+            return List.of();
+        }
+
+        // Lote 1: cenários por requisito.
+        List<Long> requirementIds = tasks.stream()
+                .map(SpecTask::getRequirement).filter(Objects::nonNull)
+                .map(Requirement::getId).distinct().collect(Collectors.toList());
+        Map<Long, List<Scenario>> scenariosByRequirement = requirementIds.isEmpty()
+                ? Map.of()
+                : scenarioRepository.findByRequirementIdIn(requirementIds).stream()
+                        .collect(Collectors.groupingBy(s -> s.getRequirement().getId()));
+
+        // Lote 2: último Pass5Run por tarefa (ordenado desc → primeiro de cada tarefa é o mais recente).
+        List<Long> taskIds = tasks.stream().map(SpecTask::getId).collect(Collectors.toList());
+        Map<Long, Pass5Run> latestRunByTask = pass5RunRepository
+                .findBySpecTaskIdInOrderByCreatedAtDescIdDesc(taskIds).stream()
+                .collect(Collectors.toMap(r -> r.getSpecTask().getId(), r -> r, (first, dup) -> first));
+
+        return tasks.stream()
+                .map(task -> assembleStatus(
+                        task,
+                        task.getRequirement() != null
+                                ? scenariosByRequirement.getOrDefault(task.getRequirement().getId(), List.of())
+                                : List.of(),
+                        latestRunByTask.get(task.getId())))
+                .collect(Collectors.toList());
+    }
+
+    private Pass5StatusResponse buildStatus(SpecTask task) {
+        return assembleStatus(task, scenariosOf(task),
+                pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(task.getId()).orElse(null));
+    }
+
+    private Pass5StatusResponse assembleStatus(SpecTask task, List<Scenario> scenarios, Pass5Run last) {
         return Pass5StatusResponse.builder()
-                .specTaskId(specTaskId)
+                .specTaskId(task.getId())
                 .outcome(last != null ? last.getOutcome() : null)
                 .critique(last != null ? last.getCritique() : null)
                 .coverageTotal(scenarios.size())

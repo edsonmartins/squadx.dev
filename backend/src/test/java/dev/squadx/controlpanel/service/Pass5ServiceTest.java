@@ -24,6 +24,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -35,12 +37,21 @@ class Pass5ServiceTest {
     @Mock private Pass5RunRepository pass5RunRepository;
     @Mock private ConformanceReviewer reviewer;
     @Mock private SpecTaskService specTaskService;
+    @Mock private dev.squadx.controlpanel.repository.ChangeRepository changeRepository;
     @Mock private OrganizationMemberRepository memberRepository;
 
     @InjectMocks private Pass5Service service;
 
     private SpecTask task;
     private Requirement requirement;
+    private Change change;
+    private final dev.squadx.model.User user = userWithId1();
+
+    private static dev.squadx.model.User userWithId1() {
+        dev.squadx.model.User u = dev.squadx.model.User.builder().email("u@example.com").fullName("U").build();
+        u.setId(1L);
+        return u;
+    }
 
     @BeforeEach
     void setUp() {
@@ -48,7 +59,7 @@ class Pass5ServiceTest {
         org.setId(100L);
         Project project = Project.builder().name("Proj").slug("proj").organization(org).build();
         project.setId(7L);
-        Change change = Change.builder().project(project).build();
+        change = Change.builder().project(project).build();
         change.setId(5L);
         requirement = Requirement.builder().change(change).requirementId("R1").build();
         requirement.setId(9L);
@@ -124,5 +135,21 @@ class Pass5ServiceTest {
 
         verify(specTaskService).applyPass5Outcome(eq(42L), eq(Pass5Result.FAIL),
                 argThat(c -> c != null && c.contains("Nenhum cenário")));
+    }
+
+    @Test
+    void getStatusesForChangeReturnsPerTask() {
+        when(changeRepository.findById(5L)).thenReturn(Optional.of(change));
+        when(memberRepository.existsByOrganizationIdAndUserId(100L, 1L)).thenReturn(true);
+        when(specTaskRepository.findByChangeId(5L)).thenReturn(List.of(task));
+        when(scenarioRepository.findByRequirementIdIn(List.of(9L))).thenReturn(List.of(scenario("s", true)));
+        when(pass5RunRepository.findBySpecTaskIdInOrderByCreatedAtDescIdDesc(List.of(42L)))
+                .thenReturn(List.of());
+
+        var statuses = service.getStatusesForChange(5L, user);
+
+        assertThat(statuses).hasSize(1);
+        assertThat(statuses.get(0).getCoverageTotal()).isEqualTo(1);
+        assertThat(statuses.get(0).getCoverageCovered()).isEqualTo(1);
     }
 }

@@ -196,6 +196,7 @@ public class SpecTaskService {
                 .pass5(task.getPass5())
                 .blockerReason(task.getBlockerReason())
                 .reviseReason(task.getReviseReason())
+                .availableTransitions(new java.util.ArrayList<>(stateMachine.manualTargets(task.getStatus())))
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .build();

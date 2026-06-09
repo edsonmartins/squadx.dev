@@ -1107,3 +1107,224 @@ export const calendarSyncApi = {
   getStatus: (organizationId: number) =>
     api.get<CalendarSyncStatus>(`/api/v1/calendar-sync/status?organizationId=${organizationId}`),
 };
+
+// ============================================================================
+// Control Panel (SquadX.dev Spec)
+// ============================================================================
+
+export type ChangePhase = "SPEC" | "IMPLEMENTACAO" | "VALIDACAO" | "CONCLUIDA";
+export type SpecTaskStatus =
+  | "A_FAZER" | "EM_CURSO" | "EM_VALIDACAO" | "CONCLUIDA" | "BLOQUEADA" | "AJUSTES";
+export type RequirementType = "ADDED" | "MODIFIED" | "REMOVED";
+export type AssigneeType = "HUMAN" | "AGENT";
+export type Pass5Result = "PENDING" | "PASS" | "FAIL";
+export type HarnessStatus = "AVAILABLE" | "CONNECTED";
+
+export interface ChangeResponse {
+  id: number;
+  module?: string;
+  phase: ChangePhase;
+  project_id: number;
+  project_name: string;
+  created_by_id?: number;
+  created_by_name?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface WhereWeAreResponse {
+  project_id: number;
+  counts: Record<SpecTaskStatus, number>;
+  total: number;
+  concluidas: number;
+  progress: number;
+}
+
+export interface ScenarioResponse {
+  id: number;
+  name: string;
+  when: string;
+  then: string;
+  covered: boolean;
+}
+
+export interface RequirementResponse {
+  id: number;
+  change_id: number;
+  requirement_id: string;
+  type: RequirementType;
+  title: string;
+  description?: string;
+  scenarios: ScenarioResponse[];
+  task_refs: number[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SpecTaskResponse {
+  id: number;
+  title: string;
+  status: SpecTaskStatus;
+  change_id: number;
+  requirement_id?: number;
+  requirement_ref?: string;
+  assignee_type?: AssigneeType;
+  assigned_user_id?: number;
+  assigned_user_name?: string;
+  assigned_agent_id?: number;
+  assigned_agent_name?: string;
+  pass5: Pass5Result;
+  blocker_reason?: string;
+  revise_reason?: string;
+  available_transitions?: SpecTaskStatus[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Pass5ScenarioCoverage {
+  id: number;
+  name: string;
+  covered: boolean;
+}
+
+export interface Pass5StatusResponse {
+  spec_task_id: number;
+  outcome?: Pass5Result;
+  critique?: string;
+  coverage_total: number;
+  coverage_covered: number;
+  scenarios: Pass5ScenarioCoverage[];
+}
+
+export interface SpecVersionResponse {
+  id: number;
+  version: number;
+  current: boolean;
+  summary?: string;
+  commit?: string;
+  change_id: number;
+  author_id?: number;
+  author_name?: string;
+  created_at: string;
+}
+
+export interface MaterializeResponse {
+  ok: boolean;
+  change_id: number;
+  version?: string;
+  commit?: string;
+  message?: string;
+}
+
+export interface HarnessResponse {
+  id: number;
+  key: string;
+  name: string;
+  vendor?: string;
+  status: HarnessStatus;
+  model?: string;
+  models: string[];
+  organization_id: number;
+  agent_id?: number;
+  agent_name?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateChangeRequest {
+  project_id: number;
+  module?: string;
+  phase?: ChangePhase;
+}
+
+export interface ScenarioInput {
+  name: string;
+  when: string;
+  then: string;
+}
+
+export interface CreateRequirementRequest {
+  change_id: number;
+  requirement_id?: string;
+  type: RequirementType;
+  title: string;
+  description?: string;
+  scenarios: ScenarioInput[];
+}
+
+export interface CreateSpecTaskRequest {
+  change_id: number;
+  requirement_id?: number;
+  title: string;
+  assignee_type?: AssigneeType;
+  assigned_user_id?: number;
+  assigned_agent_id?: number;
+}
+
+export interface SpecTaskTransitionRequest {
+  status: SpecTaskStatus;
+  note?: string;
+}
+
+export interface RegisterHarnessRequest {
+  organization_id: number;
+  key: string;
+  name: string;
+  vendor?: string;
+  models?: string[];
+  agent_id?: number;
+}
+
+export const controlPanelChangesApi = {
+  listByProject: (projectId: number) =>
+    api.get<PageResponse<ChangeResponse>>(`/api/v1/changes/project/${projectId}`),
+  get: (id: number) => api.get<ChangeResponse>(`/api/v1/changes/${id}`),
+  create: (data: CreateChangeRequest) => api.post<ChangeResponse>("/api/v1/changes", data),
+  whereWeAre: (projectId: number) =>
+    api.get<WhereWeAreResponse>(`/api/v1/changes/project/${projectId}/where-we-are`),
+};
+
+export const requirementsApi = {
+  byChange: (changeId: number) =>
+    api.get<RequirementResponse[]>(`/api/v1/requirements/change/${changeId}`),
+  create: (data: CreateRequirementRequest) =>
+    api.post<RequirementResponse>("/api/v1/requirements", data),
+};
+
+export const specTasksApi = {
+  byChange: (changeId: number) =>
+    api.get<SpecTaskResponse[]>(`/api/v1/spec-tasks/change/${changeId}`),
+  create: (data: CreateSpecTaskRequest) =>
+    api.post<SpecTaskResponse>("/api/v1/spec-tasks", data),
+  transition: (id: number, data: SpecTaskTransitionRequest) =>
+    api.patch<SpecTaskResponse>(`/api/v1/spec-tasks/${id}/transition`, data),
+};
+
+export const pass5Api = {
+  status: (taskId: number) =>
+    api.get<Pass5StatusResponse>(`/api/v1/spec-tasks/${taskId}/pass5`),
+  byChange: (changeId: number) =>
+    api.get<Pass5StatusResponse[]>(`/api/v1/changes/${changeId}/pass5`),
+  run: (taskId: number) =>
+    api.post<Pass5StatusResponse>(`/api/v1/spec-tasks/${taskId}/pass5/run`),
+  setCoverage: (scenarioId: number, covered: boolean) =>
+    api.patch<void>(`/api/v1/scenarios/${scenarioId}/coverage`, { covered }),
+};
+
+export const specVersionsApi = {
+  history: (changeId: number) =>
+    api.get<SpecVersionResponse[]>(`/api/v1/changes/${changeId}/versions`),
+  create: (changeId: number, summary?: string) =>
+    api.post<SpecVersionResponse>(`/api/v1/changes/${changeId}/versions`, { summary }),
+  materialize: (changeId: number) =>
+    api.post<MaterializeResponse>(`/api/v1/changes/${changeId}/materialize`),
+};
+
+export const harnessesApi = {
+  list: (organizationId: number) =>
+    api.get<HarnessResponse[]>(`/api/v1/harnesses?organizationId=${organizationId}`),
+  register: (data: RegisterHarnessRequest) =>
+    api.post<HarnessResponse>("/api/v1/harnesses", data),
+  selectModel: (id: number, model: string) =>
+    api.patch<HarnessResponse>(`/api/v1/harnesses/${id}/model`, { model }),
+};

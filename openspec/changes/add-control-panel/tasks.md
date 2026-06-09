@@ -44,13 +44,13 @@ identificadores em EN.
 
 ## 4. Rastreio de execução (execution-tracking)
 
-- [ ] 4.1 Migração Flyway: `spec_events` (append-only; `unique(dedup_key)`; índice por tarefa/ocorrência). — et:R4, et:R6 · RFC-0003
-- [ ] 4.2 Ingestão de webhooks Git → eventos (started/pr_opened/merge→Pass 5); reúso do `IntegrationWebhookService`. — et:R1 · RFC-0003
-- [ ] 4.3 Ingestão de eventos MCP → eventos de tarefa. — et:R2 · RFC-0003
-- [ ] 4.4 Projeção determinística `project(events)→status`; materializar em `spec_tasks`. — et:R3 · ADR-0002, RFC-0003
-- [ ] 4.5 Idempotência por `dedup_key`. — et:R4 · RFC-0003
-- [ ] 4.6 Ordenação por ocorrência (tolerância a fora de ordem). — et:R5 · RFC-0003
-- [ ] 4.7 Trilha de auditoria (histórico de execução na UI). — et:R6 · ADR-0002
+- [x] 4.1 Migração Flyway `V34`: `spec_events` (append-only via trigger no-update; `unique(dedup_key)`; índice por tarefa/ocorrência). — et:R4, et:R6 · RFC-0003
+- [x] 4.2 Ingestão de webhooks Git → eventos (push→STARTED, PR opened→PR_OPENED, merge→`SpecTaskMergedEvent` gatilho do Pass 5); HMAC SHA-256. — et:R1 · RFC-0003 _(consumo do gatilho em `pass5-validation`)_
+- [x] 4.3 Ingestão de eventos MCP → eventos de tarefa (caminho `SpecEventService.record(source=MCP)`, exercido via `transition`). — et:R2 · RFC-0003 _(o MCP server em si: `workspace-mcp-server`)_
+- [x] 4.4 Projeção determinística `SpecTaskProjector.project(events)→status`; materializada em `spec_tasks`. — et:R3 · ADR-0002, RFC-0003
+- [x] 4.5 Idempotência por `dedup_key` (SHA-256 de source|ref|type|task). — et:R4 · RFC-0003
+- [x] 4.6 Ordenação por ocorrência (`findBySpecTaskIdOrderByOccurredAtAscIdAsc`; reprojeção reprocessável). — et:R5 · RFC-0003
+- [x] 4.7 Trilha de auditoria (eventos append-only). — et:R6 · ADR-0002 _(histórico na UI: fatia de frontend)_
 
 ## 5. Validação Pass 5 (pass5-validation)
 

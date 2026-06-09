@@ -7,8 +7,10 @@ import dev.squadx.controlpanel.model.Change;
 import dev.squadx.controlpanel.model.Requirement;
 import dev.squadx.controlpanel.model.SpecTask;
 import dev.squadx.controlpanel.model.enums.AssigneeType;
+import dev.squadx.controlpanel.model.enums.EventSource;
 import dev.squadx.controlpanel.model.enums.Pass5Result;
 import dev.squadx.controlpanel.model.enums.SpecTaskStatus;
+import dev.squadx.controlpanel.model.enums.TaskEventType;
 import dev.squadx.controlpanel.repository.ChangeRepository;
 import dev.squadx.controlpanel.repository.RequirementRepository;
 import dev.squadx.controlpanel.repository.SpecTaskRepository;
@@ -24,7 +26,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +46,7 @@ public class SpecTaskService {
     private final AgentRepository agentRepository;
     private final OrganizationMemberRepository memberRepository;
     private final SpecTaskStateMachine stateMachine;
+    private final SpecEventService specEventService;
 
     @Transactional
     public SpecTaskResponse create(SpecTaskRequest request, User currentUser) {
@@ -84,27 +89,39 @@ public class SpecTaskService {
     @Transactional
     public SpecTaskResponse transition(Long taskId, SpecTaskTransitionRequest request, User currentUser) {
         SpecTask task = loadForUser(taskId, currentUser);
+        SpecTaskStatus current = task.getStatus();
         SpecTaskStatus target = request.getStatus();
 
         if (stateMachine.isPass5Only(target)) {
             throw new BadRequestException("Status '" + target + "' can only be set by Pass 5 validation");
         }
-        if (!stateMachine.canTransition(task.getStatus(), target)) {
-            throw new BadRequestException(
-                    "Invalid transition: " + task.getStatus() + " -> " + target);
+        if (!stateMachine.canTransition(current, target)) {
+            throw new BadRequestException("Invalid transition: " + current + " -> " + target);
         }
         if (target == SpecTaskStatus.BLOQUEADA && (request.getNote() == null || request.getNote().isBlank())) {
             throw new BadRequestException("A blocker requires a reason");
         }
 
-        if (target == SpecTaskStatus.BLOQUEADA) {
-            task.setBlockerReason(request.getNote());
-        } else if (task.getStatus() == SpecTaskStatus.BLOQUEADA) {
-            task.setBlockerReason(null); // desbloqueio
+        // Status is a projection of events (ADR-0002): record the event, let the projector decide.
+        TaskEventType type;
+        String payload = null;
+        if (current == SpecTaskStatus.BLOQUEADA) {
+            type = TaskEventType.UNBLOCKED;
+        } else if (target == SpecTaskStatus.BLOQUEADA) {
+            type = TaskEventType.BLOCKED;
+            payload = request.getNote();
+        } else if (target == SpecTaskStatus.EM_CURSO) {
+            type = TaskEventType.STARTED;
+        } else if (target == SpecTaskStatus.EM_VALIDACAO) {
+            type = TaskEventType.PR_OPENED;
+        } else {
+            throw new BadRequestException("Unsupported manual transition to " + target);
         }
-        task.setStatus(target);
 
-        return mapToResponse(specTaskRepository.save(task));
+        specEventService.record(taskId, type, EventSource.MCP, UUID.randomUUID().toString(),
+                payload, Instant.now());
+        return mapToResponse(specTaskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found")));
     }
 
     /**
@@ -113,20 +130,17 @@ public class SpecTaskService {
      */
     @Transactional
     public SpecTaskResponse applyPass5Outcome(Long taskId, Pass5Result result, String critique) {
-        SpecTask task = specTaskRepository.findById(taskId)
+        specTaskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
-        if (result == Pass5Result.PASS) {
-            task.setStatus(SpecTaskStatus.CONCLUIDA);
-            task.setPass5(Pass5Result.PASS);
-            task.setReviseReason(null);
-        } else if (result == Pass5Result.FAIL) {
-            task.setStatus(SpecTaskStatus.AJUSTES);
-            task.setPass5(Pass5Result.FAIL);
-            task.setReviseReason(critique);
-        } else {
-            throw new BadRequestException("Pass 5 outcome must be PASS or FAIL");
-        }
-        return mapToResponse(specTaskRepository.save(task));
+        TaskEventType type = switch (result) {
+            case PASS -> TaskEventType.PASS5_APPROVED;
+            case FAIL -> TaskEventType.PASS5_CHANGES;
+            default -> throw new BadRequestException("Pass 5 outcome must be PASS or FAIL");
+        };
+        specEventService.record(taskId, type, EventSource.PASS5, UUID.randomUUID().toString(),
+                result == Pass5Result.FAIL ? critique : null, Instant.now());
+        return mapToResponse(specTaskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found")));
     }
 
     private void applyAssignee(SpecTask.SpecTaskBuilder builder, SpecTaskRequest request) {

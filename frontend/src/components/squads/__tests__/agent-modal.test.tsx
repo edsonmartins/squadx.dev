@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentModal } from "../agent-modal";
+import { agentsApi } from "@/lib/api";
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -55,5 +57,23 @@ describe("AgentModal runtime selector", () => {
 
     expect(screen.getByText("CLI provider *")).toBeInTheDocument();
     expect(screen.queryByText("Model *")).not.toBeInTheDocument();
+  });
+
+  it("creates with backend field names (agent_type / model_id)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentModal {...baseProps} />);
+
+    await user.type(screen.getByLabelText("Name *"), "My Agent");
+    await user.click(screen.getByRole("button", { name: "Add Agent" }));
+
+    await waitFor(() => expect(agentsApi.create).toHaveBeenCalledTimes(1));
+    expect(agentsApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "My Agent",
+        agent_type: "FULLSTACK",
+        model_id: expect.any(String),
+        squad_id: 1,
+      })
+    );
   });
 });

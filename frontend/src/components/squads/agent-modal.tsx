@@ -159,9 +159,16 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
   const createMutation = useMutation({
     mutationFn: (data: AgentFormData) =>
       agentsApi.create({
-        ...data,
-        squad_id: squadId!,
+        name: data.name,
+        agent_type: data.type,
+        runtime_kind: data.runtime_kind,
+        cli_provider: data.runtime_kind === "EXTERNAL_CLI" ? data.cli_provider : null,
+        description: data.description,
+        model_id: data.model || undefined,
         system_prompt: data.system_prompt || undefined,
+        temperature: data.temperature,
+        max_tokens: data.max_tokens,
+        squad_id: squadId!,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents", squadId] });
@@ -185,10 +192,13 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
     mutationFn: (data: AgentFormData) =>
       agentsApi.update(agent!.id, {
         name: data.name,
+        // Required by the shared backend AgentRequest validation (ignored on update).
+        agent_type: data.type,
+        squad_id: agent!.squad_id,
         runtime_kind: data.runtime_kind,
         cli_provider: data.runtime_kind === "EXTERNAL_CLI" ? data.cli_provider : null,
         description: data.description,
-        model: data.model,
+        model_id: data.model || undefined,
         system_prompt: data.system_prompt,
         temperature: data.temperature,
         max_tokens: data.max_tokens,

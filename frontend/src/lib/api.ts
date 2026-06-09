@@ -884,11 +884,12 @@ export interface AgentResponse {
 
 export interface CreateAgentRequest {
   name: string;
-  type: AgentType;
+  // Field names match the backend AgentRequest JSON (agent_type / model_id).
+  agent_type: AgentType;
   runtime_kind?: AgentRuntimeKind;
   cli_provider?: CliProvider | null;
   description?: string;
-  model?: string;
+  model_id?: string;
   system_prompt?: string;
   temperature?: number;
   max_tokens?: number;
@@ -896,11 +897,15 @@ export interface CreateAgentRequest {
 }
 
 export interface UpdateAgentRequest {
-  name?: string;
+  name: string;
+  // The backend validates the shared AgentRequest (@NotNull) on update too, so
+  // agent_type and squad_id must be sent even though the service ignores them.
+  agent_type: AgentType;
+  squad_id: number;
   runtime_kind?: AgentRuntimeKind;
   cli_provider?: CliProvider | null;
   description?: string;
-  model?: string;
+  model_id?: string;
   system_prompt?: string;
   temperature?: number;
   max_tokens?: number;

@@ -18,6 +18,7 @@ public class IntegrationConfig {
     private LiveConfig live = new LiveConfig();
     private LinktorConfig linktor = new LinktorConfig();
     private GitConfig git = new GitConfig();
+    private PullwiseConfig pullwise = new PullwiseConfig();
     private String serviceSecret;
 
     /** Git provider config for Control Panel spec materialization (RFC-0002). */
@@ -28,6 +29,15 @@ public class IntegrationConfig {
         private String apiUrl = "https://api.github.com";
         private String token;
         private String branchPrefix = "spec/";
+    }
+
+    /** Pullwise conformance reviewer config for Pass 5 (RFC-0004 §7). */
+    @Getter
+    @Setter
+    public static class PullwiseConfig {
+        private boolean enabled = false;
+        private String url = "http://localhost:8080";
+        private String apiKey;
     }
 
     @Getter

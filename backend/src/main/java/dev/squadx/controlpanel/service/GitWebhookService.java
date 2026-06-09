@@ -105,7 +105,7 @@ public class GitWebhookService {
         } else if ("closed".equals(action) && Boolean.TRUE.equals(pr.get("merged"))) {
             // Gatilho do Pass 5 (consumidor real em pass5-validation).
             if (specTaskRepository.existsById(taskId.get())) {
-                eventPublisher.publishEvent(new SpecTaskMergedEvent(taskId.get(), "pr-" + number, headSha));
+                eventPublisher.publishEvent(new SpecTaskMergedEvent(taskId.get(), "pr-" + number, headSha, number));
             }
         }
     }

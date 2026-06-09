@@ -17,7 +17,7 @@ class Pass5TriggerListenerTest {
 
     @Test
     void mergedEventTriggersValidation() {  // R5
-        listener.onMerged(new SpecTaskMergedEvent(42L, "pr-3", "sha7"));
-        verify(pass5Service).validate(42L, "sha7");
+        listener.onMerged(new SpecTaskMergedEvent(42L, "pr-3", "sha7", "3"));
+        verify(pass5Service).validate(42L, "sha7", "3");
     }
 }

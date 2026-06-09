@@ -14,5 +14,10 @@ public interface ConformanceReviewer {
     /** Cenário simplificado para a revisão (sem expor entidades JPA). */
     record ScenarioRef(String name, String when, String then) {}
 
-    record ConformanceRequest(Long specTaskId, String prSha, List<ScenarioRef> scenarios) {}
+    /**
+     * Contexto da revisão. {@code repositoryUrl}/{@code prNumber} permitem ao reviewer buscar o diff
+     * do PR; ficam nulos em revalidação sob demanda (sem PR) — nesse caso a revisão é degradada.
+     */
+    record ConformanceRequest(Long specTaskId, String repositoryUrl, String prNumber, String prSha,
+                              List<ScenarioRef> scenarios) {}
 }

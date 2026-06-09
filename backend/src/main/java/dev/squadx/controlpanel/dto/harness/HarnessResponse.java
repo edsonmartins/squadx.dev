@@ -33,6 +33,9 @@ public class HarnessResponse {
     @JsonProperty("agent_name")
     private String agentName;
 
+    @JsonProperty("last_connected_at")
+    private Instant lastConnectedAt;
+
     @JsonProperty("created_at")
     private Instant createdAt;
 

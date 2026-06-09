@@ -24,6 +24,9 @@ dependencies = [
     # LLM Routing
     "litellm>=1.50.0",
 
+    # MCP (workspace bridge for CLI harnesses)
+    "mcp>=1.2.0",
+
     # Docker
     "docker>=7.1.0",
 
@@ -70,6 +73,7 @@ dev = [
 
 [project.scripts]
 squadx-client = "squadx_client.main:app"
+squadx-workspace-mcp = "squadx_client.mcp.bridge:main"
 
 [tool.ruff]
 target-version = "py311"

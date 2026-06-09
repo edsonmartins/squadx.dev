@@ -35,6 +35,10 @@ public class HarnessService {
     private final AgentRepository agentRepository;
     private final OrganizationMemberRepository memberRepository;
 
+    /** TTL da sessão MCP — "conectado" = última sessão dentro deste intervalo. */
+    @org.springframework.beans.factory.annotation.Value("${squadx.workspace.session-ttl-seconds:3600}")
+    private long sessionTtlSeconds;
+
     @Transactional
     public HarnessResponse register(HarnessRequest request, User currentUser) {
         validateUserAccess(request.getOrganizationId(), currentUser);
@@ -83,6 +87,21 @@ public class HarnessService {
         return harnessRepository.findByAgentId(agentId).map(Harness::getModel);
     }
 
+    /**
+     * Handshake vivo: marca a última conexão do harness (chamado ao abrir uma sessão MCP do
+     * workspace com {@code harness_key}). Silencioso se o harness não estiver cadastrado.
+     */
+    @Transactional
+    public void touchConnection(Long organizationId, String harnessKey) {
+        if (harnessKey == null || harnessKey.isBlank()) {
+            return;
+        }
+        harnessRepository.findByOrganizationIdAndKey(organizationId, harnessKey).ifPresent(h -> {
+            h.setLastConnectedAt(java.time.Instant.now());
+            harnessRepository.save(h);
+        });
+    }
+
     private Agent resolveAgent(Long agentId) {
         if (agentId == null) {
             return null;
@@ -97,13 +116,23 @@ public class HarnessService {
         }
     }
 
+    /** Status efetivo: CONNECTED enquanto a última sessão estiver dentro do TTL (derivado, sem job). */
+    private HarnessStatus effectiveStatus(Harness harness) {
+        java.time.Instant last = harness.getLastConnectedAt();
+        if (last != null && last.isAfter(java.time.Instant.now().minusSeconds(sessionTtlSeconds))) {
+            return HarnessStatus.CONNECTED;
+        }
+        return harness.getStatus();
+    }
+
     private HarnessResponse mapToResponse(Harness harness) {
         return HarnessResponse.builder()
                 .id(harness.getId())
                 .key(harness.getKey())
                 .name(harness.getName())
                 .vendor(harness.getVendor())
-                .status(harness.getStatus())
+                .status(effectiveStatus(harness))
+                .lastConnectedAt(harness.getLastConnectedAt())
                 .model(harness.getModel())
                 .models(new ArrayList<>(harness.getModels()))
                 .organizationId(harness.getOrganization().getId())

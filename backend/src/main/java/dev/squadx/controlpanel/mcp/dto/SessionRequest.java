@@ -19,4 +19,8 @@ public class SessionRequest {
 
     /** Identificador do agente que abrirá a sessão (opcional). */
     private String assignee;
+
+    /** Chave do harness em uso (opcional); marca o conector como conectado (handshake vivo). */
+    @JsonProperty("harness_key")
+    private String harnessKey;
 }

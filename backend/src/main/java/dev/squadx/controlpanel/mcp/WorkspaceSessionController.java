@@ -3,6 +3,7 @@ package dev.squadx.controlpanel.mcp;
 import dev.squadx.controlpanel.mcp.dto.SessionRequest;
 import dev.squadx.controlpanel.mcp.dto.SessionResponse;
 import dev.squadx.controlpanel.service.ChangeService;
+import dev.squadx.controlpanel.service.HarnessService;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.model.User;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ public class WorkspaceSessionController {
 
     private final ChangeService changeService;
     private final WorkspaceSessionProvider sessionProvider;
+    private final HarnessService harnessService;
 
     @PostMapping
     @Operation(summary = "Open a scoped MCP workspace session for a change")
@@ -34,6 +36,7 @@ public class WorkspaceSessionController {
             @AuthenticationPrincipal User user
     ) {
         ChangeService.WorkspaceScope scope = changeService.resolveScope(request.getChangeId(), user);
+        harnessService.touchConnection(scope.orgId(), request.getHarnessKey()); // handshake vivo
         WorkspaceSession session = new WorkspaceSession(
                 user.getId(), scope.orgId(), scope.projectId(), scope.changeId(), request.getAssignee());
 

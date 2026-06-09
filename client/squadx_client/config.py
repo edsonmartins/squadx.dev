@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ws_url: str = Field(default="ws://localhost:8080/ws", alias="SQUADX_WS_URL")
     api_token: str | None = Field(default=None, alias="SQUADX_API_TOKEN")
 
+    # Workspace MCP bridge (session token issued via POST /api/v1/workspace/sessions)
+    workspace_token: str | None = Field(default=None, alias="SQUADX_WORKSPACE_TOKEN")
+
     # LLM Configuration
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")

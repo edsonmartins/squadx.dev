@@ -51,6 +51,24 @@ squadx_client/
 └── stomp/            # Backend communication
 ```
 
+## Workspace MCP bridge
+
+`squadx-workspace-mcp` exposes the Control Panel workspace tool contract (get_change, get_tasks,
+update_task_status, report_blocker, materialize_change, scaffold_tests) to CLI harnesses over MCP.
+
+1. Open a workspace session (panel UI or `POST /api/v1/workspace/sessions` with `change_id`,
+   optional `assignee` and `harness_key` — the key marks the connector as connected) and copy the token.
+2. Register the bridge in your harness, e.g. Claude Code:
+
+```bash
+claude mcp add squadx-workspace \
+  -e SQUADX_API_URL=http://localhost:8080 \
+  -e SQUADX_WORKSPACE_TOKEN=<session token> \
+  -- squadx-workspace-mcp
+```
+
+For remote harnesses use SSE: `squadx-workspace-mcp --transport sse --port 8765`.
+
 ## Requirements
 
 - Python 3.11+

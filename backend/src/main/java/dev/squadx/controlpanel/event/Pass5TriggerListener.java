@@ -20,6 +20,6 @@ public class Pass5TriggerListener {
     @TransactionalEventListener
     public void onMerged(SpecTaskMergedEvent event) {
         log.info("Triggering Pass 5 for spec task {} (sha {})", event.specTaskId(), event.headSha());
-        pass5Service.validate(event.specTaskId(), event.headSha());
+        pass5Service.validate(event.specTaskId(), event.headSha(), event.prNumber());
     }
 }

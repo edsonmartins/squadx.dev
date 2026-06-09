@@ -49,6 +49,11 @@ public class Pass5Service {
      */
     @Transactional
     public Pass5Run validate(Long specTaskId, String prSha) {
+        return validate(specTaskId, prSha, null);
+    }
+
+    @Transactional
+    public Pass5Run validate(Long specTaskId, String prSha, String prNumber) {
         if (prSha != null && pass5RunRepository.existsBySpecTaskIdAndPrSha(specTaskId, prSha)) {
             return pass5RunRepository.findTopBySpecTaskIdOrderByCreatedAtDesc(specTaskId).orElse(null);
         }
@@ -73,7 +78,7 @@ public class Pass5Service {
                 outcome = Pass5Result.FAIL;                                  // R1/R2
                 critique = "Cenários sem teste: " + String.join(", ", uncovered);
             } else {
-                ConformanceVerdict verdict = reviewer.review(toRequest(specTaskId, prSha, scenarios)); // R3
+                ConformanceVerdict verdict = reviewer.review(toRequest(task, prSha, prNumber, scenarios)); // R3
                 if (verdict.diverges()) {
                     outcome = Pass5Result.FAIL;
                     critique = verdict.critique();
@@ -170,12 +175,13 @@ public class Pass5Service {
         return req != null ? scenarioRepository.findByRequirementId(req.getId()) : List.of();
     }
 
-    private ConformanceReviewer.ConformanceRequest toRequest(Long specTaskId, String prSha,
-                                                             List<Scenario> scenarios) {
+    private ConformanceReviewer.ConformanceRequest toRequest(SpecTask task, String prSha,
+                                                             String prNumber, List<Scenario> scenarios) {
         List<ConformanceReviewer.ScenarioRef> refs = scenarios.stream()
                 .map(s -> new ConformanceReviewer.ScenarioRef(s.getName(), s.getWhenCondition(), s.getThenResult()))
                 .collect(Collectors.toList());
-        return new ConformanceReviewer.ConformanceRequest(specTaskId, prSha, refs);
+        String repositoryUrl = task.getChange().getProject().getRepositoryUrl();
+        return new ConformanceReviewer.ConformanceRequest(task.getId(), repositoryUrl, prNumber, prSha, refs);
     }
 
     private SpecTask loadTask(Long specTaskId) {

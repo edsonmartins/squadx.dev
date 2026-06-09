@@ -54,14 +54,14 @@ identificadores em EN.
 
 ## 5. Validação Pass 5 (pass5-validation)
 
-- [ ] 5.1 Mapa de cobertura cenário↔teste por convenção de nome (parser dos métodos). — p5:R1 · ADR-0005, RFC-0004
-- [ ] 5.2 Etapa de cobertura: cenário sem teste reprova. — p5:R1 · RFC-0004
-- [ ] 5.3 Execução dos testes mapeados; teste quebrado reprova. — p5:R2 · RFC-0004
-- [ ] 5.4 Integração Pullwise (interface plugável) p/ conformidade comportamental. — p5:R3 · RFC-0004
-- [ ] 5.5 Desfechos: aprovado→`concluida`/`pass`; reprovado→`ajustes`/`fail`+crítica→reabre. — p5:R4 · ADR-0004, RFC-0003
-- [ ] 5.6 Disparo no merge + idempotência por (tarefa, sha). — p5:R5 · RFC-0004, RFC-0003
-- [ ] 5.7 Tela de validação (cobertura ✓/✕ + critérios + crítica). — p5:R6
-- [ ] 5.8 `scaffold_tests` na stack do repo (JUnit 5; método por cenário, nome rastreável). — p5:R1 · ADR-0005
+- [x] 5.1 Mapa de cobertura cenário↔teste (flag `Scenario.covered` = "coberto por teste que passa"; `CoverageService` writer). — p5:R1 · ADR-0005, RFC-0004
+- [x] 5.2 Etapa de cobertura: cenário sem teste reprova. — p5:R1 · RFC-0004
+- [x] 5.3 Teste mapeado falhando reprova (colapsado em `covered=false` nesta fatia). — p5:R2 · RFC-0004 _(execução real de testes: integração externa)_
+- [x] 5.4 Conformidade comportamental via `ConformanceReviewer` (interface plugável; default Noop). — p5:R3 · RFC-0004 _(cliente Pullwise real: posterior)_
+- [x] 5.5 Desfechos: aprovado→`concluida`/`pass`; reprovado→`ajustes`/`fail`+crítica (via `applyPass5Outcome`/evento PASS5). — p5:R4 · ADR-0004, RFC-0003
+- [x] 5.6 Disparo no merge (`Pass5TriggerListener`) + idempotência por `(tarefa, pr_sha)` (`pass5_runs`). — p5:R5 · RFC-0004, RFC-0003
+- [x] 5.7 Endpoint de status/cobertura (`GET /spec-tasks/{id}/pass5`, `POST .../run`). — p5:R6 _(tela em si: fatia de frontend)_
+- [~] 5.8 `scaffold_tests` (método por cenário, nome rastreável) — pertence ao `workspace-mcp-server`; aqui só o writer de cobertura. — p5:R1 · ADR-0005
 
 ## 6. Conectores de harness (harness-connectors)
 

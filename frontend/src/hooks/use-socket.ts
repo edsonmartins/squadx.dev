@@ -99,6 +99,30 @@ export function useProjectSocket(projectId: number | null) {
   }, [projectId, fetchTasks, queryClient, toast]);
 }
 
+export function useControlPanelSocket(projectId: number | null | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const handleEvent = (data: unknown) => {
+      const event = data as { type?: string };
+      if (event?.type === "spec_task_updated") {
+        queryClient.invalidateQueries({ queryKey: ["cp-where-we-are", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["cp-tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["cp-pass5"] });
+      }
+    };
+
+    const unsubscribe = socketClient.subscribe(
+      `/topic/control-panel/projects/${projectId}/tasks`,
+      handleEvent
+    );
+
+    return () => unsubscribe();
+  }, [projectId, queryClient]);
+}
+
 export function useTaskSocket(taskId: number | null) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

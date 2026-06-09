@@ -1213,6 +1213,7 @@ export interface MaterializeResponse {
   change_id: number;
   version?: string;
   commit?: string;
+  pr_url?: string;
   message?: string;
 }
 

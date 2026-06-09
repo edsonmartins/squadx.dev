@@ -71,6 +71,38 @@ public class GitHubCommitGateway implements GitCommitGateway {
         }
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public PullRequestResult openPullRequest(GitTarget target, String title, String body) {
+        if (!git.isEnabled() || isBlank(git.getToken()) || target.repositoryUrl() == null) {
+            return PullRequestResult.none();
+        }
+        String[] ownerRepo = parseOwnerRepo(target.repositoryUrl());
+        if (ownerRepo == null) {
+            return PullRequestResult.none();
+        }
+        String pulls = "/repos/" + ownerRepo[0] + "/" + ownerRepo[1] + "/pulls";
+        String branch = git.getBranchPrefix() + target.changeKey();
+
+        try {
+            // Idempotente: reaproveita um PR aberto da mesma branch, se houver.
+            List<Map<String, Object>> existing = restClient.get()
+                    .uri(pulls + "?head=" + ownerRepo[0] + ":" + branch + "&state=open")
+                    .headers(this::authHeaders)
+                    .retrieve()
+                    .body(List.class);
+            if (existing != null && !existing.isEmpty()) {
+                return new PullRequestResult(String.valueOf(existing.get(0).get("html_url")));
+            }
+            Map<String, Object> created = post(pulls, Map.of(
+                    "title", title, "head", branch, "base", target.baseBranch(), "body", body));
+            return new PullRequestResult(String.valueOf(created.get("html_url")));
+        } catch (Exception ex) {
+            log.warn("Failed to open PR for {}@{}: {}", target.repositoryUrl(), branch, ex.getMessage());
+            return PullRequestResult.none();
+        }
+    }
+
     /** Garante a branch da mudança; cria a partir da base se ausente. Retorna o sha do head. */
     private String ensureBranch(String base, String branch, String baseBranch) {
         try {

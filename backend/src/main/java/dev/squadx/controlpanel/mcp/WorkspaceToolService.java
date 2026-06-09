@@ -108,6 +108,7 @@ public class WorkspaceToolService {
                 .changeId(session.changeId())
                 .version(result.version())
                 .commit(result.commit())
+                .prUrl(result.prUrl())
                 .message(result.message())
                 .build();
     }
@@ -137,7 +138,8 @@ public class WorkspaceToolService {
                 }
                 methods.add(ScaffoldTestsResponse.Method.builder()
                         .scenarioName(sc.getName())
-                        .methodName(req.getRequirementId() + "_" + slug(sc.getName()))
+                        .methodName(dev.squadx.controlpanel.validation.ScenarioTestNaming
+                                .methodName(req.getRequirementId(), sc.getName()))
                         .build());
             }
         }
@@ -172,10 +174,4 @@ public class WorkspaceToolService {
                 .ok(true).taskId(taskId).status(task.getStatus()).build();
     }
 
-    private String slug(String name) {
-        String normalized = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+", "");                          // strip diacritics (á -> a)
-        String s = normalized.toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_|_$", "");
-        return s.isEmpty() ? "scenario" : s;
-    }
 }

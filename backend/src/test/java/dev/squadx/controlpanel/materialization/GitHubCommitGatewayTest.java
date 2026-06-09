@@ -131,6 +131,41 @@ class GitHubCommitGatewayTest {
     }
 
     @Test
+    void openPullRequestReusesExistingOpenPr() {
+        server.expect(requestTo(API + "/repos/o/r/pulls?head=o:spec/auth&state=open"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"html_url\":\"https://github.com/o/r/pull/7\"}]",
+                        MediaType.APPLICATION_JSON));
+
+        GitCommitGateway.PullRequestResult result = gateway.openPullRequest(target(), "t", "b");
+
+        assertThat(result.url()).isEqualTo("https://github.com/o/r/pull/7");
+        server.verify(); // no POST
+    }
+
+    @Test
+    void openPullRequestCreatesWhenNoneOpen() {
+        server.expect(requestTo(API + "/repos/o/r/pulls?head=o:spec/auth&state=open"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(API + "/repos/o/r/pulls")).andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("{\"html_url\":\"https://github.com/o/r/pull/8\"}",
+                        MediaType.APPLICATION_JSON));
+
+        GitCommitGateway.PullRequestResult result = gateway.openPullRequest(target(), "t", "b");
+
+        assertThat(result.url()).isEqualTo("https://github.com/o/r/pull/8");
+        server.verify();
+    }
+
+    @Test
+    void openPullRequestSkipsWhenDisabled() {
+        config.getGit().setEnabled(false);
+        assertThat(gateway.openPullRequest(target(), "t", "b").url()).isNull();
+        server.verify(); // no HTTP calls
+    }
+
+    @Test
     void parsesOwnerRepoFromUrlForms() {
         assertThat(GitHubCommitGateway.parseOwnerRepo("https://github.com/o/r")).containsExactly("o", "r");
         assertThat(GitHubCommitGateway.parseOwnerRepo("https://github.com/o/r.git")).containsExactly("o", "r");

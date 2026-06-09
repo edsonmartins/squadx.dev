@@ -42,6 +42,7 @@ public class Pass5Service {
     private final SpecTaskService specTaskService;
     private final ChangeRepository changeRepository;
     private final OrganizationMemberRepository memberRepository;
+    private final dev.squadx.controlpanel.materialization.GitHubDiffClient diffClient;
 
     /**
      * Roda o Pass 5 para uma tarefa (idempotente por {@code (task, prSha)} — R5). Disparado pelo
@@ -61,6 +62,7 @@ public class Pass5Service {
         SpecTask task = specTaskRepository.findById(specTaskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
         List<Scenario> scenarios = scenariosOf(task);
+        autoCoverFromPrDiff(task, scenarios, prNumber);   // RFC-0004 §2 (scan por convenção de nome)
 
         int total = scenarios.size();
         int covered = (int) scenarios.stream().filter(Scenario::isCovered).count();
@@ -168,6 +170,34 @@ public class Pass5Service {
                                 .id(s.getId()).name(s.getName()).covered(s.isCovered()).build())
                         .collect(Collectors.toList()))
                 .build();
+    }
+
+    /**
+     * Marca cenários como cobertos quando o método de teste rastreável ({@code R<ref>_<slug>})
+     * aparece no diff do PR — os testes derivados da spec viajam no mesmo PR (ADR-0005). Sem PR
+     * ou sem diff, mantém o estado atual (toggle manual continua valendo).
+     */
+    private void autoCoverFromPrDiff(SpecTask task, List<Scenario> scenarios, String prNumber) {
+        Requirement req = task.getRequirement();
+        if (req == null || prNumber == null
+                || scenarios.stream().allMatch(Scenario::isCovered)) {
+            return;
+        }
+        String repositoryUrl = task.getChange().getProject().getRepositoryUrl();
+        String diff = diffClient.fetchPullRequestDiff(repositoryUrl, prNumber);
+        if (diff == null || diff.isBlank()) {
+            return;
+        }
+        for (Scenario scenario : scenarios) {
+            if (!scenario.isCovered()) {
+                String method = dev.squadx.controlpanel.validation.ScenarioTestNaming
+                        .methodName(req.getRequirementId(), scenario.getName());
+                if (diff.contains(method)) {
+                    scenario.setCovered(true);
+                    scenarioRepository.save(scenario);
+                }
+            }
+        }
     }
 
     private List<Scenario> scenariosOf(SpecTask task) {

@@ -39,6 +39,7 @@ class Pass5ServiceTest {
     @Mock private SpecTaskService specTaskService;
     @Mock private dev.squadx.controlpanel.repository.ChangeRepository changeRepository;
     @Mock private OrganizationMemberRepository memberRepository;
+    @Mock private dev.squadx.controlpanel.materialization.GitHubDiffClient diffClient;
 
     @InjectMocks private Pass5Service service;
 
@@ -135,6 +136,46 @@ class Pass5ServiceTest {
 
         verify(specTaskService).applyPass5Outcome(eq(42L), eq(Pass5Result.FAIL),
                 argThat(c -> c != null && c.contains("Nenhum cenário")));
+    }
+
+    @Test
+    void autoCoversScenarioWhenTraceableMethodAppearsInPrDiff() {  // RFC-0004 §2
+        mockValidateBase();
+        Scenario uncovered = scenario("login inválido", false);
+        when(scenarioRepository.findByRequirementId(9L)).thenReturn(List.of(uncovered));
+        when(diffClient.fetchPullRequestDiff(any(), eq("5")))
+                .thenReturn("+    void R1_login_invalido() { ... }");
+        when(reviewer.review(any())).thenReturn(ConformanceVerdict.ok());
+
+        service.validate(42L, "sha1", "5");
+
+        assertThat(uncovered.isCovered()).isTrue();
+        verify(scenarioRepository).save(uncovered);
+        verify(specTaskService).applyPass5Outcome(eq(42L), eq(Pass5Result.PASS), isNull());
+    }
+
+    @Test
+    void staysUncoveredWhenDiffLacksTraceableMethod() {
+        mockValidateBase();
+        Scenario uncovered = scenario("login inválido", false);
+        when(scenarioRepository.findByRequirementId(9L)).thenReturn(List.of(uncovered));
+        when(diffClient.fetchPullRequestDiff(any(), eq("5"))).thenReturn("+ unrelated change");
+
+        service.validate(42L, "sha1", "5");
+
+        assertThat(uncovered.isCovered()).isFalse();
+        verify(specTaskService).applyPass5Outcome(eq(42L), eq(Pass5Result.FAIL),
+                argThat(c -> c != null && c.contains("login inválido")));
+    }
+
+    @Test
+    void scanSkippedWithoutPrNumber() {
+        mockValidateBase();
+        when(scenarioRepository.findByRequirementId(9L)).thenReturn(List.of(scenario("s", false)));
+
+        service.validate(42L, "sha1");
+
+        verify(diffClient, never()).fetchPullRequestDiff(any(), any());
     }
 
     @Test

@@ -51,14 +51,15 @@ public class DefaultSpecMaterializer implements SpecMaterializer {
         String hash = contentHash(files);
         String label = "v" + version.getVersion();
 
-        // Idempotência: mesma versão já materializada com conteúdo idêntico → no-op.
-        if (version.getCommit() != null && hash.equals(version.getContentHash())) {
-            return MaterializationResult.of(label, version.getCommit());
-        }
-
         String key = changeKey(change);
         GitCommitGateway.GitTarget target = new GitCommitGateway.GitTarget(
                 change.getProject().getRepositoryUrl(), change.getProject().getDefaultBranch(), key);
+
+        // Idempotência: mesma versão já materializada com conteúdo idêntico → no-op (garante o PR).
+        if (version.getCommit() != null && hash.equals(version.getContentHash())) {
+            return MaterializationResult.of(label, version.getCommit(), ensurePullRequest(target, key, label));
+        }
+
         GitCommitGateway.CommitResult result = gitCommitGateway.commit(
                 target, files, "spec(" + key + "): materialize " + label);
 
@@ -66,14 +67,24 @@ public class DefaultSpecMaterializer implements SpecMaterializer {
         if (result.sha() != null) {
             version.setCommit(result.sha());
             specVersionRepository.save(version);
-            return MaterializationResult.of(label, result.sha());
+            return MaterializationResult.of(label, result.sha(), ensurePullRequest(target, key, label));
         }
         specVersionRepository.save(version);
         if (result.conflict()) {
             return MaterializationResult.unavailable("Conflito de materialização: " + result.message());
         }
-        return new MaterializationResult(false, label, null,
+        return new MaterializationResult(false, label, null, null,
                 "Rendered " + files.size() + " file(s); git commit pendente (" + result.message() + ")");
+    }
+
+    /** RFC-0002 §4: o PR carrega spec + código; garante um PR aberto da branch da mudança. */
+    private String ensurePullRequest(GitCommitGateway.GitTarget target, String key, String label) {
+        GitCommitGateway.PullRequestResult pr = gitCommitGateway.openPullRequest(
+                target,
+                "spec(" + key + "): materialize " + label,
+                "Spec " + label + " materializada pelo Control Panel (branch `"
+                        + key + "`). O merge dispara o Pass 5.");
+        return pr.url();
     }
 
     private SpecVersion createAutoV1(Change change) {

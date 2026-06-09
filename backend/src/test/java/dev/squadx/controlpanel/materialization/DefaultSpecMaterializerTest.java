@@ -51,6 +51,8 @@ class DefaultSpecMaterializerTest {
         lenient().when(requirementRepository.findByChangeId(5L)).thenReturn(List.of());
         lenient().when(specTaskRepository.findByChangeId(5L)).thenReturn(List.of());
         lenient().when(specVersionRepository.save(any(SpecVersion.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(gitCommitGateway.openPullRequest(any(), anyString(), anyString()))
+                .thenReturn(GitCommitGateway.PullRequestResult.none());
     }
 
     @Test
@@ -91,6 +93,20 @@ class DefaultSpecMaterializerTest {
         assertThat(result.commit()).isNull();
         assertThat(result.message()).contains("pendente");
         assertThat(version.getContentHash()).isNotBlank();
+    }
+
+    @Test
+    void commitOpensPullRequestAndPropagatesUrl() {
+        when(specVersionRepository.findByChangeIdAndCurrentTrue(5L)).thenReturn(Optional.of(version));
+        when(gitCommitGateway.commit(any(GitCommitGateway.GitTarget.class), any(), anyString()))
+                .thenReturn(GitCommitGateway.CommitResult.committed("sha1"));
+        when(gitCommitGateway.openPullRequest(any(), anyString(), anyString()))
+                .thenReturn(new GitCommitGateway.PullRequestResult("https://github.com/o/r/pull/7"));
+
+        SpecMaterializer.MaterializationResult result = materializer.materialize(5L);
+
+        assertThat(result.prUrl()).isEqualTo("https://github.com/o/r/pull/7");
+        verify(gitCommitGateway).openPullRequest(any(), anyString(), anyString());
     }
 
     @Test

@@ -65,6 +65,7 @@ public class SpecVersionController {
                 .changeId(changeId)
                 .version(result.version())
                 .commit(result.commit())
+                .prUrl(result.prUrl())
                 .message(result.message())
                 .build();
         return ResponseEntity.ok(ApiResponse.success(response));

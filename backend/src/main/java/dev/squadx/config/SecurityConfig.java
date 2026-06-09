@@ -89,8 +89,9 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(workspaceSessionFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            // The anchor filter must already be registered before relative additions below.
+            .addFilterBefore(workspaceSessionFilter, JwtAuthenticationFilter.class)
             .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 
         return http.build();

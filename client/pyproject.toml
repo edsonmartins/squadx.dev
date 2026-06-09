@@ -14,12 +14,14 @@ authors = [
 ]
 dependencies = [
     # LangGraph & LangChain
-    "langgraph>=0.2.0",
-    "langchain>=0.3.0",
-    "langchain-core>=0.3.0",
-    "langchain-openai>=0.2.0",
-    "langchain-anthropic>=0.2.0",
-    "langchain-community>=0.3.0",
+    # Pinned to the 0.3.x line: langchain 1.x moved ChatLiteLLM out of
+    # langchain_community (see llm/router.py), which breaks the client at runtime.
+    "langgraph>=0.2.0,<1.0",
+    "langchain>=0.3.0,<1.0",
+    "langchain-core>=0.3.0,<1.0",
+    "langchain-openai>=0.2.0,<1.0",
+    "langchain-anthropic>=0.2.0,<1.0",
+    "langchain-community>=0.3.0,<1.0",
 
     # LLM Routing
     "litellm>=1.50.0",

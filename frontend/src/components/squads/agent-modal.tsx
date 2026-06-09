@@ -192,9 +192,6 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
     mutationFn: (data: AgentFormData) =>
       agentsApi.update(agent!.id, {
         name: data.name,
-        // Required by the shared backend AgentRequest validation (ignored on update).
-        agent_type: data.type,
-        squad_id: agent!.squad_id,
         runtime_kind: data.runtime_kind,
         cli_provider: data.runtime_kind === "EXTERNAL_CLI" ? data.cli_provider : null,
         description: data.description,

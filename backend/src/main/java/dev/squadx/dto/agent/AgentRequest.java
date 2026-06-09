@@ -1,6 +1,7 @@
 package dev.squadx.dto.agent;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.squadx.dto.validation.OnCreate;
 import dev.squadx.model.enums.AgentRuntimeKind;
 import dev.squadx.model.enums.AgentType;
 import dev.squadx.model.enums.CliProvider;
@@ -19,10 +20,11 @@ import java.util.Set;
 @AllArgsConstructor
 public class AgentRequest {
 
-    @NotBlank(message = "Name is required")
+    // Required on create only; update is partial and validates with the Default group.
+    @NotBlank(message = "Name is required", groups = OnCreate.class)
     private String name;
 
-    @NotNull(message = "Agent type is required")
+    @NotNull(message = "Agent type is required", groups = OnCreate.class)
     @JsonProperty("agent_type")
     private AgentType agentType;
 
@@ -45,7 +47,7 @@ public class AgentRequest {
 
     private Double temperature;
 
-    @NotNull(message = "Squad ID is required")
+    @NotNull(message = "Squad ID is required", groups = OnCreate.class)
     @JsonProperty("squad_id")
     private Long squadId;
 

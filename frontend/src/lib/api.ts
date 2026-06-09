@@ -897,11 +897,7 @@ export interface CreateAgentRequest {
 }
 
 export interface UpdateAgentRequest {
-  name: string;
-  // The backend validates the shared AgentRequest (@NotNull) on update too, so
-  // agent_type and squad_id must be sent even though the service ignores them.
-  agent_type: AgentType;
-  squad_id: number;
+  name?: string;
   runtime_kind?: AgentRuntimeKind;
   cli_provider?: CliProvider | null;
   description?: string;

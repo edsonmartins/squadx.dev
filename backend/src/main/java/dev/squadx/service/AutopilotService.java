@@ -180,8 +180,8 @@ public class AutopilotService {
     }
 
     private String generateWebhookToken() {
-        return UUID.randomUUID().toString().replace("-", "")
-                + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        // 122 bits of randomness as a 32-char hex secret for the webhook URL.
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     // ---- Scheduling ----

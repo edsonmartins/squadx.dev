@@ -4,12 +4,14 @@ import dev.squadx.dto.agent.AgentRequest;
 import dev.squadx.dto.agent.AgentResponse;
 import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.common.PageResponse;
+import dev.squadx.dto.validation.OnCreate;
 import dev.squadx.model.User;
 import dev.squadx.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -30,7 +32,7 @@ public class AgentController {
     @PostMapping
     @Operation(summary = "Create a new agent")
     public ResponseEntity<ApiResponse<AgentResponse>> create(
-            @Valid @RequestBody AgentRequest request,
+            @Validated(OnCreate.class) @RequestBody AgentRequest request,
             @AuthenticationPrincipal User user
     ) {
         AgentResponse response = agentService.create(request, user);

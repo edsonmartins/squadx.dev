@@ -91,7 +91,7 @@ class TestAgentAttributes:
         assert agent.sandbox is None
 
     def test_agent_created_with_sandbox(self, mock_sandbox):
-        with patch("squadx_client.agents.base.create_sandbox_tools", return_value=[MagicMock()]):
+        with patch("squadx_client.agents.tools.create_sandbox_tools", return_value=[MagicMock()]):
             agent = create_agent("backend", sandbox=mock_sandbox)
         assert agent.sandbox is mock_sandbox
         assert len(agent.tools) == 1

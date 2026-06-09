@@ -65,14 +65,14 @@ identificadores em EN.
 
 ## 6. Conectores de harness (harness-connectors)
 
-- [ ] 6.1 Migração Flyway: `harnesses` (key/name/vendor/status/model/models). — hc:R1 · ADR-0003
-- [ ] 6.2 CRUD + tela de conectores (status conectado/disponível). — hc:R1
-- [ ] 6.3 Seleção de modelo por harness; resolução no responsável-agente. — hc:R2 · ADR-0003
-- [ ] 6.4 Mapear `Agent` existente ↔ Harness/assignee (reúso). — hc:R1 · ADR-0006
-- [ ] 6.5 Adicionar harness por configuração, sem mudar o contrato MCP. — hc:R3 · ADR-0003
+- [x] 6.1 Migração Flyway `V37`: `harnesses` + `harness_models` (key/name/vendor/status/model/models; UNIQUE(org,key)). — hc:R1 · ADR-0003
+- [x] 6.2 CRUD (`HarnessService`/`HarnessController`: register/list/select-model; status AVAILABLE/CONNECTED). — hc:R1 _(tela: fatia de frontend)_
+- [x] 6.3 Seleção de modelo por harness (rejeita fora de `models`); `resolveModelForAgent`. — hc:R2 · ADR-0003
+- [x] 6.4 Mapear `Agent` existente ↔ Harness/assignee (FK `agent_id`). — hc:R1 · ADR-0006
+- [x] 6.5 Adicionar harness por configuração (registry), sem mudar o contrato MCP. — hc:R3 · ADR-0003
 
 ## 7. Transversais
 
-- [ ] 7.1 Multi-tenancy por organização + RBAC nas novas rotas (reúso do existente). — ADR-0006
-- [ ] 7.2 Auditoria LGPD das transições (via `spec_events`). — ADR-0002, et:R6
-- [ ] 7.3 Testes: cada cenário WHEN/THEN das specs vira teste rastreável (dogfooding do Pass 5). — ADR-0005
+- [x] 7.1 Multi-tenancy por organização + RBAC nas novas rotas (`validateUserAccess` em todos os services + filtro de sessão MCP). — ADR-0006
+- [x] 7.2 Auditoria LGPD das transições (trilha append-only `spec_events`). — ADR-0002, et:R6
+- [x] 7.3 Testes: cenários WHEN/THEN viram testes rastreáveis (70 testes do control-panel; dogfooding por capability). — ADR-0005

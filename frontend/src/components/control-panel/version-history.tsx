@@ -28,9 +28,14 @@ export function VersionHistory({ changeId }: { changeId: number }) {
     mutationFn: () => specVersionsApi.materialize(changeId),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["cp-versions", changeId] });
+      const parts = [
+        res.message,
+        res.commit ? `commit ${res.commit.slice(0, 8)}` : undefined,
+        res.pr_url ? `PR: ${res.pr_url}` : undefined,
+      ].filter(Boolean);
       toast({
         title: res.ok ? "Materializado" : "Materialização pendente",
-        description: res.message ?? (res.commit ? `commit ${res.commit}` : undefined),
+        description: parts.length > 0 ? parts.join(" · ") : undefined,
       });
     },
     onError: () => toast({ title: "Falha ao materializar", variant: "destructive" }),

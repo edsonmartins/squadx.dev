@@ -19,5 +19,9 @@ public class MaterializeResponse {
 
     private String version;
     private String commit;
+
+    @JsonProperty("pr_url")
+    private String prUrl;
+
     private String message;
 }

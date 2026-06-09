@@ -10,6 +10,19 @@ public interface GitCommitGateway {
 
     CommitResult commit(GitTarget target, Map<String, String> files, String message);
 
+    /**
+     * Garante um PR aberto da branch da mudança para a base (idempotente: devolve o existente se
+     * já houver). {@code url == null} quando não configurado / não suportado / erro.
+     */
+    PullRequestResult openPullRequest(GitTarget target, String title, String body);
+
+    record PullRequestResult(String url) {
+
+        public static PullRequestResult none() {
+            return new PullRequestResult(null);
+        }
+    }
+
     /** Alvo do commit: repositório do projeto, branch base e a chave da mudança (vira branch). */
     record GitTarget(String repositoryUrl, String baseBranch, String changeKey) {}
 

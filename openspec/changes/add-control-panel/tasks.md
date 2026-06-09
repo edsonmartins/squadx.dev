@@ -25,7 +25,7 @@ identificadores em EN.
 - [x] 2.1 Migração Flyway `V36`: `spec_versions` (version/current/summary/author/commit/content_hash; UNIQUE(change,version)). — vm:R1 · ADR-0001
 - [x] 2.2 `SpecVersionService` (nova versão ao aprovar; `current` único; histórico). — vm:R1 · ADR-0001
 - [x] 2.3 `ChangeFolderRenderer` determinístico (ordenação estável, sem voláteis; markdown OpenSpec). — vm:R3 · RFC-0002
-- [x] 2.4 `DefaultSpecMaterializer` → `GitHubCommitGateway` (GitHub Git Data API: blobs→tree→commit→ref, branch `spec/<key>`); registra sha em `SpecVersion`. — vm:R2 · RFC-0002 _(no-op gracioso sem token/repo; provider GitHub)_
+- [x] 2.4 `DefaultSpecMaterializer` → `GitHubCommitGateway` (GitHub Git Data API: blobs→tree→commit→ref, branch `spec/<key>`); registra sha em `SpecVersion`; **abre/reusa o PR automaticamente** (RFC-0002 §4). — vm:R2 · RFC-0002 _(no-op gracioso sem token/repo; provider GitHub)_
 - [x] 2.5 Idempotência por content-hash: conteúdo igual + commit → no-op. — vm:R3 · RFC-0002
 - [x] 2.6 Detecção de conflito de materialização: `update-ref` não-force; 422/409 → `CommitResult.conflict` → `unavailable`. — vm:R5 · RFC-0002
 - [x] 2.7 Spec materializada como markdown OpenSpec legível (sem lock-in). — vm:R4 · ADR-0001
@@ -54,7 +54,7 @@ identificadores em EN.
 
 ## 5. Validação Pass 5 (pass5-validation)
 
-- [x] 5.1 Mapa de cobertura cenário↔teste (flag `Scenario.covered` = "coberto por teste que passa"; `CoverageService` writer). — p5:R1 · ADR-0005, RFC-0004
+- [x] 5.1 Mapa de cobertura cenário↔teste: **scan automático do diff do PR por convenção de nome** (`ScenarioTestNaming`, `R<ref>_<slug>`) + `CoverageService` writer manual para exceções. — p5:R1 · ADR-0005, RFC-0004
 - [x] 5.2 Etapa de cobertura: cenário sem teste reprova. — p5:R1 · RFC-0004
 - [x] 5.3 Teste mapeado falhando reprova (colapsado em `covered=false` nesta fatia). — p5:R2 · RFC-0004 _(execução real de testes: integração externa)_
 - [x] 5.4 Conformidade comportamental via `ConformanceReviewer` (interface plugável; default Noop). — p5:R3 · RFC-0004 _(cliente Pullwise real: posterior)_

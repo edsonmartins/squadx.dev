@@ -648,6 +648,7 @@ export default function SettingsPage() {
                         size="icon"
                         onClick={() => deleteSkillMutation.mutate(skill.id)}
                         disabled={deleteSkillMutation.isPending}
+                        aria-label="Delete skill"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -675,6 +676,7 @@ export default function SettingsPage() {
                   value={memoryQuery}
                   onChange={(e) => setMemoryQuery(e.target.value)}
                   placeholder="Search bugs, patterns, tasks or execution summaries..."
+                  aria-label="Search memory history"
                   data-testid="memory-history-query"
                 />
                 <Button

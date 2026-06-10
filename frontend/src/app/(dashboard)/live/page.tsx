@@ -89,7 +89,8 @@ export default function LiveViewPage() {
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toLowerCase())}
               maxLength={8}
-              className="max-w-[220px] font-mono text-lg tracking-wider"
+              aria-label="Session code"
+              className="w-full sm:max-w-[220px] font-mono text-lg tracking-wider"
               data-testid="join-session-input"
             />
             <Button onClick={handleJoinSession} disabled={joinCode.length < 6 || joinCode.length > 8} data-testid="join-session-button">

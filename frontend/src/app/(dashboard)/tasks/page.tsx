@@ -138,7 +138,8 @@ export default function TasksPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search tasks..."
-              className="pl-8 w-[200px]"
+              aria-label="Search tasks"
+              className="pl-8 w-full sm:w-[200px]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

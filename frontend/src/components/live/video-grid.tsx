@@ -121,6 +121,7 @@ function VideoTile({
           size="icon"
           className="absolute top-2 right-2 h-6 w-6 bg-black/40 hover:bg-black/60 text-white"
           onClick={handlePiP}
+          aria-label="Picture in picture"
         >
           <PictureInPicture2 className="h-3 w-3" />
         </Button>

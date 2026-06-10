@@ -193,6 +193,7 @@ function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
               size="icon"
               className="h-8 w-8 opacity-0 group-hover:opacity-100"
               data-testid={`project-menu-trigger-${project.id}`}
+              aria-label="Project options"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>

@@ -6,18 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { projectsApi, squadsApi, ProjectResponse } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal, FieldError } from "@/components/shared/form-modal";
 import {
   Select,
   SelectContent,
@@ -162,104 +154,87 @@ export function ProjectModal({ open, onOpenChange, onSuccess, project, organizat
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" data-testid="project-modal">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Project" : "Create Project"}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update your project details below."
-              : "Create a new project to organize your tasks."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                placeholder="My Awesome Project"
-                data-testid="project-name-input"
-                {...register("name")}
-              />
-              {errors.name && (
-                <p className="text-sm text-destructive">{errors.name.message}</p>
-              )}
-            </div>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title={isEditing ? "Edit Project" : "Create Project"}
+      description={
+        isEditing
+          ? "Update your project details below."
+          : "Create a new project to organize your tasks."
+      }
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isLoading}
+      submitLabel={isEditing ? "Save Changes" : "Create Project"}
+      contentTestId="project-modal"
+      submitTestId="project-submit-button"
+    >
+      <div className="grid gap-2">
+        <Label htmlFor="name">Name *</Label>
+        <Input
+          id="name"
+          placeholder="My Awesome Project"
+          data-testid="project-name-input"
+          {...register("name")}
+        />
+        <FieldError message={errors.name?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="A brief description of your project..."
-                rows={3}
-                data-testid="project-description-input"
-                {...register("description")}
-              />
-              {errors.description && (
-                <p className="text-sm text-destructive">{errors.description.message}</p>
-              )}
-            </div>
+      <div className="grid gap-2">
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          placeholder="A brief description of your project..."
+          rows={3}
+          data-testid="project-description-input"
+          {...register("description")}
+        />
+        <FieldError message={errors.description?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="repository_url">Repository URL</Label>
-              <Input
-                id="repository_url"
-                placeholder="https://github.com/org/repo"
-                data-testid="project-repository-input"
-                {...register("repository_url")}
-              />
-              {errors.repository_url && (
-                <p className="text-sm text-destructive">{errors.repository_url.message}</p>
-              )}
-            </div>
+      <div className="grid gap-2">
+        <Label htmlFor="repository_url">Repository URL</Label>
+        <Input
+          id="repository_url"
+          placeholder="https://github.com/org/repo"
+          data-testid="project-repository-input"
+          {...register("repository_url")}
+        />
+        <FieldError message={errors.repository_url?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="default_branch">Default Branch</Label>
-              <Input
-                id="default_branch"
-                placeholder="main"
-                data-testid="project-default-branch-input"
-                {...register("default_branch")}
-              />
-              {errors.default_branch && (
-                <p className="text-sm text-destructive">{errors.default_branch.message}</p>
-              )}
-            </div>
+      <div className="grid gap-2">
+        <Label htmlFor="default_branch">Default Branch</Label>
+        <Input
+          id="default_branch"
+          placeholder="main"
+          data-testid="project-default-branch-input"
+          {...register("default_branch")}
+        />
+        <FieldError message={errors.default_branch?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="squad">Assigned Squad</Label>
-              <Select
-                value={squadId?.toString() || "none"}
-                onValueChange={(value) =>
-                  setValue("squad_id", value === "none" ? null : parseInt(value))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a squad (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No squad assigned</SelectItem>
-                  {squads?.content?.map((squad) => (
-                    <SelectItem key={squad.id} value={squad.id.toString()}>
-                      {squad.name} ({squad.active_agents_count} agents)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} data-testid="project-submit-button">
-              {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Project"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <div className="grid gap-2">
+        <Label htmlFor="squad">Assigned Squad</Label>
+        <Select
+          value={squadId?.toString() || "none"}
+          onValueChange={(value) =>
+            setValue("squad_id", value === "none" ? null : parseInt(value))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a squad (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No squad assigned</SelectItem>
+            {squads?.content?.map((squad) => (
+              <SelectItem key={squad.id} value={squad.id.toString()}>
+                {squad.name} ({squad.active_agents_count} agents)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </FormModal>
   );
 }

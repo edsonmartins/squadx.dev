@@ -246,7 +246,7 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
           >
             {copied ? (
               <>
-                <Check className="h-4 w-4 mr-2 text-green-500" />
+                <Check className="h-4 w-4 mr-2 text-ok" />
                 Copied!
               </>
             ) : (
@@ -288,7 +288,12 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
 
           {/* Status Badge */}
           <Badge
-            variant={session.status === "ACTIVE" ? "destructive" : "secondary"}
+            variant={session.status === "ACTIVE" ? "default" : "secondary"}
+            className={
+              session.status === "ACTIVE"
+                ? "bg-live text-white hover:bg-live/85"
+                : undefined
+            }
           >
             {session.status === "ACTIVE" && (
               <span className="animate-pulse mr-1.5">
@@ -414,8 +419,8 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
                     <div
                       className={`h-2 w-2 rounded-full ${
                         p.connection_state === "connected"
-                          ? "bg-green-500"
-                          : "bg-gray-400"
+                          ? "bg-ok"
+                          : "bg-neutral"
                       }`}
                     />
                     <span className="truncate">{p.display_name}</span>

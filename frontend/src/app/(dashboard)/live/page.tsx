@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/shared/empty-state";
 import { liveViewApi, organizationsApi, LiveSessionResponse } from "@/lib/api";
 import { format } from "date-fns";
 
@@ -118,13 +119,12 @@ export default function LiveViewPage() {
           </div>
         ) : activeSessions?.length === 0 ? (
           <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Video className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No active sessions</h3>
-              <p className="text-muted-foreground text-center max-w-sm">
-                There are no live sessions at the moment. Start a task execution to begin a live session.
-              </p>
-            </CardContent>
+            <EmptyState
+              icon={Video}
+              title="No active sessions"
+              description="There are no live sessions at the moment. Start a task execution to begin a live session."
+              className="py-12"
+            />
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -133,8 +133,8 @@ export default function LiveViewPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                      <Badge variant="destructive">LIVE</Badge>
+                      <span className="live-dot flex h-2 w-2" />
+                      <Badge className="bg-live text-white hover:bg-live/85">LIVE</Badge>
                     </div>
                     <span className="text-sm font-mono text-muted-foreground">
                       {session.code}

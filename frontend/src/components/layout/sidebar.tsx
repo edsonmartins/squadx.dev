@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -17,6 +18,9 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
+  Laptop,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,46 +30,134 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { approvalsApi, liveViewApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
+import { useUIStore, type Theme } from "@/stores/ui-store";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Projects", href: "/projects", icon: FolderKanban },
-  { name: "Tasks", href: "/tasks", icon: ListTodo },
-  { name: "Control Panel", href: "/control-panel", icon: ClipboardList },
-  { name: "Squads", href: "/squads", icon: Users },
-  { name: "Approvals", href: "/approvals", icon: ShieldCheck },
-  { name: "Calendar", href: "/calendar", icon: CalendarDays },
-  { name: "Live View", href: "/live", icon: Monitor },
-  { name: "Recordings", href: "/recordings", icon: Video },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
-];
+const THEME_CYCLE: Record<Theme, Theme> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
 
-const bottomNavigation = [
-  { name: "Settings", href: "/settings", icon: Settings },
+const THEME_META: Record<Theme, { icon: React.ElementType; label: string }> = {
+  system: { icon: Laptop, label: "Tema: sistema" },
+  light: { icon: Sun, label: "Tema: claro" },
+  dark: { icon: Moon, label: "Tema: escuro" },
+};
+
+function ThemeToggle({ className }: { className?: string }) {
+  const { theme, setTheme } = useUIStore();
+  const { icon: Icon, label } = THEME_META[theme];
+
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-7 w-7 shrink-0 text-[hsl(var(--sidebar-fg))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
+            className
+          )}
+          onClick={() => setTheme(THEME_CYCLE[theme])}
+          aria-label={label}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="font-heading">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  badge?: "approvals" | "live";
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navigationGroups: NavGroup[] = [
+  {
+    label: "Workspace",
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Projects", href: "/projects", icon: FolderKanban },
+      { name: "Tasks", href: "/tasks", icon: ListTodo },
+      { name: "Control Panel", href: "/control-panel", icon: ClipboardList },
+      { name: "Squads", href: "/squads", icon: Users },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { name: "Approvals", href: "/approvals", icon: ShieldCheck, badge: "approvals" },
+      { name: "Live View", href: "/live", icon: Monitor, badge: "live" },
+      { name: "Recordings", href: "/recordings", icon: Video },
+      { name: "Calendar", href: "/calendar", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [{ name: "Analytics", href: "/analytics", icon: BarChart3 }],
+  },
 ];
 
 interface NavLinkProps {
-  href: string;
-  icon: React.ElementType;
-  name: string;
+  item: NavItem;
   isActive: boolean;
   isCollapsed: boolean;
+  pendingApprovals: number;
+  hasLiveSessions: boolean;
+  onNavigate?: () => void;
 }
 
-function NavLink({ href, icon: Icon, name, isActive, isCollapsed }: NavLinkProps) {
+function NavLink({ item, isActive, isCollapsed, pendingApprovals, hasLiveSessions, onNavigate }: NavLinkProps) {
+  const Icon = item.icon;
+  const showApprovalsBadge = item.badge === "approvals" && pendingApprovals > 0;
+  const showLiveDot = item.badge === "live" && hasLiveSessions;
+
   const linkContent = (
     <Link
-      href={href}
+      href={item.href}
+      onClick={onNavigate}
       className={cn(
         "sidebar-link font-medium",
         isActive && "active",
         isCollapsed && "justify-center px-2"
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      {!isCollapsed && <span className="font-heading truncate">{name}</span>}
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {!isCollapsed && <span className="truncate">{item.name}</span>}
+      {!isCollapsed && showApprovalsBadge && (
+        <span className="sidebar-count alert" role="status" aria-label={`${pendingApprovals} aprovações pendentes`}>
+          {pendingApprovals}
+        </span>
+      )}
+      {!isCollapsed && showLiveDot && (
+        <span
+          className="live-dot ml-auto h-[7px] w-[7px] shrink-0"
+          role="status"
+          aria-label="Sessões ao vivo ativas"
+        />
+      )}
+      {isCollapsed && (showApprovalsBadge || showLiveDot) && (
+        <span
+          className={cn(
+            "absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full",
+            showLiveDot ? "live-dot" : "bg-warn"
+          )}
+          aria-hidden="true"
+        />
+      )}
     </Link>
   );
 
@@ -74,7 +166,8 @@ function NavLink({ href, icon: Icon, name, isActive, isCollapsed }: NavLinkProps
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
         <TooltipContent side="right" className="font-heading">
-          {name}
+          {item.name}
+          {showApprovalsBadge && ` (${pendingApprovals})`}
         </TooltipContent>
       </Tooltip>
     );
@@ -83,118 +176,200 @@ function NavLink({ href, icon: Icon, name, isActive, isCollapsed }: NavLinkProps
   return linkContent;
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Modo drawer (mobile): sempre expandida, sem collapse, fecha ao navegar. */
+  inDrawer?: boolean;
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ inDrawer = false, onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
-  const { logout } = useAuthStore();
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { user, logout } = useAuthStore();
+  const { sidebarCollapsed: storeCollapsed, toggleSidebar } = useUIStore();
+  const sidebarCollapsed = inDrawer ? false : storeCollapsed;
+
+  // Badges operacionais — falham em silêncio para nunca quebrar a navegação
+  const { data: pendingApprovalsData } = useQuery({
+    queryKey: ["sidebar-pending-approvals"],
+    queryFn: () => approvalsApi.getPending(),
+    refetchInterval: 30000,
+    retry: false,
+  });
+
+  const { data: liveSessions } = useQuery({
+    queryKey: ["sidebar-live-sessions"],
+    queryFn: () => liveViewApi.supabase.getActive(),
+    refetchInterval: 30000,
+    retry: false,
+  });
+
+  const pendingApprovals = pendingApprovalsData?.total_elements ?? 0;
+  const hasLiveSessions = (liveSessions?.length ?? 0) > 0;
+
+  const initials =
+    user?.full_name
+      ?.split(" ")
+      .map((part) => part.charAt(0))
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "U";
 
   return (
     <TooltipProvider>
       <div
         className={cn(
-          "sidebar flex h-full flex-col border-r bg-card transition-all duration-300 ease-in-out",
-          sidebarCollapsed ? "w-[60px]" : "w-[220px]"
+          "sidebar flex h-full flex-col transition-all duration-300 ease-in-out",
+          inDrawer ? "w-full" : sidebarCollapsed ? "w-[60px]" : "w-[236px]"
         )}
       >
         {/* Logo */}
         <div
           className={cn(
-            "flex h-[52px] items-center border-b transition-all duration-300",
+            "flex h-[56px] shrink-0 items-center border-b border-[hsl(var(--sidebar-border))] transition-all duration-300",
             sidebarCollapsed ? "justify-center px-2" : "gap-2.5 px-4"
           )}
         >
-          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-primary-foreground">SX</span>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[hsl(260_70%_56%)] shadow-[0_2px_8px_hsl(var(--primary)/0.45)]">
+            <span className="font-heading text-xs font-extrabold text-white">SX</span>
           </div>
           {!sidebarCollapsed && (
-            <span className="text-base font-bold font-heading whitespace-nowrap overflow-hidden">
-              SquadX.dev
+            <span className="overflow-hidden whitespace-nowrap font-heading text-[15px] font-bold text-white">
+              SquadX<span className="text-[hsl(var(--sidebar-label))]">.dev</span>
             </span>
           )}
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 p-2">
-          {navigation.map((item) => {
-            const isActive =
-              pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <NavLink
-                key={item.name}
-                href={item.href}
-                icon={item.icon}
-                name={item.name}
-                isActive={isActive}
-                isCollapsed={sidebarCollapsed}
-              />
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto p-2" aria-label="Navegação principal">
+          {navigationGroups.map((group, groupIndex) => (
+            <div key={group.label} className={cn(groupIndex > 0 && "mt-4")}>
+              {!sidebarCollapsed ? (
+                <div className="sidebar-group-label">{group.label}</div>
+              ) : (
+                groupIndex > 0 && (
+                  <div className="mx-2 mb-2 border-t border-[hsl(var(--sidebar-border))]" />
+                )
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/" && pathname.startsWith(item.href + "/"));
+                  return (
+                    <NavLink
+                      key={item.name}
+                      item={item}
+                      isActive={isActive}
+                      isCollapsed={sidebarCollapsed}
+                      pendingApprovals={pendingApprovals}
+                      hasLiveSessions={hasLiveSessions}
+                      onNavigate={onNavigate}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* Bottom Navigation */}
-        <div className="border-t p-2 space-y-0.5">
-          {bottomNavigation.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <NavLink
-                key={item.name}
-                href={item.href}
-                icon={item.icon}
-                name={item.name}
-                isActive={isActive}
-                isCollapsed={sidebarCollapsed}
-              />
-            );
-          })}
+        {/* Footer: settings + user + collapse */}
+        <div className="shrink-0 space-y-0.5 border-t border-[hsl(var(--sidebar-border))] p-2">
+          <NavLink
+            item={{ name: "Settings", href: "/settings", icon: Settings }}
+            isActive={pathname === "/settings"}
+            isCollapsed={sidebarCollapsed}
+            pendingApprovals={0}
+            hasLiveSessions={false}
+            onNavigate={onNavigate}
+          />
 
-          {/* Logout button */}
-          {sidebarCollapsed ? (
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-center px-2 h-9 text-muted-foreground hover:text-foreground hover:bg-muted"
-                  onClick={logout}
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="font-heading">
-                Sign out
-              </TooltipContent>
-            </Tooltip>
+          {/* User card */}
+          {!sidebarCollapsed ? (
+            <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
+              <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[hsl(260_70%_56%)]">
+                <span className="font-heading text-[11px] font-bold text-white">{initials}</span>
+              </div>
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-[13px] font-semibold text-white">{user?.full_name}</p>
+                <p className="truncate text-[11px] text-[hsl(var(--sidebar-label))]">{user?.email}</p>
+              </div>
+              <ThemeToggle />
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-[hsl(var(--sidebar-fg))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white"
+                    onClick={logout}
+                    aria-label="Sair"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="font-heading">
+                  Sign out
+                </TooltipContent>
+              </Tooltip>
+            </div>
           ) : (
+            <>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <div className="flex justify-center py-1.5">
+                    <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-gradient-to-br from-primary to-[hsl(260_70%_56%)]">
+                      <span className="font-heading text-[11px] font-bold text-white">{initials}</span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="font-heading">
+                  {user?.full_name}
+                  {user?.email ? ` · ${user.email}` : ""}
+                </TooltipContent>
+              </Tooltip>
+              <div className="flex justify-center">
+                <ThemeToggle className="h-9 w-full rounded-lg" />
+              </div>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-full justify-center px-2 text-[hsl(var(--sidebar-fg))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white"
+                    onClick={logout}
+                    aria-label="Sair"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="font-heading">
+                  Sign out
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Collapse toggle (não faz sentido no drawer mobile) */}
+          {!inDrawer && (
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start gap-3 px-3 h-9 text-muted-foreground hover:text-foreground hover:bg-muted"
-              onClick={logout}
+              className={cn(
+                "h-8 w-full text-[hsl(var(--sidebar-label))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
+                sidebarCollapsed ? "justify-center px-2" : "justify-start gap-2.5 px-2.5"
+              )}
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
             >
-              <LogOut className="h-4 w-4" />
-              <span className="font-heading">Sign out</span>
+              {sidebarCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-xs">Collapse</span>
+                </>
+              )}
             </Button>
           )}
-
-          {/* Collapse toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "w-full h-9 text-muted-foreground hover:text-foreground hover:bg-muted mt-1",
-              sidebarCollapsed ? "justify-center px-2" : "justify-start gap-3 px-3"
-            )}
-            onClick={toggleSidebar}
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span className="font-heading">Collapse</span>
-              </>
-            )}
-          </Button>
         </div>
       </div>
     </TooltipProvider>

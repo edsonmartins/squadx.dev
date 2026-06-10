@@ -28,7 +28,7 @@ export function RequirementList({ requirements }: { requirements: RequirementRes
                     <span className="font-medium">{sc.name}</span>
                     <span
                       className={
-                        sc.covered ? "inline-flex items-center text-emerald-600" : "inline-flex items-center text-red-600"
+                        sc.covered ? "inline-flex items-center text-ok" : "inline-flex items-center text-danger"
                       }
                     >
                       {sc.covered ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}

@@ -65,7 +65,7 @@ export function VersionHistory({ changeId }: { changeId: number }) {
               <li key={v.id} className="flex items-center justify-between rounded border p-2 text-sm">
                 <span className="flex items-center gap-2">
                   <strong>v{v.version}</strong>
-                  {v.current && <span className="rounded bg-emerald-500/15 px-1.5 text-xs text-emerald-600">atual</span>}
+                  {v.current && <span className="rounded bg-ok-soft px-1.5 text-xs text-ok">atual</span>}
                   {v.summary && <span className="text-muted-foreground">{v.summary}</span>}
                 </span>
                 <span className="flex items-center gap-1 font-mono text-xs text-muted-foreground">

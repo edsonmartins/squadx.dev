@@ -22,7 +22,7 @@ backend/*.war
 backend/.mvn/wrapper/maven-wrapper.jar
 
 # ===== Frontend (Next.js) =====
-frontend/node_modules/
+node_modules/
 frontend/.next/
 frontend/out/
 frontend/.pnp/

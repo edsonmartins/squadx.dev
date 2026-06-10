@@ -47,15 +47,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/stores/task-store";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-
-const statusColors: Record<TaskStatus, string> = {
-  TODO: "bg-slate-500",
-  IN_PROGRESS: "bg-blue-500",
-  IN_REVIEW: "bg-purple-500",
-  BLOCKED: "bg-red-500",
-  DONE: "bg-green-500",
-  CANCELLED: "bg-gray-400",
-};
+import {
+  TASK_STATUS_TONE,
+  TASK_PRIORITY_TONE,
+  TONE_BADGE,
+  TONE_TEXT,
+} from "@/lib/design/semantics";
 
 const statusLabels: Record<TaskStatus, string> = {
   TODO: "To Do",
@@ -64,13 +61,6 @@ const statusLabels: Record<TaskStatus, string> = {
   BLOCKED: "Blocked",
   DONE: "Done",
   CANCELLED: "Cancelled",
-};
-
-const priorityColors: Record<TaskPriority, string> = {
-  LOW: "bg-slate-500",
-  MEDIUM: "bg-blue-500",
-  HIGH: "bg-orange-500",
-  URGENT: "bg-red-500",
 };
 
 interface TaskDetailSheetProps {
@@ -135,18 +125,12 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Badge className={cn(statusColors[task?.status || "TODO"], "text-white")}>
+                <Badge className={cn(TONE_BADGE[TASK_STATUS_TONE[task?.status || "TODO"]], "border-transparent")}>
                   {statusLabels[task?.status || "TODO"]}
                 </Badge>
                 <Badge
                   variant="outline"
-                  className={cn(
-                    "border-2",
-                    task?.priority === "URGENT" && "border-red-500 text-red-500",
-                    task?.priority === "HIGH" && "border-orange-500 text-orange-500",
-                    task?.priority === "MEDIUM" && "border-blue-500 text-blue-500",
-                    task?.priority === "LOW" && "border-slate-500 text-slate-500"
-                  )}
+                  className={cn("border-2", TONE_TEXT[TASK_PRIORITY_TONE[task?.priority || "LOW"]])}
                 >
                   {task?.priority}
                 </Badge>
@@ -199,10 +183,10 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
 
           {/* Live View Section */}
           {(isRunning || liveSession) && (
-            <div className="rounded-lg border border-red-500/50 bg-red-500/5 p-4 space-y-3">
+            <div className="rounded-lg border border-live/50 bg-live/5 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-sm font-medium text-red-600">LIVE VIEW AVAILABLE</span>
+                <span className="live-dot flex h-2 w-2" aria-hidden="true" />
+                <span className="text-sm font-medium text-live">LIVE VIEW AVAILABLE</span>
               </div>
 
               {liveSession && (

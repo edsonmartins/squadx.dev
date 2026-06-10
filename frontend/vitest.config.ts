@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
+    // Specs Playwright rodam via `pnpm test:e2e`, não no vitest
+    exclude: ['node_modules/**', 'e2e/**', 'e2e-real/**'],
   },
   resolve: {
     alias: {

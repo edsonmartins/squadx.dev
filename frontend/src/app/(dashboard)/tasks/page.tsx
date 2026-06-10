@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Filter, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Filter, Search, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
 import { DeleteConfirmDialog } from "@/components/shared/delete-confirm-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useTaskStore } from "@/stores/task-store";
 import { projectsApi, organizationsApi, TaskResponse, TaskStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectSocket } from "@/hooks/use-socket";
 
 export default function TasksPage() {
+  const router = useRouter();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskResponse | null>(null);
@@ -109,10 +112,14 @@ export default function TasksPage() {
 
   if (projects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">No projects found</p>
-        <Button>Create your first project</Button>
-      </div>
+      <EmptyState
+        icon={FolderKanban}
+        title="No projects found"
+        description="Tasks live inside projects. Create your first project to start planning work."
+        actionLabel="Create your first project"
+        onAction={() => router.push("/projects")}
+        className="h-64"
+      />
     );
   }
 

@@ -6,17 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { controlPanelChangesApi } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal } from "@/components/shared/form-modal";
 import { useToast } from "@/hooks/use-toast";
 
 const schema = z.object({ module: z.string().max(255).optional() });
@@ -54,29 +46,21 @@ export function ChangeModal({ open, onClose, projectId }: ChangeModalProps) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nova mudança</DialogTitle>
-          <DialogDescription>Crie uma mudança (change) para começar a especificar.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="module">Módulo</Label>
-              <Input id="module" placeholder="ex.: auth, billing" {...register("module")} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Criando..." : "Criar mudança"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title="Nova mudança"
+      description="Crie uma mudança (change) para começar a especificar."
+      onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+      isSubmitting={createMutation.isPending}
+      submitLabel="Criar mudança"
+      submittingLabel="Criando..."
+      cancelLabel="Cancelar"
+    >
+      <div className="grid gap-2">
+        <Label htmlFor="module">Módulo</Label>
+        <Input id="module" placeholder="ex.: auth, billing" {...register("module")} />
+      </div>
+    </FormModal>
   );
 }

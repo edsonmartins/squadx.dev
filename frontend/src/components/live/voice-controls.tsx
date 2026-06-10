@@ -75,10 +75,10 @@ export function VoiceControls({
               className={`w-1 rounded-sm transition-colors ${
                 audioLevel >= threshold
                   ? threshold <= 60
-                    ? "bg-green-500"
+                    ? "bg-ok"
                     : threshold <= 80
-                      ? "bg-yellow-500"
-                      : "bg-red-500"
+                      ? "bg-warn"
+                      : "bg-danger"
                   : "bg-muted"
               }`}
               style={{ height: `${threshold / 25 + 4}px` }}
@@ -130,7 +130,7 @@ export function VoiceControls({
               key={p.peerId}
               className={`relative h-7 w-7 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-medium ${
                 p.isSpeaking
-                  ? "bg-green-500 text-white ring-2 ring-green-400 ring-offset-1 animate-pulse"
+                  ? "bg-ok text-white ring-2 ring-ok/60 ring-offset-1 animate-pulse"
                   : "bg-muted text-muted-foreground"
               }`}
               title={`${p.userName}${!p.isAudioEnabled ? " (muted)" : ""}`}

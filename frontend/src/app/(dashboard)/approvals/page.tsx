@@ -24,21 +24,26 @@ import {
   ApprovalStatus,
   ApprovalType,
 } from "@/lib/api";
+import {
+  APPROVAL_STATUS_TONE,
+  APPROVAL_TYPE_TONE,
+  TONE_BADGE,
+} from "@/lib/design/semantics";
 
 const statusColors: Record<ApprovalStatus, string> = {
-  PENDING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  APPROVED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  REJECTED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  EXPIRED: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-  CANCELLED: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+  PENDING: TONE_BADGE[APPROVAL_STATUS_TONE.PENDING],
+  APPROVED: TONE_BADGE[APPROVAL_STATUS_TONE.APPROVED],
+  REJECTED: TONE_BADGE[APPROVAL_STATUS_TONE.REJECTED],
+  EXPIRED: TONE_BADGE[APPROVAL_STATUS_TONE.EXPIRED],
+  CANCELLED: TONE_BADGE[APPROVAL_STATUS_TONE.CANCELLED],
 };
 
 const typeColors: Record<ApprovalType, string> = {
-  COMMIT: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  DEPLOY: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  DELETE: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  MERGE: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
-  CONFIGURATION: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  COMMIT: TONE_BADGE[APPROVAL_TYPE_TONE.COMMIT],
+  DEPLOY: TONE_BADGE[APPROVAL_TYPE_TONE.DEPLOY],
+  DELETE: TONE_BADGE[APPROVAL_TYPE_TONE.DELETE],
+  MERGE: TONE_BADGE[APPROVAL_TYPE_TONE.MERGE],
+  CONFIGURATION: TONE_BADGE[APPROVAL_TYPE_TONE.CONFIGURATION],
 };
 
 function formatDate(dateStr: string) {
@@ -214,7 +219,7 @@ export default function ApprovalsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-danger hover:bg-danger-soft hover:text-danger"
                             onClick={() => openReviewDialog(approval, "reject")}
                           >
                             <XCircle className="mr-1.5 h-4 w-4" />
@@ -222,7 +227,7 @@ export default function ApprovalsPage() {
                           </Button>
                           <Button
                             size="sm"
-                            className="bg-green-600 hover:bg-green-700"
+                            className="bg-ok text-white hover:bg-ok/85"
                             onClick={() => openReviewDialog(approval, "approve")}
                           >
                             <CheckCircle className="mr-1.5 h-4 w-4" />
@@ -275,8 +280,8 @@ export default function ApprovalsPage() {
               disabled={reviewMutation.isPending}
               className={
                 reviewAction === "approve"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-red-600 hover:bg-red-700"
+                  ? "bg-ok text-white hover:bg-ok/85"
+                  : "bg-danger text-white hover:bg-danger/85"
               }
             >
               {reviewMutation.isPending

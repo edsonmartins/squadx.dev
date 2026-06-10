@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { DeleteConfirmDialog } from "@/components/shared/delete-confirm-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
 import Link from "next/link";
 
 export default function ProjectsPage() {
@@ -119,17 +120,14 @@ export default function ProjectsPage() {
         </div>
       ) : projects?.content?.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FolderGit2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No projects yet</h3>
-            <p className="text-muted-foreground text-center mb-4 max-w-sm">
-              Create your first project to start managing tasks with AI squads.
-            </p>
-            <Button onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Project
-            </Button>
-          </CardContent>
+          <EmptyState
+            icon={FolderGit2}
+            title="No projects yet"
+            description="Create your first project to start managing tasks with AI squads."
+            actionLabel="Create Project"
+            onAction={handleCreate}
+            className="py-12"
+          />
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

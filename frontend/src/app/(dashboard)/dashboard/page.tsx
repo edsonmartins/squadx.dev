@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,13 +12,23 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Eye,
+  Play,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { organizationsApi, projectsApi, executionsApi, liveViewApi } from "@/lib/api";
+import { organizationsApi, projectsApi, executionsApi, liveViewApi, ExecutionResponse, PageResponse } from "@/lib/api";
 import { useOrganizationStore } from "@/stores/organization-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { ProjectModal } from "@/components/projects/project-modal";
+import { EmptyState } from "@/components/shared/empty-state";
+import { cn } from "@/lib/utils";
+import {
+  EXECUTION_STATUS_TONE,
+  TONE_BADGE,
+  TONE_TEXT,
+  type SemanticTone,
+} from "@/lib/design/semantics";
 
 interface MetricsData {
   total_input_tokens?: number;
@@ -25,19 +36,46 @@ interface MetricsData {
   total_cost?: number;
 }
 
+const EXECUTION_STATUS_LABEL: Record<string, string> = {
+  COMPLETED: "Completed",
+  RUNNING: "Running",
+  FAILED: "Failed",
+  PENDING: "Pending",
+  CANCELLED: "Cancelled",
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const { selectedOrganization, fetchOrganizations } = useOrganizationStore();
-
-  useEffect(() => {
-    fetchOrganizations();
-  }, [fetchOrganizations]);
+  const { selectedOrganization, selectOrganization } = useOrganizationStore();
+  const { user } = useAuthStore();
 
   const { data: orgsData } = useQuery({
     queryKey: ["organizations"],
     queryFn: () => organizationsApi.list(),
   });
+
+  // Keep selectedOrganization in sync with fresh data from query
+  const currentOrganization = useMemo(() => {
+    if (!orgsData?.content || orgsData.content.length === 0) return selectedOrganization;
+
+    // Find the selected org in fresh data, or default to first
+    const freshOrg = selectedOrganization
+      ? orgsData.content.find(o => o.id === selectedOrganization.id)
+      : orgsData.content[0];
+
+    return freshOrg || orgsData.content[0];
+  }, [orgsData, selectedOrganization]);
+
+  // Update store when fresh data is available
+  useEffect(() => {
+    if (currentOrganization && currentOrganization.id !== selectedOrganization?.id) {
+      selectOrganization(currentOrganization);
+    } else if (currentOrganization && selectedOrganization &&
+               currentOrganization.squads_count !== selectedOrganization.squads_count) {
+      selectOrganization(currentOrganization);
+    }
+  }, [currentOrganization, selectedOrganization, selectOrganization]);
 
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
@@ -45,22 +83,22 @@ export default function DashboardPage() {
   });
 
   const { data: activeSessions } = useQuery({
-    queryKey: ["active-sessions", selectedOrganization?.id],
+    queryKey: ["active-sessions", currentOrganization?.id],
     queryFn: () =>
-      selectedOrganization
-        ? liveViewApi.getActiveByOrganization(selectedOrganization.id)
+      currentOrganization
+        ? liveViewApi.getActiveByOrganization(currentOrganization.id)
         : Promise.resolve([]),
-    enabled: !!selectedOrganization,
+    enabled: !!currentOrganization,
   });
 
   const { data: metricsData } = useQuery<MetricsData>({
-    queryKey: ["metrics", selectedOrganization?.id],
+    queryKey: ["metrics", currentOrganization?.id],
     queryFn: async () => {
-      if (!selectedOrganization) return {};
-      const result = await executionsApi.getMetrics(selectedOrganization.id);
+      if (!currentOrganization) return {};
+      const result = await executionsApi.getMetrics(currentOrganization.id);
       return result as MetricsData;
     },
-    enabled: !!selectedOrganization,
+    enabled: !!currentOrganization,
   });
 
   const organizations = orgsData?.content || [];
@@ -72,109 +110,151 @@ export default function DashboardPage() {
       value: projects.length,
       icon: FolderKanban,
       change: "+2 this week",
-      changeType: "positive" as const,
+      tone: "info" as SemanticTone,
     },
     {
       title: "Active Tasks",
       value: projects.reduce((acc, p) => acc + p.tasks_count, 0),
       icon: ListTodo,
       change: "15 in progress",
-      changeType: "neutral" as const,
+      tone: "warn" as SemanticTone,
     },
     {
       title: "Organizations",
       value: organizations.length,
       icon: Users,
       change: `${organizations.reduce((acc, o) => acc + o.members_count, 0)} members`,
-      changeType: "neutral" as const,
+      tone: "neutral" as SemanticTone,
     },
     {
       title: "AI Squads",
-      value: organizations.reduce((acc, o) => acc + o.squads_count, 0),
+      value: currentOrganization?.squads_count || 0,
       icon: TrendingUp,
-      change: "All active",
-      changeType: "positive" as const,
+      change: currentOrganization?.name || "No org selected",
+      tone: "ok" as SemanticTone,
     },
   ];
 
-  const recentActivity = [
-    {
-      id: 1,
-      type: "completed",
-      title: "Implement user authentication",
-      project: "squadx-frontend",
-      time: "2 hours ago",
-      icon: CheckCircle2,
-      iconColor: "text-green-500",
-    },
-    {
-      id: 2,
-      type: "in_progress",
-      title: "Fix API response handling",
-      project: "squadx-backend",
-      time: "4 hours ago",
-      icon: Clock,
-      iconColor: "text-blue-500",
-    },
-    {
-      id: 3,
-      type: "blocked",
-      title: "Database migration script",
-      project: "squadx-backend",
-      time: "1 day ago",
-      icon: AlertCircle,
-      iconColor: "text-yellow-500",
-    },
-  ];
+  const { data: executionsData, isLoading: executionsLoading } = useQuery<PageResponse<ExecutionResponse>>({
+    queryKey: ["recent-executions", currentOrganization?.id],
+    queryFn: () =>
+      currentOrganization
+        ? executionsApi.listByOrganization(currentOrganization.id)
+        : Promise.resolve({ content: [], page_number: 0, page_size: 0, total_elements: 0, total_pages: 0, is_first: true, is_last: true }),
+    enabled: !!currentOrganization,
+  });
+
+  const recentActivity = useMemo(() => {
+    const executions = executionsData?.content || [];
+    return executions.slice(0, 8).map((exec: ExecutionResponse) => {
+      const statusIcons: Record<string, typeof CheckCircle2> = {
+        COMPLETED: CheckCircle2,
+        RUNNING: Play,
+        FAILED: AlertCircle,
+        PENDING: Clock,
+        CANCELLED: AlertCircle,
+      };
+      const icon = statusIcons[exec.status] || Clock;
+      const tone = EXECUTION_STATUS_TONE[exec.status] || "neutral";
+      const time = exec.started_at || exec.created_at;
+      const elapsed = Date.now() - new Date(time).getTime();
+      const hours = Math.floor(elapsed / 3600000);
+      const timeLabel =
+        hours < 1
+          ? "< 1h ago"
+          : hours < 24
+          ? `${hours}h ago`
+          : `${Math.floor(hours / 24)}d ago`;
+
+      return {
+        id: exec.id,
+        status: exec.status,
+        title: exec.task_title,
+        project: exec.agent_name || "Unknown agent",
+        time: timeLabel,
+        icon,
+        tone,
+      };
+    });
+  }, [executionsData]);
 
   const handleProjectCreated = () => {
     setIsProjectModalOpen(false);
     router.push("/projects");
   };
 
+  const firstName = user?.full_name?.split(" ")[0];
+  const liveCount = activeSessions?.length ?? 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="animate-rise flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back! Here&apos;s what&apos;s happening with your AI squads.
+          <h1 className="text-2xl font-bold tracking-tight">
+            {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
+          </h1>
+          <p className="mt-0.5 text-[13.5px] text-muted-foreground">
+            {currentOrganization?.squads_count || 0} squads ·{" "}
+            {liveCount > 0 ? `${liveCount} live session${liveCount > 1 ? "s" : ""} · ` : ""}
+            here&apos;s what&apos;s happening with your AI squads.
           </p>
         </div>
-        {activeSessions && activeSessions.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={() => router.push("/live")}
-            className="gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            {activeSessions.length} Live Session{activeSessions.length > 1 ? "s" : ""}
-          </Button>
-        )}
       </div>
 
+      {/* Live strip */}
+      {liveCount > 0 && (
+        <Card className="animate-rise overflow-hidden" style={{ animationDelay: "60ms" }}>
+          <div className="flex items-center gap-3 bg-[radial-gradient(80%_200%_at_100%_0%,hsl(var(--live)/0.07)_0%,transparent_55%)] px-5 py-3.5">
+            <span className="live-dot h-[9px] w-[9px] shrink-0" aria-hidden="true" />
+            <p className="text-sm">
+              <span className="font-semibold">
+                {liveCount} live session{liveCount > 1 ? "s" : ""}
+              </span>{" "}
+              <span className="text-muted-foreground">
+                — your squads are executing right now
+              </span>
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-8 gap-1.5 font-heading font-semibold text-primary hover:text-primary"
+              onClick={() => router.push("/live")}
+            >
+              Watch
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+      <div className="grid gap-3.5 md:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat, i) => (
+          <Card
+            key={stat.title}
+            className="animate-rise transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+            style={{ animationDelay: `${80 + i * 50}ms` }}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="font-heading text-xs font-semibold text-muted-foreground">
                 {stat.title}
               </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <span
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-md",
+                  TONE_BADGE[stat.tone]
+                )}
+                aria-hidden="true"
+              >
+                <stat.icon className="h-4 w-4" />
+              </span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p
-                className={`text-xs ${
-                  stat.changeType === "positive"
-                    ? "text-green-500"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {stat.change}
-              </p>
+              <div className="font-mono text-[26px] font-semibold leading-none tracking-tight">
+                {stat.value}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{stat.change}</p>
             </CardContent>
           </Card>
         ))}
@@ -182,68 +262,97 @@ export default function DashboardPage() {
 
       {/* Cost Metrics */}
       {metricsData && (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Input Tokens
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {(metricsData.total_input_tokens || 0).toLocaleString()}
+        <Card className="animate-rise" style={{ animationDelay: "280ms" }}>
+          <CardHeader className="border-b py-3.5">
+            <CardTitle className="font-heading text-sm font-bold">Usage &amp; Cost</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="px-5 py-4">
+                <p className="font-heading text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Input tokens
+                </p>
+                <p className="mt-1 font-mono text-lg font-semibold tracking-tight">
+                  {(metricsData.total_input_tokens || 0).toLocaleString()}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Output Tokens
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {(metricsData.total_output_tokens || 0).toLocaleString()}
+              <div className="px-5 py-4">
+                <p className="font-heading text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Output tokens
+                </p>
+                <p className="mt-1 font-mono text-lg font-semibold tracking-tight">
+                  {(metricsData.total_output_tokens || 0).toLocaleString()}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Cost
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                ${(metricsData.total_cost || 0).toFixed(2)}
+              <div className="px-5 py-4">
+                <p className="font-heading text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Total cost
+                </p>
+                <p className={cn("mt-1 font-mono text-lg font-semibold tracking-tight", TONE_TEXT.ok)}>
+                  ${(metricsData.total_cost || 0).toFixed(2)}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3.5 lg:grid-cols-2">
         {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
+        <Card className="animate-rise" style={{ animationDelay: "340ms" }}>
+          <CardHeader className="border-b py-3.5">
+            <CardTitle className="font-heading text-sm font-bold">Recent Activity</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="p-0">
+            {executionsLoading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading activity...</span>
+              </div>
+            )}
+            {!executionsLoading && recentActivity.length === 0 && (
+              <EmptyState
+                icon={Clock}
+                title="No recent activity"
+                description="Executions from your squads will show up here."
+                actionLabel="Go to tasks"
+                onAction={() => router.push("/tasks")}
+              />
+            )}
+            <div>
               {recentActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                  className="flex items-center gap-3 border-b border-border/60 px-5 py-3 transition-colors last:border-b-0 hover:bg-muted/40"
                 >
-                  <activity.icon className={`h-5 w-5 ${activity.iconColor}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {activity.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.project} • {activity.time}
+                  <span
+                    className={cn(
+                      "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full",
+                      TONE_BADGE[activity.tone]
+                    )}
+                    aria-hidden="true"
+                  >
+                    <activity.icon
+                      className={cn("h-3.5 w-3.5", activity.status === "RUNNING" && "animate-pulse")}
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-medium">{activity.title}</p>
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="truncate">{activity.project}</span>
+                      <span
+                        className={cn(
+                          "badge-pill px-2 py-0 text-[10px] font-semibold",
+                          TONE_BADGE[activity.tone]
+                        )}
+                      >
+                        {EXECUTION_STATUS_LABEL[activity.status] || activity.status}
+                      </span>
                     </p>
                   </div>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {activity.time}
+                  </span>
                 </div>
               ))}
             </div>
@@ -251,38 +360,38 @@ export default function DashboardPage() {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+        <Card className="animate-rise" style={{ animationDelay: "400ms" }}>
+          <CardHeader className="border-b py-3.5">
+            <CardTitle className="font-heading text-sm font-bold">Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 onClick={() => setIsProjectModalOpen(true)}
-                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary hover:bg-muted/50 transition-colors"
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary hover:bg-muted/50"
               >
-                <FolderKanban className="h-8 w-8 text-muted-foreground" />
+                <FolderKanban className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                 <span className="text-sm font-medium">Create Project</span>
               </button>
               <button
                 onClick={() => router.push("/tasks")}
-                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary hover:bg-muted/50 transition-colors"
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary hover:bg-muted/50"
               >
-                <ListTodo className="h-8 w-8 text-muted-foreground" />
+                <ListTodo className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                 <span className="text-sm font-medium">View Tasks</span>
               </button>
               <button
                 onClick={() => router.push("/squads")}
-                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary hover:bg-muted/50 transition-colors"
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary hover:bg-muted/50"
               >
-                <Users className="h-8 w-8 text-muted-foreground" />
+                <Users className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                 <span className="text-sm font-medium">Configure Squad</span>
               </button>
               <button
                 onClick={() => router.push("/analytics")}
-                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center hover:border-primary hover:bg-muted/50 transition-colors"
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary hover:bg-muted/50"
               >
-                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                <TrendingUp className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                 <span className="text-sm font-medium">View Analytics</span>
               </button>
             </div>

@@ -26,13 +26,13 @@ import { DeleteConfirmDialog } from "@/components/shared/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
 
 const agentTypeIcons: Record<AgentType, React.ReactNode> = {
-  FRONTEND: <span className="text-blue-500">FE</span>,
-  BACKEND: <span className="text-green-500">BE</span>,
-  FULLSTACK: <span className="text-purple-500">FS</span>,
-  DEVOPS: <span className="text-orange-500">DO</span>,
-  QA: <span className="text-yellow-500">QA</span>,
-  COORDINATOR: <span className="text-red-500">CO</span>,
-  DATABASE: <span className="text-cyan-500">DB</span>,
+  FRONTEND: <span className="text-info">FE</span>,
+  BACKEND: <span className="text-ok">BE</span>,
+  FULLSTACK: <span className="text-info">FS</span>,
+  DEVOPS: <span className="text-warn">DO</span>,
+  QA: <span className="text-warn">QA</span>,
+  COORDINATOR: <span className="text-danger">CO</span>,
+  DATABASE: <span className="text-info">DB</span>,
 };
 
 const agentTypeLabels: Record<AgentType, string> = {
@@ -165,10 +165,10 @@ export function SquadDetailSheet({ squad, onClose, organizationId }: SquadDetail
               </div>
               <div className="rounded-lg border p-3">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Power className="h-4 w-4 text-green-500" />
+                  <Power className="h-4 w-4 text-ok" />
                   <span>Active</span>
                 </div>
-                <div className="mt-1 text-2xl font-bold text-green-600">
+                <div className="mt-1 text-2xl font-bold text-ok">
                   {squad?.active_agents_count || 0}
                 </div>
               </div>
@@ -265,7 +265,7 @@ function AgentCard({ agent, onEdit, onDelete, onToggleActive, onOpenDirectChat }
             <div className="flex items-center gap-2">
               <h4 className="font-medium">{agent.name}</h4>
               {agent.is_active && (
-                <span className="flex h-2 w-2 rounded-full bg-green-500" />
+                <span className="flex h-2 w-2 rounded-full bg-ok" />
               )}
             </div>
             <p className="text-sm text-muted-foreground">

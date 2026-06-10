@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AnnotationTool } from "@/hooks/use-annotations";
+import { ANNOTATION_PRESET_COLORS } from "@/lib/design/semantics";
 
-const PRESET_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#ffffff"];
+const PRESET_COLORS = ANNOTATION_PRESET_COLORS;
 
 const TOOLS: { tool: AnnotationTool; icon: typeof MousePointer2; label: string }[] = [
   { tool: "pointer", icon: MousePointer2, label: "Pointer" },
@@ -101,7 +102,7 @@ export function AnnotationToolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-white hover:bg-red-500/30"
+              className="h-8 w-8 text-white hover:bg-danger/30"
               onClick={onClear}
             >
               <Trash2 className="h-4 w-4" />

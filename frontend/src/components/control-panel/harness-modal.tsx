@@ -6,17 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { harnessesApi } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal, FieldError } from "@/components/shared/form-modal";
 import { useToast } from "@/hooks/use-toast";
 
 const schema = z.object({
@@ -71,45 +63,37 @@ export function HarnessModal({ open, onClose, organizationId }: HarnessModalProp
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Registrar harness</DialogTitle>
-          <DialogDescription>Todo harness fala o mesmo contrato MCP do workspace.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="key">Chave</Label>
-                <Input id="key" placeholder="claude-code" {...register("key")} />
-                {errors.key && <p className="text-sm text-destructive">{errors.key.message}</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="name">Nome</Label>
-                <Input id="name" placeholder="Claude Code" {...register("name")} />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="vendor">Fornecedor</Label>
-              <Input id="vendor" placeholder="Anthropic" {...register("vendor")} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="models">Modelos (separados por vírgula)</Label>
-              <Input id="models" placeholder="claude-opus-4-8, claude-sonnet-4-6" {...register("models")} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Registrando..." : "Registrar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title="Registrar harness"
+      description="Todo harness fala o mesmo contrato MCP do workspace."
+      onSubmit={handleSubmit((data) => mutation.mutate(data))}
+      isSubmitting={mutation.isPending}
+      submitLabel="Registrar"
+      submittingLabel="Registrando..."
+      cancelLabel="Cancelar"
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-2">
+          <Label htmlFor="key">Chave</Label>
+          <Input id="key" placeholder="claude-code" {...register("key")} />
+          <FieldError message={errors.key?.message} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="name">Nome</Label>
+          <Input id="name" placeholder="Claude Code" {...register("name")} />
+          <FieldError message={errors.name?.message} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="vendor">Fornecedor</Label>
+        <Input id="vendor" placeholder="Anthropic" {...register("vendor")} />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="models">Modelos (separados por vírgula)</Label>
+        <Input id="models" placeholder="claude-opus-4-8, claude-sonnet-4-6" {...register("models")} />
+      </div>
+    </FormModal>
   );
 }

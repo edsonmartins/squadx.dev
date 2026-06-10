@@ -139,7 +139,7 @@ export default function RecordingsPage() {
             id="session-id"
             type="number"
             placeholder="Enter session ID..."
-            className="w-[200px]"
+            className="w-full sm:w-[200px]"
             value={sessionIdInput}
             onChange={(e) => setSessionIdInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}

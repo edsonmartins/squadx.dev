@@ -312,6 +312,7 @@ export function StreamViewer({
                         hasControl && "bg-primary/50"
                       )}
                       onClick={toggleControl}
+                      aria-label={hasControl ? "Release control" : "Request control"}
                     >
                       {hasControl ? (
                         <MousePointer2 className="h-4 w-4" />
@@ -334,6 +335,7 @@ export function StreamViewer({
                     size="icon"
                     className="h-8 w-8 text-white hover:bg-white/20"
                     onClick={() => setShowStats(!showStats)}
+                    aria-label={showStats ? "Hide stats" : "Show stats"}
                   >
                     <Settings className="h-4 w-4" />
                   </Button>
@@ -351,6 +353,7 @@ export function StreamViewer({
                     size="icon"
                     className="h-8 w-8 text-white hover:bg-white/20"
                     onClick={toggleMute}
+                    aria-label={isMuted ? "Unmute" : "Mute"}
                   >
                     {isMuted ? (
                       <VolumeX className="h-4 w-4" />
@@ -372,6 +375,7 @@ export function StreamViewer({
                     size="icon"
                     className="h-8 w-8 text-white hover:bg-white/20"
                     onClick={toggleFullscreen}
+                    aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
                   >
                     {isFullscreen ? (
                       <Minimize2 className="h-4 w-4" />

@@ -487,7 +487,7 @@ export default function LiveStreamPage({ params }: LiveStreamPageProps) {
                   onKeyDown={handleKeyPress}
                   className="flex-1"
                 />
-                <Button size="icon" onClick={handleSendMessage}>
+                <Button size="icon" onClick={handleSendMessage} aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </Button>
               </div>

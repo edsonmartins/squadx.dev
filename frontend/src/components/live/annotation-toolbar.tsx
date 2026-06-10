@@ -59,6 +59,7 @@ export function AnnotationToolbar({
                   activeTool === tool && "bg-white/25 ring-1 ring-white/50"
                 )}
                 onClick={() => onToolChange(tool)}
+                aria-label={label}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -104,6 +105,7 @@ export function AnnotationToolbar({
               size="icon"
               className="h-8 w-8 text-white hover:bg-danger/30"
               onClick={onClear}
+              aria-label="Clear all annotations"
             >
               <Trash2 className="h-4 w-4" />
             </Button>

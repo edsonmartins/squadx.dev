@@ -17,8 +17,8 @@ describe("control-panel helpers", () => {
     expect(transitionActionLabel("BLOQUEADA")).toBe("Bloquear");
   });
 
-  it("maps pass5 outcomes to colors", () => {
-    expect(PASS5_OUTCOME_CLASS.PASS).toContain("emerald");
-    expect(PASS5_OUTCOME_CLASS.FAIL).toContain("red");
+  it("maps pass5 outcomes to semantic tones", () => {
+    expect(PASS5_OUTCOME_CLASS.PASS).toBe("text-ok");
+    expect(PASS5_OUTCOME_CLASS.FAIL).toBe("text-danger");
   });
 });

@@ -268,8 +268,8 @@ function SquadCard({ squad, onEdit, onDelete, onToggleActive, onViewDetails }: S
               <Bot className="h-4 w-4" />
               <span>{squad.agents_count} agents</span>
             </div>
-            <div className="flex items-center gap-1 text-green-600">
-              <span className="h-2 w-2 rounded-full bg-green-500" />
+            <div className="flex items-center gap-1 text-ok">
+              <span className="h-2 w-2 rounded-full bg-ok" />
               <span>{squad.active_agents_count} active</span>
             </div>
           </div>

@@ -31,7 +31,7 @@ export function HarnessList({ harnesses }: { harnesses: HarnessResponse[] }) {
               <span
                 className={
                   h.status === "CONNECTED"
-                    ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600"
+                    ? "rounded-full bg-ok-soft px-2 py-0.5 text-xs text-ok"
                     : "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                 }
               >

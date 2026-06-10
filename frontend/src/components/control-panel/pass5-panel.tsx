@@ -65,12 +65,12 @@ export function Pass5Panel({ taskId, title, changeId, status }: Pass5PanelProps)
             Cobertura: {status?.coverage_covered ?? 0}/{status?.coverage_total ?? 0}
           </span>
         </div>
-        {status?.critique && <p className="text-xs text-orange-600">{status.critique}</p>}
+        {status?.critique && <p className="text-xs text-warn">{status.critique}</p>}
         <ul className="space-y-1">
           {status?.scenarios?.map((sc) => (
             <li key={sc.id} className="flex items-center justify-between rounded border p-2 text-xs">
               <span className="flex items-center gap-1">
-                {sc.covered ? <Check className="h-3 w-3 text-emerald-600" /> : <X className="h-3 w-3 text-red-600" />}
+                {sc.covered ? <Check className="h-3 w-3 text-ok" /> : <X className="h-3 w-3 text-danger" />}
                 {sc.name}
               </span>
               <Button

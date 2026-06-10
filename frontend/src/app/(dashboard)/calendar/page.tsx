@@ -33,19 +33,20 @@ import {
   CreateMeetingRequest,
   organizationsApi,
 } from "@/lib/api";
+import { TONE_BADGE } from "@/lib/design/semantics";
 
 const statusColors: Record<MeetingStatus, string> = {
-  SCHEDULED: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  IN_PROGRESS: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  COMPLETED: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
-  CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  SCHEDULED: TONE_BADGE.info,
+  IN_PROGRESS: TONE_BADGE.ok,
+  COMPLETED: TONE_BADGE.neutral,
+  CANCELLED: TONE_BADGE.danger,
 };
 
 const rsvpColors: Record<RsvpStatus, string> = {
-  PENDING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  ACCEPTED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  DECLINED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  TENTATIVE: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  PENDING: TONE_BADGE.warn,
+  ACCEPTED: TONE_BADGE.ok,
+  DECLINED: TONE_BADGE.danger,
+  TENTATIVE: TONE_BADGE.warn,
 };
 
 function formatDateTime(dateStr: string) {
@@ -262,7 +263,7 @@ export default function CalendarPage() {
                       <Button
                         size="sm"
                         variant={meeting.my_rsvp === "DECLINED" ? "default" : "outline"}
-                        className="h-8 text-red-600 hover:text-red-700"
+                        className="h-8 text-danger hover:text-danger/85"
                         onClick={() =>
                           rsvpMutation.mutate({ id: meeting.id, status: "DECLINED" })
                         }

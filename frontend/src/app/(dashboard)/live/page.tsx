@@ -133,8 +133,8 @@ export default function LiveViewPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                      <Badge variant="destructive">LIVE</Badge>
+                      <span className="live-dot flex h-2 w-2" />
+                      <Badge className="bg-live text-white hover:bg-live/85">LIVE</Badge>
                     </div>
                     <span className="text-sm font-mono text-muted-foreground">
                       {session.code}

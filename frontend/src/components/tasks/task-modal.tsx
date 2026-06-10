@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/stores/task-store";
+import { TASK_PRIORITY_TONE, TONE_TEXT } from "@/lib/design/semantics";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
@@ -58,10 +59,10 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
 ];
 
 const priorityOptions: { value: TaskPriority; label: string; color: string }[] = [
-  { value: "LOW", label: "Low", color: "text-slate-500" },
-  { value: "MEDIUM", label: "Medium", color: "text-blue-500" },
-  { value: "HIGH", label: "High", color: "text-orange-500" },
-  { value: "URGENT", label: "Urgent", color: "text-red-500" },
+  { value: "LOW", label: "Low", color: TONE_TEXT[TASK_PRIORITY_TONE.LOW] },
+  { value: "MEDIUM", label: "Medium", color: TONE_TEXT[TASK_PRIORITY_TONE.MEDIUM] },
+  { value: "HIGH", label: "High", color: TONE_TEXT[TASK_PRIORITY_TONE.HIGH] },
+  { value: "URGENT", label: "Urgent", color: TONE_TEXT[TASK_PRIORITY_TONE.URGENT] },
 ];
 
 interface TaskModalProps {

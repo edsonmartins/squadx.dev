@@ -59,7 +59,7 @@ function VideoTile({
   return (
     <div
       className={`relative rounded-lg overflow-hidden bg-muted aspect-video ${
-        isSpeaking ? "ring-2 ring-green-500 ring-offset-1" : ""
+        isSpeaking ? "ring-2 ring-ok ring-offset-1" : ""
       }`}
     >
       {hasVideo ? (
@@ -75,7 +75,7 @@ function VideoTile({
           <div
             className={`h-16 w-16 rounded-full flex items-center justify-center text-2xl font-semibold ${
               isSpeaking
-                ? "bg-green-500 text-white animate-pulse"
+                ? "bg-ok text-white animate-pulse"
                 : "bg-muted-foreground/20 text-muted-foreground"
             }`}
           >
@@ -95,7 +95,7 @@ function VideoTile({
           </span>
           <div className="flex items-center gap-1">
             {!isAudioEnabled && (
-              <MicOff className="h-3.5 w-3.5 text-red-400" />
+              <MicOff className="h-3.5 w-3.5 text-danger" />
             )}
             {!isVideoEnabled && (
               <VideoOff className="h-3.5 w-3.5 text-white/70" />
@@ -107,7 +107,7 @@ function VideoTile({
       {/* Speaking indicator */}
       {isSpeaking && (
         <div className="absolute top-2 left-2">
-          <div className="flex items-center gap-1 bg-green-500/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+          <div className="flex items-center gap-1 bg-ok/90 text-white text-[10px] px-1.5 py-0.5 rounded-full">
             <Mic className="h-2.5 w-2.5" />
             Speaking
           </div>

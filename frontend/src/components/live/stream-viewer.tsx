@@ -144,13 +144,13 @@ export function StreamViewer({
   const getConnectionStatusColor = () => {
     switch (connectionState) {
       case "connected":
-        return "bg-green-500";
+        return "bg-ok";
       case "connecting":
-        return "bg-yellow-500";
+        return "bg-warn";
       case "failed":
-        return "bg-red-500";
+        return "bg-danger";
       default:
-        return "bg-gray-500";
+        return "bg-neutral";
     }
   };
 
@@ -187,7 +187,7 @@ export function StreamViewer({
               <>
                 <Loader2 className="h-12 w-12 animate-spin mb-4" />
                 <p className="text-lg font-medium">Connecting to stream...</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-white/60 mt-2">
                   Establishing WebRTC connection
                 </p>
               </>
@@ -195,9 +195,9 @@ export function StreamViewer({
 
             {connectionState === "failed" && (
               <>
-                <WifiOff className="h-12 w-12 text-red-500 mb-4" />
+                <WifiOff className="h-12 w-12 text-danger mb-4" />
                 <p className="text-lg font-medium">Connection failed</p>
-                <p className="text-sm text-gray-400 mt-2 mb-4">
+                <p className="text-sm text-white/60 mt-2 mb-4">
                   Unable to connect to the live stream
                 </p>
                 <Button variant="outline" onClick={handleReconnect}>
@@ -209,9 +209,9 @@ export function StreamViewer({
 
             {connectionState === "disconnected" && (
               <>
-                <Wifi className="h-12 w-12 text-gray-500 mb-4" />
+                <Wifi className="h-12 w-12 text-neutral mb-4" />
                 <p className="text-lg font-medium">Stream disconnected</p>
-                <p className="text-sm text-gray-400 mt-2 mb-4">
+                <p className="text-sm text-white/60 mt-2 mb-4">
                   The live stream has ended or is unavailable
                 </p>
                 <Button variant="outline" onClick={handleReconnect}>
@@ -223,9 +223,9 @@ export function StreamViewer({
 
             {connectionState === "closed" && (
               <>
-                <WifiOff className="h-12 w-12 text-gray-500 mb-4" />
+                <WifiOff className="h-12 w-12 text-neutral mb-4" />
                 <p className="text-lg font-medium">Session ended</p>
-                <p className="text-sm text-gray-400 mt-2 mb-4">
+                <p className="text-sm text-white/60 mt-2 mb-4">
                   The live session has been closed
                 </p>
                 <Button variant="outline" onClick={handleReconnect}>
@@ -237,9 +237,9 @@ export function StreamViewer({
 
             {connectionState === "reconnecting" && (
               <>
-                <Loader2 className="h-12 w-12 animate-spin text-yellow-500 mb-4" />
+                <Loader2 className="h-12 w-12 animate-spin text-warn mb-4" />
                 <p className="text-lg font-medium">Reconnecting...</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-white/60 mt-2">
                   Attempting to restore the connection
                 </p>
               </>
@@ -271,8 +271,8 @@ export function StreamViewer({
                 <Badge variant="secondary" className="capitalize">
                   {connectionState === "connected" ? (
                     <>
-                      <span className="animate-pulse mr-1.5">
-                        <span className="inline-block h-1.5 w-1.5 bg-red-500 rounded-full" />
+                      <span className="mr-1.5">
+                        <span className="live-dot inline-block h-1.5 w-1.5" />
                       </span>
                       LIVE
                     </>
@@ -284,7 +284,7 @@ export function StreamViewer({
 
               {/* Stats Display */}
               {showStats && connectionState === "connected" && (
-                <div className="flex items-center gap-3 text-xs text-gray-300 ml-2">
+                <div className="flex items-center gap-3 text-xs text-white/70 ml-2">
                   {parsedStats.resolution && (
                     <span>{parsedStats.resolution}</span>
                   )}

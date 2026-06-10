@@ -1,4 +1,5 @@
 import { ChangePhase, Pass5Result, SpecTaskStatus } from "./api";
+import { TONE_BADGE, TONE_TEXT } from "./design/semantics";
 
 /** Rótulos PT dos estados do board (ADR-0004). */
 export const SPEC_TASK_STATUS_LABEL: Record<SpecTaskStatus, string> = {
@@ -20,14 +21,14 @@ export const SPEC_TASK_STATUS_ORDER: SpecTaskStatus[] = [
   "AJUSTES",
 ];
 
-/** Classes de badge por estado. */
+/** Classes de badge por estado (tons semânticos do design system). */
 export const SPEC_TASK_STATUS_BADGE: Record<SpecTaskStatus, string> = {
-  A_FAZER: "bg-muted text-muted-foreground",
-  EM_CURSO: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  EM_VALIDACAO: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  CONCLUIDA: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  BLOQUEADA: "bg-red-500/15 text-red-600 dark:text-red-400",
-  AJUSTES: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  A_FAZER: TONE_BADGE.neutral,
+  EM_CURSO: TONE_BADGE.info,
+  EM_VALIDACAO: TONE_BADGE.warn,
+  CONCLUIDA: TONE_BADGE.ok,
+  BLOQUEADA: TONE_BADGE.danger,
+  AJUSTES: TONE_BADGE.warn,
 };
 
 export const CHANGE_PHASE_LABEL: Record<ChangePhase, string> = {
@@ -46,8 +47,8 @@ export const PASS5_LABEL: Record<Pass5Result, string> = {
 /** Cor do desfecho do Pass 5. */
 export const PASS5_OUTCOME_CLASS: Record<Pass5Result, string> = {
   PENDING: "text-muted-foreground",
-  PASS: "text-emerald-600",
-  FAIL: "text-red-600",
+  PASS: TONE_TEXT.ok,
+  FAIL: TONE_TEXT.danger,
 };
 
 // As transições válidas são data-driven: o backend envia `available_transitions` em SpecTaskResponse

@@ -16,15 +16,16 @@ import {
   RecordingStatus,
   organizationsApi,
 } from "@/lib/api";
+import { RECORDING_STATUS_TONE, TONE_BADGE } from "@/lib/design/semantics";
 
 const statusColors: Record<RecordingStatus, string> = {
-  RECORDING: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  COMPLETED: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  FAILED: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+  RECORDING: TONE_BADGE[RECORDING_STATUS_TONE.RECORDING],
+  COMPLETED: TONE_BADGE[RECORDING_STATUS_TONE.COMPLETED],
+  FAILED: TONE_BADGE[RECORDING_STATUS_TONE.FAILED],
 };
 
 const statusIcons: Record<RecordingStatus, React.ReactNode> = {
-  RECORDING: <span className="relative flex h-2 w-2 mr-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>,
+  RECORDING: <span className="relative flex h-2 w-2 mr-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-danger"></span></span>,
   COMPLETED: null,
   FAILED: <AlertCircle className="h-3 w-3 mr-1" />,
 };

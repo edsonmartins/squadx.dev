@@ -629,9 +629,9 @@ export default function SettingsPage() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{skill.summary || skill.content}</p>
                           {skill.antipattern ? (
-                            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs text-orange-700">Antipattern</span>
+                            <span className="rounded bg-warn-soft px-2 py-0.5 text-xs text-warn">Antipattern</span>
                           ) : (
-                            <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Pattern</span>
+                            <span className="rounded bg-ok-soft px-2 py-0.5 text-xs text-ok">Pattern</span>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">{skill.content}</p>

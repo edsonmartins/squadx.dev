@@ -26,10 +26,10 @@ export function SpecTaskCard({ task }: { task: SpecTaskResponse }) {
         )}
       </div>
       {task.blocker_reason && (
-        <p className="mt-1 text-xs text-red-600">Bloqueio: {task.blocker_reason}</p>
+        <p className="mt-1 text-xs text-danger">Bloqueio: {task.blocker_reason}</p>
       )}
       {task.revise_reason && (
-        <p className="mt-1 text-xs text-orange-600">Ajustes: {task.revise_reason}</p>
+        <p className="mt-1 text-xs text-warn">Ajustes: {task.revise_reason}</p>
       )}
       <div className="mt-2">
         <TransitionControls task={task} />

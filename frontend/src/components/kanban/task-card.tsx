@@ -3,7 +3,11 @@
 import { ListTree, Clock, User, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskResponse, TaskPriority } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
+import {
+  TASK_PRIORITY_TONE,
+  TONE_BADGE,
+  TONE_BORDER_L,
+} from "@/lib/design/semantics";
 
 interface TaskCardContentProps {
   task: TaskResponse;
@@ -11,20 +15,6 @@ interface TaskCardContentProps {
   liveSessionCode?: string;
   onWatchLive?: (code: string) => void;
 }
-
-const priorityColors: Record<TaskPriority, string> = {
-  LOW: "border-l-slate-400",
-  MEDIUM: "border-l-blue-500",
-  HIGH: "border-l-orange-500",
-  URGENT: "border-l-red-500",
-};
-
-const priorityBadgeColors: Record<TaskPriority, string> = {
-  LOW: "bg-slate-100 text-slate-600",
-  MEDIUM: "bg-blue-50 text-blue-600",
-  HIGH: "bg-orange-50 text-orange-600",
-  URGENT: "bg-red-50 text-red-600",
-};
 
 const priorityLabels: Record<TaskPriority, string> = {
   LOW: "Low",
@@ -50,8 +40,8 @@ export function TaskCardContent({
     <div
       className={cn(
         "task-card task-card-bordered p-2.5",
-        priorityColors[task.priority],
-        liveSessionCode && "ring-1 ring-red-500/50"
+        TONE_BORDER_L[TASK_PRIORITY_TONE[task.priority]],
+        liveSessionCode && "ring-1 ring-live/50"
       )}
       onClick={onClick}
       data-testid={`task-card-${task.id}`}
@@ -62,23 +52,22 @@ export function TaskCardContent({
           <span
             className={cn(
               "badge-pill text-[10px]",
-              priorityBadgeColors[task.priority]
+              TONE_BADGE[TASK_PRIORITY_TONE[task.priority]]
             )}
           >
             {priorityLabels[task.priority]}
           </span>
           {liveSessionCode && (
-            <Badge
-              variant="destructive"
-              className="text-[9px] px-1.5 py-0 h-4 cursor-pointer hover:bg-red-600"
+            <button
+              type="button"
               onClick={handleWatchLive}
+              aria-label="Assistir sessão ao vivo"
+              className="inline-flex h-4 items-center rounded-full bg-live px-1.5 text-[9px] font-semibold text-white hover:bg-live/85 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
             >
-              <span className="animate-pulse mr-1">
-                <span className="inline-block h-1 w-1 bg-white rounded-full" />
-              </span>
+              <span className="live-dot mr-1 inline-block h-1.5 w-1.5" />
               <Video className="h-2.5 w-2.5 mr-0.5" />
               LIVE
-            </Badge>
+            </button>
           )}
         </div>
         {task.story_points && (

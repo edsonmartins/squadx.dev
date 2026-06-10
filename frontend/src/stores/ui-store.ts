@@ -10,7 +10,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      sidebarCollapsed: true, // Start collapsed by default
+      sidebarCollapsed: false, // Navegação agrupada do shell v2 nasce expandida
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed: boolean) =>

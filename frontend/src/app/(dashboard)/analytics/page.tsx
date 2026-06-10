@@ -43,8 +43,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { CHART_PALETTE } from "@/lib/design/semantics";
 
-const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e"];
+const PIE_COLORS = CHART_PALETTE;
 
 type Period = "7d" | "30d" | "90d" | "year";
 
@@ -399,7 +400,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CheckCircle className="h-5 w-5 text-ok" />
               <span className="text-3xl font-bold">{stats.successRate}%</span>
               <TrendIndicator value={stats.successTrend} />
             </div>
@@ -415,7 +416,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-500" />
+              <Users className="h-5 w-5 text-info" />
               <span className="text-3xl font-bold">{stats.activeAgents}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -430,7 +431,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-500" />
+              <DollarSign className="h-5 w-5 text-ok" />
               <span className="text-3xl font-bold">
                 ${stats.totalExecutions > 0 ? (stats.totalCost / stats.totalExecutions).toFixed(2) : "0.00"}
               </span>
@@ -481,7 +482,7 @@ function TrendIndicator({ value, inverse }: { value: number; inverse?: boolean }
   return (
     <span
       className={`flex items-center ${
-        isPositive ? "text-green-500" : "text-red-500"
+        isPositive ? "text-ok" : "text-danger"
       }`}
     >
       <Icon className="h-3 w-3 mr-0.5" />

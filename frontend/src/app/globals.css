@@ -2,94 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   SquadX Design System v2 — "Mission Control"
+   Neutros frios (slate) + brand blue. Sidebar ink-navy.
+   Tipografia: heading (display) / body (texto) / mono (dados).
+   ============================================================ */
+
 @layer base {
   :root {
-    /* SquadX primary blue (mantido) */
-    --primary: 221.2 83.2% 53.3%;
+    /* SquadX brand blue */
+    --primary: 224 76% 48%;
     --primary-foreground: 210 40% 98%;
 
-    /* Background */
-    --background: 0 0% 100%;
-    --foreground: 20 20% 10%;
+    /* Background — neutro frio */
+    --background: 220 23% 97%;
+    --foreground: 228 25% 12%;
 
     /* Card */
     --card: 0 0% 100%;
-    --card-foreground: 20 20% 10%;
+    --card-foreground: 228 25% 12%;
 
     /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 20 20% 10%;
+    --popover-foreground: 228 25% 12%;
 
-    /* Secondary - warm tones */
-    --secondary: 20 10% 96%;
-    --secondary-foreground: 20 20% 25%;
+    /* Secondary */
+    --secondary: 220 16% 94%;
+    --secondary-foreground: 227 18% 25%;
 
-    /* Muted - warm gray palette */
-    --muted: 20 10% 96%;
-    --muted-foreground: 20 10% 45%;
+    /* Muted */
+    --muted: 220 16% 94%;
+    --muted-foreground: 226 12% 44%;
 
     /* Accent */
-    --accent: 20 10% 96%;
-    --accent-foreground: 20 20% 25%;
+    --accent: 220 16% 94%;
+    --accent-foreground: 227 18% 25%;
 
     /* Destructive */
-    --destructive: 0 84% 60%;
+    --destructive: 356 78% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success */
-    --success: 142 76% 36%;
+    /* Tons semânticos — fonte única p/ status e prioridade */
+    --ok: 152 64% 32%;
+    --ok-soft: 150 55% 94%;
+    --warn: 28 85% 38%;
+    --warn-soft: 42 95% 93%;
+    --danger: 356 72% 44%;
+    --danger-soft: 356 85% 96%;
+    --info: 224 76% 48%;
+    --info-soft: 220 90% 96%;
+    --neutral: 226 10% 44%;
+    --neutral-soft: 220 16% 93%;
+    --live: 152 70% 38%;
+
+    /* Compat: success/warning legados apontam para os tons novos */
+    --success: var(--ok);
     --success-foreground: 0 0% 100%;
+    --warning: 36 92% 44%;
+    --warning-foreground: 228 25% 12%;
 
-    /* Warning */
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 20% 10%;
+    /* Border */
+    --border: 220 14% 90%;
+    --input: 220 14% 88%;
+    --ring: 224 76% 48%;
 
-    /* Border - warm subtle */
-    --border: 20 10% 90%;
-    --input: 20 10% 90%;
-    --ring: 221.2 83.2% 53.3%;
+    /* Sidebar ink-navy */
+    --sidebar: 228 32% 7%;
+    --sidebar-hover: 226 24% 14%;
+    --sidebar-active: 226 26% 16%;
+    --sidebar-border: 228 24% 14%;
+    --sidebar-fg: 220 14% 72%;
+    --sidebar-fg-strong: 0 0% 100%;
+    --sidebar-label: 224 12% 44%;
 
     /* Radius */
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 
   .dark {
-    /* SquadX primary blue (dark mode) */
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
 
-    /* Background - warm dark */
-    --background: 20 20% 7%;
-    --foreground: 20 10% 96%;
+    --background: 228 25% 8%;
+    --foreground: 220 18% 94%;
 
-    /* Card */
-    --card: 20 15% 10%;
-    --card-foreground: 20 10% 96%;
+    --card: 228 22% 11%;
+    --card-foreground: 220 18% 94%;
 
-    /* Popover */
-    --popover: 20 15% 10%;
-    --popover-foreground: 20 10% 96%;
+    --popover: 228 22% 11%;
+    --popover-foreground: 220 18% 94%;
 
-    /* Secondary */
-    --secondary: 20 15% 15%;
-    --secondary-foreground: 20 10% 96%;
+    --secondary: 227 18% 16%;
+    --secondary-foreground: 220 18% 94%;
 
-    /* Muted */
-    --muted: 20 15% 15%;
-    --muted-foreground: 20 10% 60%;
+    --muted: 227 18% 16%;
+    --muted-foreground: 224 12% 62%;
 
-    /* Accent */
-    --accent: 20 15% 15%;
-    --accent-foreground: 20 10% 96%;
+    --accent: 227 18% 16%;
+    --accent-foreground: 220 18% 94%;
 
-    /* Destructive */
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 356 70% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Border */
-    --border: 20 15% 18%;
-    --input: 20 15% 18%;
-    --ring: 224.3 76.3% 48%;
+    --ok: 152 55% 55%;
+    --ok-soft: 152 45% 13%;
+    --warn: 40 90% 60%;
+    --warn-soft: 36 50% 13%;
+    --danger: 356 80% 64%;
+    --danger-soft: 356 45% 14%;
+    --info: 217 91% 66%;
+    --info-soft: 222 50% 15%;
+    --neutral: 224 10% 62%;
+    --neutral-soft: 226 16% 17%;
+    --live: 152 60% 50%;
+
+    --success: var(--ok);
+    --success-foreground: 222 47% 11%;
+    --warning: 40 90% 56%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 227 16% 19%;
+    --input: 227 16% 19%;
+    --ring: 217 91% 60%;
+
+    /* Sidebar mantém ink-navy nos dois temas */
+    --sidebar: 228 32% 6%;
+    --sidebar-hover: 226 24% 12%;
+    --sidebar-active: 226 26% 15%;
+    --sidebar-border: 228 24% 12%;
+    --sidebar-fg: 220 14% 72%;
+    --sidebar-fg-strong: 0 0% 100%;
+    --sidebar-label: 224 12% 44%;
   }
 }
 
@@ -99,12 +142,17 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-body), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.55;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.01em;
+  }
+  /* Dados (números, ids, custos, código) usam mono */
+  code, kbd, samp, .font-data {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
 }
 
@@ -126,6 +174,41 @@
   @apply bg-muted-foreground/50;
 }
 
+/* Entrada suave de página/painéis */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Pulse ring para indicadores live */
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--live) / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px hsl(var(--live) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--live) / 0);
+  }
+}
+
+.live-dot {
+  @apply rounded-full;
+  background: hsl(var(--live));
+  animation: live-pulse 2s infinite;
+}
+
 /* Kanban styles */
 .kanban-column {
   @apply min-h-[180px] rounded-xl p-1.5;
@@ -143,12 +226,12 @@
   background: hsl(var(--card));
   border-radius: 8px;
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px hsl(228 30% 12% / 0.05);
 }
 
 .task-card:hover {
-  background: hsl(var(--muted) / 0.5);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: hsl(220 13% 84%);
+  box-shadow: 0 4px 12px hsl(228 30% 12% / 0.08);
 }
 
 .task-card.dragging {
@@ -169,30 +252,63 @@
 /* Topbar styles */
 .topbar {
   @apply sticky top-0 z-50;
-  height: 52px;
-  background: hsl(var(--card));
+  height: 56px;
+  background: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid hsl(var(--border));
 }
 
-/* Sidebar styles */
+/* ============ Sidebar ink-navy ============ */
 .sidebar {
   @apply relative;
+  background:
+    radial-gradient(120% 60% at 0% 0%, hsl(224 50% 16% / 0.55) 0%, transparent 60%),
+    hsl(var(--sidebar));
+  border-right: 1px solid hsl(var(--sidebar-border)) !important;
+  color: hsl(var(--sidebar-fg));
+}
+
+.sidebar-group-label {
+  @apply px-2.5 pb-1.5 text-[10px] font-semibold uppercase;
+  font-family: var(--font-heading), system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  color: hsl(var(--sidebar-label));
 }
 
 .sidebar-link {
-  @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200;
-  color: hsl(var(--muted-foreground));
+  @apply relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors duration-150;
+  color: hsl(var(--sidebar-fg));
 }
 
 .sidebar-link:hover {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: hsl(var(--sidebar-hover));
+  color: hsl(var(--sidebar-fg-strong));
 }
 
 .sidebar-link.active {
-  @apply bg-primary text-primary-foreground;
+  background: hsl(var(--sidebar-active));
+  color: hsl(var(--sidebar-fg-strong));
 }
 
-.sidebar-link.active:hover {
-  @apply bg-primary/90;
+.sidebar-link.active::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: hsl(217 91% 64%);
+}
+
+.sidebar-count {
+  @apply ml-auto rounded-full px-1.5 py-px text-[10px] font-medium;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  background: hsl(226 22% 20%);
+  color: hsl(220 14% 70%);
+}
+
+.sidebar-count.alert {
+  background: hsl(36 90% 48% / 0.18);
+  color: hsl(40 95% 64%);
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useSocket } from "@/hooks/use-socket";
 
 export default function DashboardLayout({
@@ -13,10 +15,17 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isLoading, initialize } = useAuthStore();
+  const { mobileSidebarOpen, setMobileSidebarOpen } = useUIStore();
 
   // Initialize WebSocket connection
   useSocket();
+
+  // Fecha o drawer mobile ao trocar de rota
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname, setMobileSidebarOpen]);
 
   useEffect(() => {
     initialize();
@@ -45,10 +54,24 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      {/* Sidebar fixa (desktop) */}
+      <div className="hidden h-full md:flex">
+        <Sidebar />
+      </div>
+
+      {/* Drawer (mobile) */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent
+          side="left"
+          className="w-[260px] border-r-0 p-0 md:hidden [&>button]:text-white"
+        >
+          <Sidebar inDrawer onNavigate={() => setMobileSidebarOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-auto bg-muted/30 p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-muted/30 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

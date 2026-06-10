@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Search, Plus, ChevronRight } from "lucide-react";
+import { Bell, Search, Plus, ChevronRight, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useUIStore } from "@/stores/ui-store";
 
 const SECTION_LABELS: Record<string, string> = {
   "": "Dashboard",
@@ -24,6 +25,7 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const searchRef = useRef<HTMLInputElement>(null);
+  const setMobileSidebarOpen = useUIStore((state) => state.setMobileSidebarOpen);
 
   const firstSegment = pathname.split("/")[1] ?? "";
   const sectionLabel = SECTION_LABELS[firstSegment] ?? "Dashboard";
@@ -41,7 +43,18 @@ export function Header() {
   }, []);
 
   return (
-    <header className="topbar flex items-center gap-4 px-6">
+    <header className="topbar flex items-center gap-3 px-4 md:gap-4 md:px-6">
+      {/* Menu (mobile) */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 shrink-0 md:hidden"
+        onClick={() => setMobileSidebarOpen(true)}
+        aria-label="Abrir menu de navegação"
+      >
+        <Menu className="h-5 w-5" aria-hidden="true" />
+      </Button>
+
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="hidden items-center gap-1.5 text-[13px] sm:flex">
         <span className="text-muted-foreground">Workspace</span>

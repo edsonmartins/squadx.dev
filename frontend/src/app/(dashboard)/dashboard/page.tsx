@@ -21,6 +21,7 @@ import { organizationsApi, projectsApi, executionsApi, liveViewApi, ExecutionRes
 import { useOrganizationStore } from "@/stores/organization-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { ProjectModal } from "@/components/projects/project-modal";
+import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import {
   EXECUTION_STATUS_TONE,
@@ -310,21 +311,13 @@ export default function DashboardPage() {
               </div>
             )}
             {!executionsLoading && recentActivity.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-                <Clock className="mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm font-medium">No recent activity</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Executions from your squads will show up here.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 font-heading"
-                  onClick={() => router.push("/tasks")}
-                >
-                  Go to tasks
-                </Button>
-              </div>
+              <EmptyState
+                icon={Clock}
+                title="No recent activity"
+                description="Executions from your squads will show up here."
+                actionLabel="Go to tasks"
+                onAction={() => router.push("/tasks")}
+              />
             )}
             <div>
               {recentActivity.map((activity) => (

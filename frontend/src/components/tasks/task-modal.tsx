@@ -12,18 +12,10 @@ import {
   TaskStatus,
   TaskPriority,
 } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal, FieldError } from "@/components/shared/form-modal";
 import {
   Select,
   SelectContent,
@@ -233,166 +225,156 @@ export function TaskModal({
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" data-testid="task-modal">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Task" : "Create Task"}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update your task details."
-              : "Create a new task for your project."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Title *</Label>
-              <Input
-                id="title"
-                placeholder="Implement user authentication"
-                data-testid="task-title-input"
-                {...register("title")}
-              />
-              {errors.title && (
-                <p className="text-sm text-destructive">{errors.title.message}</p>
-              )}
-            </div>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title={isEditing ? "Edit Task" : "Create Task"}
+      description={
+        isEditing
+          ? "Update your task details."
+          : "Create a new task for your project."
+      }
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isLoading}
+      submitLabel={isEditing ? "Save Changes" : "Create Task"}
+      contentClassName="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
+      contentTestId="task-modal"
+      submitTestId="task-submit-button"
+    >
+      <div className="grid gap-2">
+        <Label htmlFor="title">Title *</Label>
+        <Input
+          id="title"
+          placeholder="Implement user authentication"
+          data-testid="task-title-input"
+          {...register("title")}
+        />
+        <FieldError message={errors.title?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Add detailed description of the task..."
-                rows={4}
-                data-testid="task-description-input"
-                {...register("description")}
-              />
-            </div>
+      <div className="grid gap-2">
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          placeholder="Add detailed description of the task..."
+          rows={4}
+          data-testid="task-description-input"
+          {...register("description")}
+        />
+      </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={status}
-                  onValueChange={(value) => setValue("status", value as TaskStatus)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={status}
+            onValueChange={(value) => setValue("status", value as TaskStatus)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="priority">Priority</Label>
-                <Select
-                  value={priority}
-                  onValueChange={(value) => setValue("priority", value as TaskPriority)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {priorityOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        <span className={option.color}>{option.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+        <div className="grid gap-2">
+          <Label htmlFor="priority">Priority</Label>
+          <Select
+            value={priority}
+            onValueChange={(value) => setValue("priority", value as TaskPriority)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select priority" />
+            </SelectTrigger>
+            <SelectContent>
+              {priorityOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  <span className={option.color}>{option.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="story_points">Story Points</Label>
-                <Input
-                  id="story_points"
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="5"
-                  {...register("story_points", {
-                    setValueAs: (v) => (v === "" ? null : parseInt(v, 10)),
-                  })}
-                />
-              </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="story_points">Story Points</Label>
+          <Input
+            id="story_points"
+            type="number"
+            min="0"
+            max="100"
+            placeholder="5"
+            {...register("story_points", {
+              setValueAs: (v) => (v === "" ? null : parseInt(v, 10)),
+            })}
+          />
+        </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="estimated_hours">Est. Hours</Label>
-                <Input
-                  id="estimated_hours"
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="8"
-                  {...register("estimated_hours", {
-                    setValueAs: (v) => (v === "" ? null : parseFloat(v)),
-                  })}
-                />
-              </div>
+        <div className="grid gap-2">
+          <Label htmlFor="estimated_hours">Est. Hours</Label>
+          <Input
+            id="estimated_hours"
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="8"
+            {...register("estimated_hours", {
+              setValueAs: (v) => (v === "" ? null : parseFloat(v)),
+            })}
+          />
+        </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="due_date">Due Date</Label>
-                <Input
-                  id="due_date"
-                  type="date"
-                  {...register("due_date")}
-                />
-              </div>
-            </div>
+        <div className="grid gap-2">
+          <Label htmlFor="due_date">Due Date</Label>
+          <Input
+            id="due_date"
+            type="date"
+            {...register("due_date")}
+          />
+        </div>
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="assigned_agent">Assigned Agent</Label>
-              <Select
-                value={assignedAgentId?.toString() || "none"}
-                onValueChange={(value) =>
-                  setValue("assigned_agent_id", value === "none" ? null : parseInt(value))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an agent (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No agent assigned</SelectItem>
-                  {agents?.content?.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id.toString()}>
-                      {agent.name} ({agent.type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="grid gap-2">
+        <Label htmlFor="assigned_agent">Assigned Agent</Label>
+        <Select
+          value={assignedAgentId?.toString() || "none"}
+          onValueChange={(value) =>
+            setValue("assigned_agent_id", value === "none" ? null : parseInt(value))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select an agent (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No agent assigned</SelectItem>
+            {agents?.content?.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id.toString()}>
+                {agent.name} ({agent.type})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="tags">Tags</Label>
-              <Input
-                id="tags"
-                placeholder="frontend, auth, urgent (comma separated)"
-                {...register("tags")}
-              />
-              <p className="text-xs text-muted-foreground">
-                Separate tags with commas
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} data-testid="task-submit-button">
-              {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Task"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <div className="grid gap-2">
+        <Label htmlFor="tags">Tags</Label>
+        <Input
+          id="tags"
+          placeholder="frontend, auth, urgent (comma separated)"
+          {...register("tags")}
+        />
+        <p className="text-xs text-muted-foreground">
+          Separate tags with commas
+        </p>
+      </div>
+    </FormModal>
   );
 }

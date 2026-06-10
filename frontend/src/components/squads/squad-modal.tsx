@@ -6,18 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { squadsApi, SquadResponse } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal, FieldError } from "@/components/shared/form-modal";
 import { useToast } from "@/hooks/use-toast";
 
 const squadSchema = z.object({
@@ -125,54 +117,35 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Squad" : "Create Squad"}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update your AI squad details."
-              : "Create a new AI development squad to automate your tasks."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                placeholder="Backend Squad"
-                {...register("name")}
-              />
-              {errors.name && (
-                <p className="text-sm text-destructive">{errors.name.message}</p>
-              )}
-            </div>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title={isEditing ? "Edit Squad" : "Create Squad"}
+      description={
+        isEditing
+          ? "Update your AI squad details."
+          : "Create a new AI development squad to automate your tasks."
+      }
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isLoading}
+      submitLabel={isEditing ? "Save Changes" : "Create Squad"}
+    >
+      <div className="grid gap-2">
+        <Label htmlFor="name">Name *</Label>
+        <Input id="name" placeholder="Backend Squad" {...register("name")} />
+        <FieldError message={errors.name?.message} />
+      </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="A squad specialized in backend development with Node.js and Python..."
-                rows={3}
-                {...register("description")}
-              />
-              {errors.description && (
-                <p className="text-sm text-destructive">{errors.description.message}</p>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Squad"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <div className="grid gap-2">
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          placeholder="A squad specialized in backend development with Node.js and Python..."
+          rows={3}
+          {...register("description")}
+        />
+        <FieldError message={errors.description?.message} />
+      </div>
+    </FormModal>
   );
 }

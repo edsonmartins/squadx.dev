@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useToast } from "@/hooks/use-toast";
 import { SquadModal } from "@/components/squads/squad-modal";
 import { SquadDetailSheet } from "@/components/squads/squad-detail-sheet";
@@ -147,17 +148,14 @@ export default function SquadsPage() {
         </div>
       ) : squads?.content?.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No squads yet</h3>
-            <p className="text-muted-foreground text-center mb-4 max-w-sm">
-              Create your first AI squad to start automating your development tasks.
-            </p>
-            <Button onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Squad
-            </Button>
-          </CardContent>
+          <EmptyState
+            icon={Users}
+            title="No squads yet"
+            description="Create your first AI squad to start automating your development tasks."
+            actionLabel="Create Squad"
+            onAction={handleCreate}
+            className="py-12"
+          />
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

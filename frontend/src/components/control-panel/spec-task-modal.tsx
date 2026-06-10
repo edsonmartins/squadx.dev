@@ -6,17 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { specTasksApi, RequirementResponse } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormModal, FieldError } from "@/components/shared/form-modal";
 import {
   Select,
   SelectContent,
@@ -74,51 +66,43 @@ export function SpecTaskModal({ open, onClose, changeId, requirements }: SpecTas
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nova tarefa</DialogTitle>
-          <DialogDescription>A tarefa nasce de um requisito (rastreabilidade).</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Título</Label>
-              <Input id="title" {...register("title")} />
-              {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
-            </div>
-            <div className="grid gap-2">
-              <Label>Requisito de origem</Label>
-              <Controller
-                control={control}
-                name="requirement_id"
-                render={({ field }) => (
-                  <Select value={field.value || undefined} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um requisito (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {requirements.map((r) => (
-                        <SelectItem key={r.id} value={String(r.id)}>
-                          {r.requirement_id} — {r.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Criando..." : "Criar tarefa"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title="Nova tarefa"
+      description="A tarefa nasce de um requisito (rastreabilidade)."
+      onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+      isSubmitting={createMutation.isPending}
+      submitLabel="Criar tarefa"
+      submittingLabel="Criando..."
+      cancelLabel="Cancelar"
+    >
+      <div className="grid gap-2">
+        <Label htmlFor="title">Título</Label>
+        <Input id="title" {...register("title")} />
+        <FieldError message={errors.title?.message} />
+      </div>
+      <div className="grid gap-2">
+        <Label>Requisito de origem</Label>
+        <Controller
+          control={control}
+          name="requirement_id"
+          render={({ field }) => (
+            <Select value={field.value || undefined} onValueChange={field.onChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um requisito (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {requirements.map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.requirement_id} — {r.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+    </FormModal>
   );
 }

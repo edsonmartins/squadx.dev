@@ -23,7 +23,9 @@ vi.mock('@/stores/auth-store', () => ({
 vi.mock('@/stores/ui-store', () => ({
   useUIStore: vi.fn(() => ({
     sidebarCollapsed: false,
+    theme: 'system',
     toggleSidebar: vi.fn(),
+    setTheme: vi.fn(),
   })),
 }))
 

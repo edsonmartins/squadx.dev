@@ -18,6 +18,9 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
+  Laptop,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,7 +32,46 @@ import {
 } from "@/components/ui/tooltip";
 import { approvalsApi, liveViewApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
+import { useUIStore, type Theme } from "@/stores/ui-store";
+
+const THEME_CYCLE: Record<Theme, Theme> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
+
+const THEME_META: Record<Theme, { icon: React.ElementType; label: string }> = {
+  system: { icon: Laptop, label: "Tema: sistema" },
+  light: { icon: Sun, label: "Tema: claro" },
+  dark: { icon: Moon, label: "Tema: escuro" },
+};
+
+function ThemeToggle({ className }: { className?: string }) {
+  const { theme, setTheme } = useUIStore();
+  const { icon: Icon, label } = THEME_META[theme];
+
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-7 w-7 shrink-0 text-[hsl(var(--sidebar-fg))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
+            className
+          )}
+          onClick={() => setTheme(THEME_CYCLE[theme])}
+          aria-label={label}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="font-heading">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface NavItem {
   name: string;
@@ -75,9 +117,10 @@ interface NavLinkProps {
   isCollapsed: boolean;
   pendingApprovals: number;
   hasLiveSessions: boolean;
+  onNavigate?: () => void;
 }
 
-function NavLink({ item, isActive, isCollapsed, pendingApprovals, hasLiveSessions }: NavLinkProps) {
+function NavLink({ item, isActive, isCollapsed, pendingApprovals, hasLiveSessions, onNavigate }: NavLinkProps) {
   const Icon = item.icon;
   const showApprovalsBadge = item.badge === "approvals" && pendingApprovals > 0;
   const showLiveDot = item.badge === "live" && hasLiveSessions;
@@ -85,6 +128,7 @@ function NavLink({ item, isActive, isCollapsed, pendingApprovals, hasLiveSession
   const linkContent = (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         "sidebar-link font-medium",
         isActive && "active",
@@ -132,10 +176,17 @@ function NavLink({ item, isActive, isCollapsed, pendingApprovals, hasLiveSession
   return linkContent;
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Modo drawer (mobile): sempre expandida, sem collapse, fecha ao navegar. */
+  inDrawer?: boolean;
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ inDrawer = false, onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarCollapsed: storeCollapsed, toggleSidebar } = useUIStore();
+  const sidebarCollapsed = inDrawer ? false : storeCollapsed;
 
   // Badges operacionais — falham em silêncio para nunca quebrar a navegação
   const { data: pendingApprovalsData } = useQuery({
@@ -168,7 +219,7 @@ export function Sidebar() {
       <div
         className={cn(
           "sidebar flex h-full flex-col transition-all duration-300 ease-in-out",
-          sidebarCollapsed ? "w-[60px]" : "w-[236px]"
+          inDrawer ? "w-full" : sidebarCollapsed ? "w-[60px]" : "w-[236px]"
         )}
       >
         {/* Logo */}
@@ -212,6 +263,7 @@ export function Sidebar() {
                       isCollapsed={sidebarCollapsed}
                       pendingApprovals={pendingApprovals}
                       hasLiveSessions={hasLiveSessions}
+                      onNavigate={onNavigate}
                     />
                   );
                 })}
@@ -228,6 +280,7 @@ export function Sidebar() {
             isCollapsed={sidebarCollapsed}
             pendingApprovals={0}
             hasLiveSessions={false}
+            onNavigate={onNavigate}
           />
 
           {/* User card */}
@@ -240,6 +293,7 @@ export function Sidebar() {
                 <p className="truncate text-[13px] font-semibold text-white">{user?.full_name}</p>
                 <p className="truncate text-[11px] text-[hsl(var(--sidebar-label))]">{user?.email}</p>
               </div>
+              <ThemeToggle />
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -272,6 +326,9 @@ export function Sidebar() {
                   {user?.email ? ` · ${user.email}` : ""}
                 </TooltipContent>
               </Tooltip>
+              <div className="flex justify-center">
+                <ThemeToggle className="h-9 w-full rounded-lg" />
+              </div>
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button
@@ -291,26 +348,28 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Collapse toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "h-8 w-full text-[hsl(var(--sidebar-label))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
-              sidebarCollapsed ? "justify-center px-2" : "justify-start gap-2.5 px-2.5"
-            )}
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-xs">Collapse</span>
-              </>
-            )}
-          </Button>
+          {/* Collapse toggle (não faz sentido no drawer mobile) */}
+          {!inDrawer && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-8 w-full text-[hsl(var(--sidebar-label))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
+                sidebarCollapsed ? "justify-center px-2" : "justify-start gap-2.5 px-2.5"
+              )}
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-xs">Collapse</span>
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </TooltipProvider>

@@ -17,7 +17,8 @@ test("creates, edits and deletes a project", async ({ page }) => {
   await page.getByTestId("project-default-branch-input").fill("release");
   await page.getByTestId("project-submit-button").click();
 
-  await expect(page.getByText("Project created")).toBeVisible();
+  // exact:true evita colisão com o announcement aria-live do toast ("Notification Project created…")
+  await expect(page.getByText("Project created", { exact: true })).toBeVisible();
   await expect(page.getByText("Gamma QA Portal")).toBeVisible();
 
   const projectCard = page.getByText("Gamma QA Portal").locator("..").locator("..").locator("..");

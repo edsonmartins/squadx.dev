@@ -154,6 +154,7 @@ class OrchestratorState(BaseModel):
     review_findings: list[dict[str, Any]] = Field(default_factory=list)  # latest reviewer pass
     review_verdict: Literal["continue", "approve", "escalate"] | None = None  # arbiter's decision
     escalation_reason: str | None = None  # why the arbiter handed back to a human
+    cost_budget_usd: float | None = None  # hard cost ceiling; over it the arbiter escalates (None = no cap)
 
     # Control
     should_end: bool = False

@@ -84,6 +84,8 @@ class TestSpecialistDiscipline:
         prompt = agent_cls.get_system_prompt(object())  # self unused
         assert "reproduce FIRST" in prompt
         assert "Verify before claiming done" in prompt
+        assert "CURRENT library docs" in prompt          # library-docs-lookup guardrail
+        assert "no AI self-attribution" in prompt        # no-self-attribution guardrail
 
     def test_coordinator_requires_acceptance_criteria_ids(self):
         prompt = CoordinatorAgent.get_system_prompt(object())

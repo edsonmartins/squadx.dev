@@ -9,7 +9,8 @@ if TYPE_CHECKING:
 
 
 # Shared discipline appended to every specialist prompt — the cross-cutting habits that keep
-# AI-written code honest (reproduce-first, reuse over reinvention, verify-before-done).
+# AI-written code honest (reproduce-first, reuse over reinvention, verify-before-done, real docs,
+# no AI self-attribution).
 _ENGINEERING_DISCIPLINE = """
 
 Engineering discipline (every task):
@@ -17,9 +18,13 @@ Engineering discipline (every task):
   duplicate it. No speculative abstraction, no over-engineering.
 - Bug fixes: reproduce FIRST with a failing test (confirm it's red), then fix until green.
 - Satisfy every acceptance criterion you are given; add or update focused tests for what you change.
+- Look up CURRENT library docs (don't guess an API from memory) when you touch an external
+  library/SDK/framework — pull the version the project actually depends on.
 - Verify before claiming done: build, run the relevant tests and linter, check for regressions.
   Never report a red build as done — report what you actually ran and its result.
 - Keep the change minimal and scoped: no unrelated edits or drive-by refactors.
+- Write commits/PRs as the engineering team: no AI self-attribution, no "Generated with",
+  no Co-Authored-By bot trailer.
 
 Output: a summary of what changed, the files touched, and the exact commands to verify it."""
 

@@ -592,18 +592,23 @@ async def arbiter(state: OrchestratorState) -> dict[str, Any]:
     blockers = _blockers(state.review_findings)
     has_failed = bool(state.failed_subtasks)
     needs_work = bool(blockers) or has_failed
+    spent = state.metrics.total_cost
+    over_budget = state.cost_budget_usd is not None and spent >= state.cost_budget_usd
 
     if not needs_work:
         verdict = "approve"
     elif cycle >= state.max_cycles:
         verdict = "escalate"  # didn't converge within the backstop
+    elif over_budget:
+        verdict = "escalate"  # cost ceiling hit — stop spending on another loop, hand to a human
     elif state.complexity == "trivial":
         verdict = "escalate"  # a trivial task that still has blockers isn't worth looping on
     else:
         verdict = "continue"
 
     logger.info("arbiter_decision", verdict=verdict, cycle=cycle, max_cycles=state.max_cycles,
-                blockers=len(blockers), failed=len(state.failed_subtasks), complexity=state.complexity)
+                blockers=len(blockers), failed=len(state.failed_subtasks), complexity=state.complexity,
+                cost_usd=round(spent, 4), budget_usd=state.cost_budget_usd)
 
     if verdict == "continue":
         # Inject a single fix subtask that owns the open blockers and route back to execute.
@@ -634,8 +639,12 @@ async def arbiter(state: OrchestratorState) -> dict[str, Any]:
     await _record_team_learnings(state, verdict=verdict, summary=summary, blockers=blockers)
 
     if verdict == "escalate":
-        reason = (f"Did not converge after {cycle} round(s); "
-                  f"{len(blockers)} blocker(s) and {len(state.failed_subtasks)} failed subtask(s) remain.")
+        if over_budget:
+            reason = (f"Cost ceiling reached (${spent:.4f} ≥ ${state.cost_budget_usd:.4f}) with "
+                      f"{len(blockers)} blocker(s) still open — stopped before another loop.")
+        else:
+            reason = (f"Did not converge after {cycle} round(s); "
+                      f"{len(blockers)} blocker(s) and {len(state.failed_subtasks)} failed subtask(s) remain.")
         return {"review_verdict": "escalate", "cycle_count": cycle, "escalation_reason": reason}
 
     return {"review_verdict": "approve", "cycle_count": cycle}
@@ -696,10 +705,11 @@ async def commit_changes(state: OrchestratorState) -> dict[str, Any]:
         branch_name = f"squadx/task-{state.task_id}"
         git_manager.create_branch(branch_name)
 
-        # Stage and commit
-        commit_message = f"""[SquadX] {state.task.get('title', 'Task completion')}
+        # Stage and commit. Write as the engineering team — no AI self-attribution (no
+        # "Generated with"/"AI agents", no Co-Authored-By bot trailer).
+        commit_message = f"""{state.task.get('title', 'Task completion')}
 
-{state.final_result or 'Task completed by AI agents'}
+{state.final_result or 'Implements the task per its acceptance criteria.'}
 
 Task ID: {state.task_id}
 Files modified: {len(all_files)}

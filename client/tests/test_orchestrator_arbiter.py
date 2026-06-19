@@ -15,7 +15,7 @@ from squadx_client.orchestrator.nodes import (
     _map_complexity,
 )
 from squadx_client.orchestrator.graph import route_after_arbiter
-from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask
+from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics
 
 
 def _plan(*subtasks: SubTask) -> TaskPlan:
@@ -86,6 +86,25 @@ class TestArbiterDecision:
         result = await arbiter(state)
         assert result["review_verdict"] == "escalate"
 
+    async def test_escalates_when_over_cost_budget(self):
+        state = _state(review_findings=[BLOCKER], complexity="standard", cycle_count=0, max_cycles=3,
+                       cost_budget_usd=1.0, metrics=ExecutionMetrics(total_cost=1.5))
+        result = await arbiter(state)
+        assert result["review_verdict"] == "escalate"
+        assert "cost ceiling" in result["escalation_reason"].lower()
+
+    async def test_continues_when_under_cost_budget(self):
+        state = _state(review_findings=[BLOCKER], complexity="standard", cycle_count=0,
+                       cost_budget_usd=10.0, metrics=ExecutionMetrics(total_cost=1.5))
+        result = await arbiter(state)
+        assert result["review_verdict"] == "continue"
+
+    async def test_no_budget_means_no_cost_brake(self):
+        state = _state(review_findings=[BLOCKER], complexity="standard", cycle_count=0,
+                       metrics=ExecutionMetrics(total_cost=999.0))
+        result = await arbiter(state)
+        assert result["review_verdict"] == "continue"
+
     async def test_failed_subtask_forces_work_even_without_findings(self):
         state = _state(review_findings=[], failed_subtasks=["s1"], complexity="standard", cycle_count=0)
         result = await arbiter(state)
@@ -153,6 +172,19 @@ class TestCommitGate:
             result = await commit_changes(state)
         git.create_branch.assert_called_once()
         assert result["git_commit"] == "abc123"
+
+    async def test_commit_message_has_no_ai_self_attribution(self):
+        sub = SubTask(id="s1", title="t", description="d", agent_type="backend", files_modified=["api.py"])
+        state = _state(plan=_plan(sub), completed_subtasks=["s1"], review_verdict="approve")
+        git = MagicMock()
+        git.commit.return_value = "abc123"
+        with patch("squadx_client.orchestrator.nodes.GitManager", return_value=git):
+            await commit_changes(state)
+        message = git.commit.call_args.args[1]
+        lowered = message.lower()
+        assert "ai agents" not in lowered
+        assert "generated with" not in lowered
+        assert "co-authored-by" not in lowered
 
 
 class TestReviewProducesFindings:

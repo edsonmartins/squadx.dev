@@ -29,6 +29,9 @@ public class IntegrationConfig {
         private String apiUrl = "https://api.github.com";
         private String token;
         private String branchPrefix = "spec/";
+        /** Outbound poll of PR review comments (fallback when inbound webhooks can't reach us). */
+        private boolean pollEnabled = false;
+        private long pollIntervalMs = 90_000;
     }
 
     /** Pullwise conformance reviewer config for Pass 5 (RFC-0004 §7). */

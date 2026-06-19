@@ -116,7 +116,7 @@ public class GitHubCommitGateway implements GitCommitGateway {
         throw new IllegalStateException("missing sha in GitHub response");
     }
 
-    static String[] parseOwnerRepo(String repositoryUrl) {
+    public static String[] parseOwnerRepo(String repositoryUrl) {
         Matcher m = GITHUB_URL.matcher(repositoryUrl.trim());
         return m.find() ? new String[]{m.group(1), m.group(2)} : null;
     }

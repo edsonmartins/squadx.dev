@@ -1,8 +1,8 @@
 package dev.squadx.controlpanel.model.enums;
 
 /**
- * Tipos de evento que alimentam a projeção do estado da tarefa (RFC-0003). {@code IMPLEMENTED} é
- * apenas afirmação ("terminei de codar") e não muda o estado do board sozinho.
+ * Tipos de evento que alimentam a projeção do estado da tarefa (RFC-0003). {@code IMPLEMENTED} e
+ * {@code REVIEW_COMMENT} são apenas afirmações/feedback e não mudam o estado do board sozinhos.
  */
 public enum TaskEventType {
     STARTED,
@@ -11,5 +11,6 @@ public enum TaskEventType {
     BLOCKED,
     UNBLOCKED,
     PASS5_APPROVED,
-    PASS5_CHANGES
+    PASS5_CHANGES,
+    REVIEW_COMMENT
 }

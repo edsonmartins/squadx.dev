@@ -25,7 +25,7 @@ import java.util.Map;
 @Slf4j
 public class GitHubReviewClient {
 
-    static final String MARKER_PREFIX = "<!-- squadx-pass5:";
+    public static final String MARKER_PREFIX = "<!-- squadx-pass5:";
     private static final int MAX_INLINE = 10;
 
     private final IntegrationConfig.GitConfig git;

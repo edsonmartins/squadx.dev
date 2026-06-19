@@ -43,6 +43,9 @@ public class SpecTaskProjector {
                 case IMPLEMENTED -> {
                     // Afirmação do agente/dev; não muda o board (RFC-0003).
                 }
+                case REVIEW_COMMENT -> {
+                    // Feedback de review ingerido do PR (poller); registrado, mas não move o board.
+                }
                 case PR_OPENED -> {
                     if (stateMachine.canTransition(status, SpecTaskStatus.EM_VALIDACAO)) {
                         status = SpecTaskStatus.EM_VALIDACAO;

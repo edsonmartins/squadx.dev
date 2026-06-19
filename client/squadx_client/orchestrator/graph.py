@@ -11,11 +11,24 @@ from squadx_client.orchestrator.nodes import (
     create_plan,
     execute_subtask,
     review_results,
+    arbiter,
+    escalate,
     commit_changes,
     handle_error,
 )
 
 logger = structlog.get_logger()
+
+
+def route_after_arbiter(state: OrchestratorState) -> Literal["execute", "commit", "escalate"]:
+    """Route on the arbiter's verdict: re-work, ship, or hand back to a human."""
+    _get = (lambda s, k, d=None: s.get(k, d)) if isinstance(state, dict) else (lambda s, k, d=None: getattr(s, k, d))
+    verdict = _get(state, "review_verdict")
+    if verdict == "continue":
+        return "execute"
+    if verdict == "escalate":
+        return "escalate"
+    return "commit"
 
 
 def should_continue(state: OrchestratorState) -> Literal["execute", "review", "error", "end"]:
@@ -65,6 +78,8 @@ def create_orchestrator() -> StateGraph:
     graph.add_node("plan", create_plan)
     graph.add_node("execute", execute_subtask)
     graph.add_node("review", review_results)
+    graph.add_node("arbiter", arbiter)
+    graph.add_node("escalate", escalate)
     graph.add_node("commit", commit_changes)
     graph.add_node("error", handle_error)
 
@@ -93,7 +108,18 @@ def create_orchestrator() -> StateGraph:
             "end": END,
         },
     )
-    graph.add_edge("review", "commit")
+    # Review produces findings; the arbiter is the authority on when the loop stops.
+    graph.add_edge("review", "arbiter")
+    graph.add_conditional_edges(
+        "arbiter",
+        route_after_arbiter,
+        {
+            "execute": "execute",   # CONTINUE — re-work the injected fix subtask
+            "commit": "commit",     # APPROVE — ship it
+            "escalate": "escalate", # ESCALATE — hand back to a human
+        },
+    )
+    graph.add_edge("escalate", END)
     graph.add_edge("commit", END)
     graph.add_edge("error", END)
 
@@ -104,25 +130,33 @@ def create_orchestrator() -> StateGraph:
 # Diagram of the graph:
 #
 #                    ┌─────────────┐
-#                    │   analyze   │
+#                    │   analyze   │  (sets complexity)
 #                    └──────┬──────┘
 #                           │
 #                    ┌──────▼──────┐
 #                    │    plan     │
 #                    └──────┬──────┘
 #                           │
-#           ┌───────────────┼───────────────┐
-#           │               │               │
-#    ┌──────▼─────┐  ┌──────▼─────┐  ┌──────▼─────┐
-#    │  execute   │  │   review   │  │   error    │
-#    └──────┬─────┘  └──────┬─────┘  └──────┬─────┘
-#           │               │               │
-#           └───────────────┼───────────────┘
-#                           │
-#                    ┌──────▼──────┐
-#                    │   commit    │
-#                    └──────┬──────┘
-#                           │
-#                    ┌──────▼──────┐
-#                    │     END     │
-#                    └─────────────┘
+#              ┌────────────▼────────────┐
+#              │         execute         │◄────────────┐ CONTINUE
+#              └────────────┬────────────┘             │ (fix subtask)
+#                           │ (no pending)             │
+#                    ┌──────▼──────┐                   │
+#                    │   review    │ (findings + risk) │
+#                    └──────┬──────┘                   │
+#                           │                          │
+#                    ┌──────▼──────┐  the loop-breaker │
+#                    │   arbiter   │───────────────────┘
+#                    └──┬───────┬──┘
+#               APPROVE │       │ ESCALATE
+#                 ┌─────▼──┐ ┌──▼────────┐
+#                 │ commit │ │ escalate  │ (report_blocker → human)
+#                 └────┬───┘ └─────┬─────┘
+#                      └─────┬─────┘
+#                     ┌──────▼──────┐
+#                     │     END     │
+#                     └─────────────┘
+#
+# The arbiter — not the reviewer — decides when the loop stops. cycle_count is a hard backstop
+# (max_cycles); complexity scales rigor. A risky task never APPROVEs with an open blocker; a
+# trivial one escalates rather than looping.

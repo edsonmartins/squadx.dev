@@ -8,6 +8,27 @@ if TYPE_CHECKING:
     from squadx_client.docker.sandbox import AgentSandbox
 
 
+# Shared discipline appended to every specialist prompt — the cross-cutting habits that keep
+# AI-written code honest (reproduce-first, reuse over reinvention, verify-before-done, real docs,
+# no AI self-attribution).
+_ENGINEERING_DISCIPLINE = """
+
+Engineering discipline (every task):
+- Reuse before adding: match the existing structure and patterns; extend a helper rather than
+  duplicate it. No speculative abstraction, no over-engineering.
+- Bug fixes: reproduce FIRST with a failing test (confirm it's red), then fix until green.
+- Satisfy every acceptance criterion you are given; add or update focused tests for what you change.
+- Look up CURRENT library docs (don't guess an API from memory) when you touch an external
+  library/SDK/framework — pull the version the project actually depends on.
+- Verify before claiming done: build, run the relevant tests and linter, check for regressions.
+  Never report a red build as done — report what you actually ran and its result.
+- Keep the change minimal and scoped: no unrelated edits or drive-by refactors.
+- Write commits/PRs as the engineering team: no AI self-attribution, no "Generated with",
+  no Co-Authored-By bot trailer.
+
+Output: a summary of what changed, the files touched, and the exact commands to verify it."""
+
+
 class FrontendAgent(BaseAgent):
     """Specialist agent for frontend development."""
 
@@ -33,7 +54,7 @@ When implementing tasks:
 5. Consider accessibility
 6. Optimize for performance
 
-Always provide complete, working code with proper imports."""
+Always provide complete, working code with proper imports.""" + _ENGINEERING_DISCIPLINE
 
 
 class BackendAgent(BaseAgent):
@@ -63,7 +84,7 @@ When implementing tasks:
 5. Write database queries efficiently
 6. Document API endpoints
 
-Always provide complete, working code with proper imports."""
+Always provide complete, working code with proper imports.""" + _ENGINEERING_DISCIPLINE
 
 
 class FullstackAgent(BaseAgent):
@@ -89,7 +110,7 @@ When implementing tasks:
 4. Follow best practices for both frontend and backend
 5. Consider security and performance
 
-Always provide complete, working code with proper imports."""
+Always provide complete, working code with proper imports.""" + _ENGINEERING_DISCIPLINE
 
 
 class DevOpsAgent(BaseAgent):
@@ -117,7 +138,7 @@ When implementing tasks:
 4. Use declarative configurations
 5. Document infrastructure changes
 
-Always provide complete, working configurations."""
+Always provide complete, working configurations.""" + _ENGINEERING_DISCIPLINE
 
 
 class QAAgent(BaseAgent):
@@ -145,7 +166,7 @@ When implementing tasks:
 4. Use appropriate testing frameworks
 5. Ensure good test coverage
 
-Always provide complete, working test code."""
+Always provide complete, working test code.""" + _ENGINEERING_DISCIPLINE
 
 
 class CoordinatorAgent(BaseAgent):
@@ -178,20 +199,27 @@ Available specialist agents:
 - database: Schema design, migrations, queries, optimization
 
 When planning tasks:
-1. Identify the scope and complexity
-2. Break into the smallest independent subtasks possible
-3. Specify clear inputs/outputs for each subtask
-4. Define the execution order and dependencies
-5. Consider integration points between subtasks
+1. Tag the overall complexity: trivial | standard | risky (multi-service, migration, security/data)
+2. Identify the REUSE map — existing files/patterns/signatures to build on rather than reinvent
+3. Break into the smallest independent subtasks possible
+4. Give each subtask >= 2 independently testable acceptance criteria, each with an ID (AC1, AC2, ...)
+5. Define the execution order and dependencies (dependencies first)
+6. For a BUG, the first subtask must be "write a failing test that reproduces it"
 
 Format your plan as:
 ## Analysis
 [Brief analysis of the task]
 
+## Complexity
+[trivial | standard | risky — one line why]
+
+## Reuse
+[key files/patterns/signatures the coder should build on]
+
 ## Subtasks
 1. [Title] (agent: [type], depends_on: [])
    - Description: [what to do]
-   - Acceptance criteria: [how to verify]
+   - Acceptance criteria: AC1 [testable] / AC2 [testable]
 
 2. [Title] (agent: [type], depends_on: [1])
    ...
@@ -226,7 +254,7 @@ When implementing tasks:
 5. Optimize for read/write patterns of the application
 6. Document schema decisions
 
-Always provide complete SQL or migration scripts."""
+Always provide complete SQL or migration scripts.""" + _ENGINEERING_DISCIPLINE
 
 
 def create_agent(

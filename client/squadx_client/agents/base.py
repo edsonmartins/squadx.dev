@@ -301,6 +301,12 @@ Format your response as:
         if context:
             if context.get("main_task") is not None:
                 context_str += f"\n\nMain task: {context['main_task'].get('title', 'N/A')}"
+            if context.get("reuse_map"):
+                context_str += f"\n\nReuse map (build on these, don't reinvent): {context['reuse_map']}"
+            if context.get("acceptance_criteria"):
+                context_str += "\n\nAcceptance criteria (this work must satisfy ALL):"
+                for ac in context["acceptance_criteria"]:
+                    context_str += f"\n- {ac}"
             if context.get("completed_subtasks"):
                 context_str += "\n\nAlready completed:"
                 for st in context["completed_subtasks"]:

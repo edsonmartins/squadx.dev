@@ -18,6 +18,9 @@ class SubTask(BaseModel):
     files_modified: list[str] = Field(default_factory=list)
     error: str | None = None
     live_session_code: str | None = None  # Live streaming session code
+    acceptance_criteria: list[str] = Field(default_factory=list)  # Testable ACs the work must satisfy
+    depends_on: list[str] = Field(default_factory=list)  # IDs of subtasks that must finish first
+    is_fix: bool = False  # True when injected by the arbiter to address review findings
 
 
 class TaskPlan(BaseModel):
@@ -28,6 +31,7 @@ class TaskPlan(BaseModel):
     subtasks: list[SubTask]
     execution_order: list[str]  # List of subtask IDs in execution order
     parallel_groups: list[list[str]] = Field(default_factory=list)  # Groups that can run in parallel
+    reuse: str = ""  # Key existing files/patterns the coder should build on rather than reinvent
 
 
 class AgentMetrics(BaseModel):
@@ -142,6 +146,15 @@ class OrchestratorState(BaseModel):
 
     # Metrics
     metrics: ExecutionMetrics = Field(default_factory=ExecutionMetrics)
+
+    # Review / arbitration loop (the loop-breaker — see arbiter node)
+    complexity: Literal["trivial", "standard", "risky"] = "standard"
+    cycle_count: int = 0  # review→arbiter rounds completed
+    max_cycles: int = 3  # hard backstop so the team never loops forever
+    review_findings: list[dict[str, Any]] = Field(default_factory=list)  # latest reviewer pass
+    review_verdict: Literal["continue", "approve", "escalate"] | None = None  # arbiter's decision
+    escalation_reason: str | None = None  # why the arbiter handed back to a human
+    cost_budget_usd: float | None = None  # hard cost ceiling; over it the arbiter escalates (None = no cap)
 
     # Control
     should_end: bool = False

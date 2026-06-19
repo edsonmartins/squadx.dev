@@ -1,6 +1,7 @@
 package dev.squadx.controlpanel.validation;
 
 import dev.squadx.controlpanel.materialization.GitHubDiffClient;
+import dev.squadx.controlpanel.materialization.GitHubReviewClient;
 import dev.squadx.integration.IntegrationConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,8 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -23,6 +23,7 @@ class PullwiseConformanceReviewerTest {
 
     private static final String URL = "http://pullwise";
     private GitHubDiffClient diffClient;
+    private GitHubReviewClient reviewClient;
     private MockRestServiceServer server;
     private PullwiseConformanceReviewer reviewer;
 
@@ -33,9 +34,10 @@ class PullwiseConformanceReviewerTest {
         config.getPullwise().setUrl(URL);
         config.getPullwise().setApiKey("k");
         diffClient = mock(GitHubDiffClient.class);
+        reviewClient = mock(GitHubReviewClient.class);
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        reviewer = new PullwiseConformanceReviewer(config, builder, diffClient);
+        reviewer = new PullwiseConformanceReviewer(config, builder, diffClient, reviewClient);
     }
 
     private ConformanceReviewer.ConformanceRequest request() {
@@ -56,6 +58,9 @@ class PullwiseConformanceReviewerTest {
 
         assertThat(verdict.diverges()).isTrue();
         assertThat(verdict.critique()).contains("missing X").contains("C1");
+        // The divergent finding is published to the PR as an idempotent review.
+        verify(reviewClient).publishConformanceReview(
+                eq("https://github.com/o/r"), eq("5"), eq("sha"), anyString(), argThat(f -> f.size() == 1));
         server.verify();
     }
 

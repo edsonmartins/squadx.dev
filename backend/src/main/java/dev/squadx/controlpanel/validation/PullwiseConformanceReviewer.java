@@ -1,6 +1,7 @@
 package dev.squadx.controlpanel.validation;
 
 import dev.squadx.controlpanel.materialization.GitHubDiffClient;
+import dev.squadx.controlpanel.materialization.GitHubReviewClient;
 import dev.squadx.integration.IntegrationConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,12 +29,14 @@ public class PullwiseConformanceReviewer implements ConformanceReviewer {
     private final IntegrationConfig.PullwiseConfig pullwise;
     private final RestClient restClient;
     private final GitHubDiffClient diffClient;
+    private final GitHubReviewClient reviewClient;
 
     public PullwiseConformanceReviewer(IntegrationConfig config, RestClient.Builder builder,
-                                       GitHubDiffClient diffClient) {
+                                       GitHubDiffClient diffClient, GitHubReviewClient reviewClient) {
         this.pullwise = config.getPullwise();
         this.restClient = builder.baseUrl(pullwise.getUrl()).build();
         this.diffClient = diffClient;
+        this.reviewClient = reviewClient;
     }
 
     @Override
@@ -66,7 +69,9 @@ public class PullwiseConformanceReviewer implements ConformanceReviewer {
             if (response == null || !Boolean.TRUE.equals(response.get("diverges"))) {
                 return ConformanceVerdict.ok();
             }
-            return ConformanceVerdict.diverges(buildCritique(response));
+            String critique = buildCritique(response);
+            publishReview(request, critique, response); // efeito colateral best-effort; não afeta o verdict
+            return ConformanceVerdict.diverges(critique);
         } catch (Exception e) {
             log.warn("Pullwise conformance review failed for task {}: {}", request.specTaskId(), e.getMessage());
             return ConformanceVerdict.ok();
@@ -89,5 +94,46 @@ public class PullwiseConformanceReviewer implements ConformanceReviewer {
             }
         }
         return sb.toString().isBlank() ? "conformance diverged" : sb.toString();
+    }
+
+    /** Publica os achados divergentes como uma review idempotente no PR (Pass 5 → feedback acionável). */
+    private void publishReview(ConformanceRequest request, String summary, Map<?, ?> response) {
+        List<GitHubReviewClient.ReviewFinding> findings = toFindings(response);
+        if (!findings.isEmpty()) {
+            reviewClient.publishConformanceReview(
+                    request.repositoryUrl(), request.prNumber(), request.prSha(), summary, findings);
+        }
+    }
+
+    private List<GitHubReviewClient.ReviewFinding> toFindings(Map<?, ?> response) {
+        if (!(response.get("criteria") instanceof List<?> list)) {
+            return List.of();
+        }
+        List<GitHubReviewClient.ReviewFinding> findings = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> c && Boolean.FALSE.equals(c.get("ok"))) {
+                findings.add(new GitHubReviewClient.ReviewFinding(
+                        asString(c.get("name")),
+                        asString(c.get("note")),
+                        asString(c.get("file") != null ? c.get("file") : c.get("path")),
+                        asInt(c.get("line"))));
+            }
+        }
+        return findings;
+    }
+
+    private static String asString(Object o) {
+        return o != null ? String.valueOf(o) : null;
+    }
+
+    private static Integer asInt(Object o) {
+        if (o instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return o != null ? Integer.parseInt(String.valueOf(o)) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

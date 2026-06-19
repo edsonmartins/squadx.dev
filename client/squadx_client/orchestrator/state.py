@@ -31,6 +31,7 @@ class TaskPlan(BaseModel):
     subtasks: list[SubTask]
     execution_order: list[str]  # List of subtask IDs in execution order
     parallel_groups: list[list[str]] = Field(default_factory=list)  # Groups that can run in parallel
+    reuse: str = ""  # Key existing files/patterns the coder should build on rather than reinvent
 
 
 class AgentMetrics(BaseModel):

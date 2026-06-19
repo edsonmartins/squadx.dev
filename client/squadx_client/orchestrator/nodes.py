@@ -185,28 +185,41 @@ async def create_plan(state: OrchestratorState) -> dict[str, Any]:
     task = state.task
     llm = get_llm()
 
-    system_prompt = """You are a project manager creating an execution plan.
+    system_prompt = """You are the Planner/Architect. Convert the request into an executable plan \
+BEFORE any code is written — you never write code here. Reuse before adding.
 
-Based on the task analysis, create a detailed plan with subtasks for specialist agents.
-
-Each subtask should specify:
-- id: unique identifier (use UUIDs)
+For EACH subtask specify:
+- id: a short unique identifier (e.g. "s1")
 - title: brief title
 - description: detailed description of what to do
 - agent_type: frontend|backend|fullstack|devops|qa
+- acceptance_criteria: >= 2 independently testable criteria, each prefixed with an ID (AC1, AC2, ...)
+- depends_on: ids of subtasks that must finish first ([] if none)
+
+Also identify, for the change as a whole:
+- reuse: the key existing files/patterns/signatures the coder should build on rather than reinvent
+  (one or two lines; "" if genuinely unknown)
+- complexity: trivial (one-line/local) | standard | risky (multi-service, migration, security/data)
+
+For a BUG, the FIRST subtask must be "write a failing test that reproduces it".
+Slice the work so subtasks integrate cleanly, and order them so dependencies come first.
 
 Respond in JSON format:
 {
+    "complexity": "trivial|standard|risky",
+    "reuse": "key files/patterns to build on",
     "subtasks": [
         {
-            "id": "uuid",
+            "id": "s1",
             "title": "Subtask title",
             "description": "What the agent should do",
-            "agent_type": "backend"
+            "agent_type": "backend",
+            "acceptance_criteria": ["AC1 <testable>", "AC2 <testable>"],
+            "depends_on": []
         }
     ],
-    "execution_order": ["uuid1", "uuid2"],
-    "parallel_groups": [["uuid1", "uuid2"], ["uuid3"]]
+    "execution_order": ["s1", "s2"],
+    "parallel_groups": [["s1"], ["s2"]]
 }"""
 
     plan_prompt = f"""Task: {task.get('title')}
@@ -227,14 +240,19 @@ Create an execution plan."""
 
     await _record_prompt_interaction(state, plan_prompt, response.content, "create_plan")
 
+    plan_complexity: str | None = None
     try:
         plan_data = json.loads(response.content)
+        if plan_data.get("complexity"):
+            plan_complexity = _map_complexity(plan_data.get("complexity"))
         subtasks = [
             SubTask(
                 id=st.get("id", str(uuid.uuid4())),
                 title=st["title"],
                 description=st["description"],
                 agent_type=st["agent_type"],
+                acceptance_criteria=[str(ac) for ac in st.get("acceptance_criteria", [])],
+                depends_on=[str(d) for d in st.get("depends_on", [])],
             )
             for st in plan_data.get("subtasks", [])
         ]
@@ -245,6 +263,7 @@ Create an execution plan."""
             subtasks=subtasks,
             execution_order=plan_data.get("execution_order", [st.id for st in subtasks]),
             parallel_groups=plan_data.get("parallel_groups", []),
+            reuse=str(plan_data.get("reuse", "")),
         )
     except (json.JSONDecodeError, KeyError) as e:
         logger.error("plan_creation_failed", error=str(e))
@@ -264,12 +283,16 @@ Create an execution plan."""
             execution_order=[subtask_id],
         )
 
-    logger.info("plan_created", subtask_count=len(plan.subtasks))
+    logger.info("plan_created", subtask_count=len(plan.subtasks), complexity=plan_complexity)
 
-    return {
+    update: dict[str, Any] = {
         "plan": plan,
         "messages": state.messages + [response],
     }
+    # The planner sees the decomposition, so prefer its complexity call over the analyzer's.
+    if plan_complexity:
+        update["complexity"] = plan_complexity
+    return update
 
 
 async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
@@ -345,6 +368,8 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 "completed_subtasks": [
                     st for st in state.plan.subtasks if st.id in state.completed_subtasks
                 ],
+                "acceptance_criteria": subtask.acceptance_criteria,
+                "reuse_map": state.plan.reuse,
             },
         )
 

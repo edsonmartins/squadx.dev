@@ -10,8 +10,10 @@ from typing import Any, Optional
 import aiohttp
 import structlog
 
+from squadx_client.agents.security import scrub_env
 from squadx_client.config import settings
 from squadx_client.memory import BrainSentryClient
+from squadx_client.messaging.run_event import default_run_event_metadata
 from squadx_client.orchestrator.graph import create_orchestrator
 from squadx_client.websocket import StompClientManager, MessageType
 from squadx_client.websocket.handlers import TaskMessageHandler
@@ -363,7 +365,8 @@ class SquadXDaemon:
         cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
         workspace_path = task_data.get("project_path") or settings.workspace_path
 
-        # Inject provider API keys into the sandbox environment (BYO key).
+        # Inject provider API keys into the sandbox environment (BYO key). Scrub defensively so
+        # only these explicitly-allowed secrets (and safe vars) ever reach the CLI (ADR-0007).
         environment: dict[str, str] = {}
         if settings.anthropic_api_key:
             environment["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
@@ -371,6 +374,9 @@ class SquadXDaemon:
             environment["OPENAI_API_KEY"] = settings.openai_api_key
         if getattr(settings, "google_api_key", None):
             environment["GOOGLE_API_KEY"] = settings.google_api_key
+        environment = scrub_env(
+            environment, allow=("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY")
+        )
 
         sandbox = AgentSandbox(
             task_id=task_id,
@@ -698,15 +704,24 @@ class SquadXDaemon:
         level: str,
         message: str,
         agent: str = "",
+        event_type: str | None = None,
+        visibility: str | None = None,
+        importance: str | None = None,
     ) -> None:
-        """Send execution log to backend.
+        """Send execution log to backend, tagged with Attention Budget metadata (RFC-0005 §1).
 
         Args:
             execution_id: Execution ID
             level: Log level (DEBUG, INFO, WARNING, ERROR)
             message: Log message
             agent: Agent name (if applicable)
+            event_type: Optional structured event type (e.g. "tool.log", "run.completed")
+            visibility: Explicit "human" | "audit" | "debug" (overrides the derived default)
+            importance: Explicit "low" | "normal" | "high" | "blocking"
         """
+        metadata = default_run_event_metadata(
+            event_type=event_type, level=level, visibility=visibility, importance=importance
+        )
         destination = self.DEST_EXECUTION_LOGS.format(execution_id=execution_id)
         await self.stomp.send(
             destination,
@@ -714,6 +729,8 @@ class SquadXDaemon:
                 "type": MessageType.EXECUTION_LOG.value,
                 "execution_id": execution_id,
                 "level": level,
+                "visibility": metadata.visibility,
+                "importance": metadata.importance,
                 "message": message,
                 "agent": agent,
                 "timestamp": datetime.now().isoformat(),

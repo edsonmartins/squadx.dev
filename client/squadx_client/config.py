@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     enable_network: bool = Field(default=False, alias="SQUADX_ENABLE_NETWORK")
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
+    # External-CLI prompt-injection policy: "enforce" | "audit" | "off" (RFC-0005 / ADR-0007).
+    cli_security_mode: str = Field(default="audit", alias="SQUADX_CLI_SECURITY_MODE")
 
     # Network policy
     network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full

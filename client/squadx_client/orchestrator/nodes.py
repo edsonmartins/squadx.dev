@@ -15,7 +15,9 @@ from squadx_client.llm.router import get_llm
 from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
 from squadx_client.memory.policy import MemoryScopeContext
 from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
+from squadx_client.orchestrator.context_packet import build_context_packet
 from squadx_client.agents.factory import create_agent
+from squadx_client.agents.security import filter_internal_artifacts
 from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 
@@ -358,19 +360,24 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             brainsentry_session_id=state.brainsentry_session_id,
         )
 
+        # Assemble a curated, auditable Context Packet (ADR-0007, RFC-0005) and pass it alongside
+        # the raw context. Prompt builders prefer the packet; raw keys remain for compatibility.
+        subtask_context: dict[str, Any] = {
+            "main_task": state.task,
+            "execution_id": state.execution_id or state.task_id,
+            "completed_subtasks": [
+                st for st in state.plan.subtasks if st.id in state.completed_subtasks
+            ],
+            "acceptance_criteria": subtask.acceptance_criteria,
+            "reuse_map": state.plan.reuse,
+        }
+        subtask_context["context_packet"] = build_context_packet(subtask_context)
+
         # Execute the subtask
         result = await agent.execute(
             task_title=subtask.title,
             task_description=subtask.description,
-            context={
-                "main_task": state.task,
-                "execution_id": state.execution_id or state.task_id,
-                "completed_subtasks": [
-                    st for st in state.plan.subtasks if st.id in state.completed_subtasks
-                ],
-                "acceptance_criteria": subtask.acceptance_criteria,
-                "reuse_map": state.plan.reuse,
-            },
+            context=subtask_context,
         )
 
         execution_time = time.time() - start_time
@@ -688,11 +695,13 @@ async def commit_changes(state: OrchestratorState) -> dict[str, Any]:
         logger.warning("commit_blocked_unapproved", verdict=state.review_verdict, task_id=state.task_id)
         return {"should_end": True}
 
-    # Collect all modified files
+    # Collect all modified files, dropping internal agent-CLI artifacts (.claude/.codex/.omx)
+    # so they never pollute the task commit (ADR-0007).
     all_files = []
     for subtask in state.plan.subtasks:
         if subtask.id in state.completed_subtasks:
             all_files.extend(subtask.files_modified)
+    all_files = filter_internal_artifacts(all_files)
 
     if not all_files:
         logger.info("no_files_to_commit")

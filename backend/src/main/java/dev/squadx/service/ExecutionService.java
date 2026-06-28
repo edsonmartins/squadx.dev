@@ -3,6 +3,7 @@ package dev.squadx.service;
 import dev.squadx.dto.common.PageResponse;
 import dev.squadx.dto.execution.ExecutionRequest;
 import dev.squadx.dto.execution.ExecutionResponse;
+import dev.squadx.dto.execution.FollowUpResponse;
 import dev.squadx.event.ExecutionCompletedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
@@ -10,6 +11,7 @@ import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.integration.BrainSentryClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.ExecutionStatus;
+import dev.squadx.model.enums.FollowUpStatus;
 import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,8 @@ public class ExecutionService {
     private final BrainSentryClient brainSentryClient;
     private final ApplicationEventPublisher eventPublisher;
     private final SquadAgentResolver squadAgentResolver;
+    private final RunAdmissionService runAdmissionService;
+    private final FollowUpRequestRepository followUpRequestRepository;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -49,38 +53,37 @@ public class ExecutionService {
 
         validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
 
-        // Check if task already has a running execution
-        List<Execution> runningExecutions = executionRepository.findByTaskIdAndStatus(
-                task.getId(), ExecutionStatus.RUNNING);
-        if (!runningExecutions.isEmpty()) {
-            throw new BadRequestException("Task already has a running execution");
+        // Admission seam (RFC-0005 §2): dedup duplicate triggers and queue follow-ups when a run
+        // is already active, instead of racing or hard-failing.
+        RunAdmissionService.AdmissionResult admission = runAdmissionService.admit(task, request, currentUser);
+        switch (admission.action()) {
+            case DROP_DUPLICATE -> {
+                ExecutionResponse response = mapToResponse(admission.referencedExecution());
+                response.setAdmission(admission.decision());
+                return response;
+            }
+            case QUEUE_FOLLOW_UP -> {
+                Execution active = admission.referencedExecution();
+                appendAuditLog(active, "follow_up_request.queued", admission.decision().getReason());
+                ExecutionResponse response = mapToResponse(active);
+                response.setAdmission(admission.decision());
+                return response;
+            }
+            default -> { /* START — fall through to create a run */ }
         }
 
-        // Get agent
-        Agent agent;
-        if (request.getAgentId() != null) {
-            agent = agentRepository.findById(request.getAgentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
-        } else if (task.getAssignedAgent() != null) {
-            agent = task.getAssignedAgent();
-        } else if (task.getAssignedSquad() != null) {
-            // Squad leader-delegation: resolve the squad's leader (or an online member).
-            agent = squadAgentResolver.resolve(task.getAssignedSquad());
-            if (agent == null) {
-                throw new BadRequestException("No agent available in the assigned squad");
-            }
-        } else {
-            throw new BadRequestException("No agent specified for execution");
-        }
+        Agent agent = resolveAgent(task, request.getAgentId());
 
         // Create execution
         Execution execution = Execution.builder()
                 .task(task)
                 .agent(agent)
                 .status(ExecutionStatus.PENDING)
+                .idempotencyKey(admission.decision().getIdempotencyKey())
                 .build();
 
         execution = executionRepository.save(execution);
+        appendAuditLog(execution, "admission.decided", admission.decision().getReason());
 
         if (brainSentryClient.isEnabled()) {
             String sessionId = tryStartBrainSentrySession(task, execution, agent);
@@ -98,12 +101,32 @@ public class ExecutionService {
         taskRepository.save(task);
 
         ExecutionResponse response = mapToResponse(execution);
+        response.setAdmission(admission.decision());
 
         // Notify via WebSocket
         dispatchTaskAssignment(task, execution, currentUser);
         notifyExecutionChange("created", response, task.getProject().getId());
 
         return response;
+    }
+
+    private Agent resolveAgent(Task task, Long requestedAgentId) {
+        if (requestedAgentId != null) {
+            return agentRepository.findById(requestedAgentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        }
+        if (task.getAssignedAgent() != null) {
+            return task.getAssignedAgent();
+        }
+        if (task.getAssignedSquad() != null) {
+            // Squad leader-delegation: resolve the squad's leader (or an online member).
+            Agent agent = squadAgentResolver.resolve(task.getAssignedSquad());
+            if (agent == null) {
+                throw new BadRequestException("No agent available in the assigned squad");
+            }
+            return agent;
+        }
+        throw new BadRequestException("No agent specified for execution");
     }
 
     @Transactional
@@ -229,12 +252,26 @@ public class ExecutionService {
 
     @Transactional
     public void addLog(Long executionId, String level, String message, String metadata) {
+        addLog(executionId, null, level, null, null, message, metadata);
+    }
+
+    /**
+     * Append an execution log/event with Attention Budget classification (RFC-0005 §1). Explicit
+     * {@code visibility}/{@code importance} (sent by the client) win; otherwise they are derived
+     * from {@code eventType} or the log {@code level}.
+     */
+    @Transactional
+    public void addLog(Long executionId, String eventType, String level, String visibility,
+                       String importance, String message, String metadata) {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
 
+        RunEventMetadata.Metadata md = RunEventMetadata.resolve(visibility, importance, eventType, level);
         ExecutionLog log = ExecutionLog.builder()
                 .execution(execution)
-                .level(level)
+                .level(level != null ? level : "INFO")
+                .visibility(md.visibility())
+                .importance(md.importance())
                 .message(message)
                 .metadata(metadata)
                 .build();
@@ -243,7 +280,23 @@ public class ExecutionService {
         executionRepository.save(execution);
 
         // Notify via WebSocket
-        webSocketEventService.sendExecutionLog(executionId, level, message);
+        webSocketEventService.sendExecutionLog(executionId, log.getLevel(), md.visibility(), md.importance(), message);
+    }
+
+    /** Append an audit-only timeline event to an already-loaded execution (admission, promotion). */
+    private void appendAuditLog(Execution execution, String eventType, String message) {
+        RunEventMetadata.Metadata md = RunEventMetadata.resolve(null, null, eventType, "INFO");
+        ExecutionLog log = ExecutionLog.builder()
+                .execution(execution)
+                .level("INFO")
+                .visibility(md.visibility())
+                .importance(md.importance())
+                .message(message)
+                .metadata("{\"event\":\"" + eventType + "\"}")
+                .build();
+        execution.getLogs().add(log);
+        executionRepository.save(execution);
+        webSocketEventService.sendExecutionLog(execution.getId(), "INFO", md.visibility(), md.importance(), message);
     }
 
     /**
@@ -425,6 +478,7 @@ public class ExecutionService {
 
         executionRepository.save(execution);
         publishExecutionCompletedEventIfNeeded(execution);
+        promoteNextFollowUp(task);
     }
 
     private void handleTaskFailure(Execution execution, Map<String, Object> payload, boolean rejected) {
@@ -441,6 +495,7 @@ public class ExecutionService {
 
         executionRepository.save(execution);
         publishExecutionCompletedEventIfNeeded(execution);
+        promoteNextFollowUp(task);
     }
 
     private String stringValue(Object value) {
@@ -482,6 +537,60 @@ public class ExecutionService {
         ));
     }
 
+    /**
+     * Promote the oldest pending follow-up for a task into a new PENDING execution once the active
+     * run terminates (RFC-0005 §2.3). The new run is picked up by the client's polling/claim path.
+     */
+    private void promoteNextFollowUp(Task task) {
+        followUpRequestRepository
+                .findFirstByTaskIdAndStatusOrderByCreatedAtAsc(task.getId(), FollowUpStatus.PENDING)
+                .ifPresent(followUp -> {
+                    try {
+                        Agent agent = resolveAgent(task, followUp.getRequestedAgentId());
+                        Execution promoted = executionRepository.save(Execution.builder()
+                                .task(task)
+                                .agent(agent)
+                                .status(ExecutionStatus.PENDING)
+                                .build());
+                        appendAuditLog(promoted, "run.created",
+                                "Promoted from follow-up request #" + followUp.getId());
+                        followUp.setStatus(FollowUpStatus.PROMOTED);
+                        followUpRequestRepository.save(followUp);
+                        log.info("Promoted follow-up {} to execution {} for task {}",
+                                followUp.getId(), promoted.getId(), task.getId());
+                    } catch (RuntimeException e) {
+                        followUp.setStatus(FollowUpStatus.CANCELLED);
+                        followUpRequestRepository.save(followUp);
+                        log.warn("Cancelled follow-up {} for task {}: {}",
+                                followUp.getId(), task.getId(), e.getMessage());
+                    }
+                });
+    }
+
+    /** Pending follow-up requests queued behind the active run for a task (RFC-0005 §2.3). */
+    @Transactional(readOnly = true)
+    public PageResponse<FollowUpResponse> getPendingFollowUps(Long taskId, Pageable pageable, User currentUser) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        validateUserAccess(task.getProject().getOrganization().getId(), currentUser.getId());
+
+        Page<FollowUpResponse> page = followUpRequestRepository
+                .findByTaskIdAndStatus(taskId, FollowUpStatus.PENDING, pageable)
+                .map(this::mapFollowUp);
+        return PageResponse.from(page);
+    }
+
+    private FollowUpResponse mapFollowUp(FollowUpRequest followUp) {
+        return FollowUpResponse.builder()
+                .id(followUp.getId())
+                .taskId(followUp.getTask().getId())
+                .activeExecutionId(followUp.getActiveExecutionId())
+                .requestedAgentId(followUp.getRequestedAgentId())
+                .status(followUp.getStatus())
+                .createdAt(followUp.getCreatedAt())
+                .build();
+    }
+
     private ExecutionResponse mapToResponse(Execution execution) {
         Long durationSeconds = null;
         if (execution.getStartedAt() != null && execution.getCompletedAt() != null) {
@@ -512,6 +621,8 @@ public class ExecutionService {
                         .map(log -> ExecutionResponse.LogEntry.builder()
                                 .id(log.getId())
                                 .level(log.getLevel())
+                                .visibility(log.getVisibility())
+                                .importance(log.getImportance())
                                 .message(log.getMessage())
                                 .metadata(log.getMetadata())
                                 .createdAt(log.getCreatedAt())

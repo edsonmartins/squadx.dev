@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,12 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
     Page<Execution> findByTaskId(Long taskId, Pageable pageable);
 
     List<Execution> findByTaskIdAndStatus(Long taskId, ExecutionStatus status);
+
+    /** Active runs (PENDING or RUNNING) for a task — used by the admission seam (RFC-0005 §2.2). */
+    List<Execution> findByTaskIdAndStatusIn(Long taskId, Collection<ExecutionStatus> statuses);
+
+    /** Dedup lookup for idempotent admission (RFC-0005 §2.1). */
+    Optional<Execution> findByTaskIdAndIdempotencyKey(Long taskId, String idempotencyKey);
 
     /** Pending executions in organizations the user belongs to (limit applied by Pageable). */
     @Query("""

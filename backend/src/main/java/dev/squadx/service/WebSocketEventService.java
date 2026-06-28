@@ -127,7 +127,7 @@ public class WebSocketEventService {
         );
     }
 
-    public void sendExecutionLog(Long executionId, String level, String message) {
+    public void sendExecutionLog(Long executionId, String level, String visibility, String importance, String message) {
         log.trace("Broadcasting execution log for execution {}", executionId);
         messagingTemplate.convertAndSend(
                 "/topic/executions/" + executionId + "/logs",
@@ -135,6 +135,8 @@ public class WebSocketEventService {
                         "type", "execution_log",
                         "executionId", executionId,
                         "level", level,
+                        "visibility", visibility != null ? visibility : "human",
+                        "importance", importance != null ? importance : "normal",
                         "message", message,
                         "timestamp", System.currentTimeMillis()
                 )

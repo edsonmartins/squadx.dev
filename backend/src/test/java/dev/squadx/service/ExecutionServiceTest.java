@@ -2,6 +2,7 @@ package dev.squadx.service;
 
 import dev.squadx.dto.execution.ExecutionRequest;
 import dev.squadx.dto.execution.ExecutionResponse;
+import dev.squadx.dto.execution.RunAdmissionDecision;
 import dev.squadx.event.ExecutionCompletedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
@@ -22,8 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -59,6 +58,12 @@ class ExecutionServiceTest {
 
     @Mock
     private SquadAgentResolver squadAgentResolver;
+
+    @Mock
+    private RunAdmissionService runAdmissionService;
+
+    @Mock
+    private FollowUpRequestRepository followUpRequestRepository;
 
     @InjectMocks
     private ExecutionService executionService;
@@ -123,6 +128,17 @@ class ExecutionServiceTest {
     @DisplayName("startExecution()")
     class StartExecution {
 
+        private void stubAdmitStart() {
+            RunAdmissionDecision decision = RunAdmissionDecision.builder()
+                    .action(RunAdmissionAction.START)
+                    .reasonCode(RunAdmissionReasonCode.NEW_EVENT)
+                    .reason("ok")
+                    .decidedAt(Instant.now())
+                    .build();
+            when(runAdmissionService.admit(any(Task.class), any(ExecutionRequest.class), any(User.class)))
+                    .thenReturn(new RunAdmissionService.AdmissionResult(decision, null, null));
+        }
+
         @Test
         @DisplayName("should start execution with explicit agent ID")
         void shouldStartExecutionWithExplicitAgentId() {
@@ -133,8 +149,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
             when(agentRepository.findById(1L)).thenReturn(Optional.of(testAgent));
             when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
                 Execution saved = invocation.getArgument(0);
@@ -149,8 +164,9 @@ class ExecutionServiceTest {
             assertThat(response.getTaskId()).isEqualTo(1L);
             assertThat(response.getAgentId()).isEqualTo(1L);
             assertThat(response.getStatus()).isEqualTo(ExecutionStatus.PENDING);
+            assertThat(response.getAdmission().getAction()).isEqualTo(RunAdmissionAction.START);
 
-            verify(executionRepository).save(any(Execution.class));
+            verify(executionRepository, atLeastOnce()).save(any(Execution.class));
             verify(taskRepository).save(any(Task.class));
             verify(webSocketEventService).sendExecutionStarted(eq(1L), eq(1L), any());
             verify(webSocketEventService).sendTaskAssignedToUser(eq("test@example.com"), eq(1L), anyMap());
@@ -167,8 +183,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
             when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
                 Execution saved = invocation.getArgument(0);
                 saved.setId(1L);
@@ -208,8 +223,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
             when(agentRepository.findById(99L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> executionService.startExecution(request, testUser))
@@ -226,8 +240,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
 
             assertThatThrownBy(() -> executionService.startExecution(request, testUser))
                     .isInstanceOf(BadRequestException.class)
@@ -235,21 +248,66 @@ class ExecutionServiceTest {
         }
 
         @Test
-        @DisplayName("should throw when task already has a running execution")
-        void shouldThrowWhenAlreadyRunning() {
+        @DisplayName("should return existing run (idempotent) when admission drops a duplicate")
+        void shouldReturnExistingRunOnDuplicate() {
+            ExecutionRequest request = ExecutionRequest.builder()
+                    .taskId(1L)
+                    .agentId(1L)
+                    .idempotencyKey("dup-key")
+                    .build();
+
+            RunAdmissionDecision decision = RunAdmissionDecision.builder()
+                    .action(RunAdmissionAction.DROP_DUPLICATE)
+                    .reasonCode(RunAdmissionReasonCode.DUPLICATE_SOURCE_EVENT)
+                    .activeExecutionId(1L)
+                    .idempotencyKey("dup-key")
+                    .decidedAt(Instant.now())
+                    .build();
+
+            when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+            when(runAdmissionService.admit(any(Task.class), any(ExecutionRequest.class), any(User.class)))
+                    .thenReturn(new RunAdmissionService.AdmissionResult(decision, testExecution, null));
+
+            ExecutionResponse response = executionService.startExecution(request, testUser);
+
+            assertThat(response.getAdmission().getAction()).isEqualTo(RunAdmissionAction.DROP_DUPLICATE);
+            assertThat(response.getId()).isEqualTo(1L);
+            // No new run is created on a duplicate.
+            verify(executionRepository, never()).save(any(Execution.class));
+            verify(agentRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("should queue a follow-up when a run is already active for the task")
+        void shouldQueueFollowUpWhenRunActive() {
             ExecutionRequest request = ExecutionRequest.builder()
                     .taskId(1L)
                     .agentId(1L)
                     .build();
 
+            RunAdmissionDecision decision = RunAdmissionDecision.builder()
+                    .action(RunAdmissionAction.QUEUE_FOLLOW_UP)
+                    .reasonCode(RunAdmissionReasonCode.ACTIVE_RUN_SAME_TASK)
+                    .reason("A run is already active for this task; queued as follow-up work.")
+                    .activeExecutionId(1L)
+                    .followUpRequestId(7L)
+                    .decidedAt(Instant.now())
+                    .build();
+
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(List.of(testExecution));
+            when(runAdmissionService.admit(any(Task.class), any(ExecutionRequest.class), any(User.class)))
+                    .thenReturn(new RunAdmissionService.AdmissionResult(decision, testExecution, null));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            assertThatThrownBy(() -> executionService.startExecution(request, testUser))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Task already has a running execution");
+            ExecutionResponse response = executionService.startExecution(request, testUser);
+
+            assertThat(response.getAdmission().getAction()).isEqualTo(RunAdmissionAction.QUEUE_FOLLOW_UP);
+            assertThat(response.getAdmission().getActiveExecutionId()).isEqualTo(1L);
+            assertThat(response.getAdmission().getFollowUpRequestId()).isEqualTo(7L);
+            // No new run, no agent resolution — just an audit log on the active run.
+            verify(agentRepository, never()).findById(any());
         }
 
         @Test
@@ -262,8 +320,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
             when(agentRepository.findById(1L)).thenReturn(Optional.of(testAgent));
             when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
                 Execution saved = invocation.getArgument(0);
@@ -287,8 +344,7 @@ class ExecutionServiceTest {
 
             when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
             when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
-            when(executionRepository.findByTaskIdAndStatus(1L, ExecutionStatus.RUNNING))
-                    .thenReturn(Collections.emptyList());
+            stubAdmitStart();
             when(agentRepository.findById(1L)).thenReturn(Optional.of(testAgent));
             when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
                 Execution saved = invocation.getArgument(0);
@@ -540,9 +596,25 @@ class ExecutionServiceTest {
             assertThat(testExecution.getLogs()).hasSize(1);
             assertThat(testExecution.getLogs().get(0).getMessage()).isEqualTo("Test log message");
             assertThat(testExecution.getLogs().get(0).getLevel()).isEqualTo("INFO");
+            // INFO is internal/diagnostic by default → audit channel (RFC-0005 §1).
+            assertThat(testExecution.getLogs().get(0).getVisibility()).isEqualTo("audit");
+            assertThat(testExecution.getLogs().get(0).getImportance()).isEqualTo("normal");
 
             verify(executionRepository).save(any(Execution.class));
-            verify(webSocketEventService).sendExecutionLog(1L, "INFO", "Test log message");
+            verify(webSocketEventService).sendExecutionLog(1L, "INFO", "audit", "normal", "Test log message");
+        }
+
+        @Test
+        @DisplayName("should classify an explicit human/blocking log")
+        void shouldClassifyExplicitHumanLog() {
+            when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+            when(executionRepository.save(any(Execution.class))).thenReturn(testExecution);
+
+            executionService.addLog(1L, "run.escalated", "ERROR", null, null, "needs human", null);
+
+            assertThat(testExecution.getLogs().get(0).getVisibility()).isEqualTo("human");
+            assertThat(testExecution.getLogs().get(0).getImportance()).isEqualTo("blocking");
+            verify(webSocketEventService).sendExecutionLog(1L, "ERROR", "human", "blocking", "needs human");
         }
     }
 

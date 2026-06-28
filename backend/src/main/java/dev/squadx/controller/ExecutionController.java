@@ -4,6 +4,7 @@ import dev.squadx.dto.common.ApiResponse;
 import dev.squadx.dto.common.PageResponse;
 import dev.squadx.dto.execution.ExecutionRequest;
 import dev.squadx.dto.execution.ExecutionResponse;
+import dev.squadx.dto.execution.FollowUpResponse;
 import dev.squadx.model.User;
 import dev.squadx.model.enums.ExecutionStatus;
 import dev.squadx.service.ExecutionService;
@@ -76,6 +77,17 @@ public class ExecutionController {
             @AuthenticationPrincipal User user
     ) {
         PageResponse<ExecutionResponse> response = executionService.getByTaskId(taskId, pageable, user);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/task/{taskId}/follow-ups")
+    @Operation(summary = "List pending follow-up requests queued behind the active run for a task")
+    public ResponseEntity<ApiResponse<PageResponse<FollowUpResponse>>> getPendingFollowUps(
+            @PathVariable Long taskId,
+            @PageableDefault(size = 20) Pageable pageable,
+            @AuthenticationPrincipal User user
+    ) {
+        PageResponse<FollowUpResponse> response = executionService.getPendingFollowUps(taskId, pageable, user);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

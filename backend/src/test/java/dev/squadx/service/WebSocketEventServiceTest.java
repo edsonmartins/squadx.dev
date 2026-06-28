@@ -83,7 +83,7 @@ class WebSocketEventServiceTest {
         @DisplayName("should broadcast execution log to execution topic")
         @SuppressWarnings("unchecked")
         void shouldBroadcastExecutionLog() {
-            webSocketEventService.sendExecutionLog(42L, "INFO", "Build started");
+            webSocketEventService.sendExecutionLog(42L, "INFO", "audit", "normal", "Build started");
 
             ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
             verify(messagingTemplate).convertAndSend(
@@ -95,6 +95,8 @@ class WebSocketEventServiceTest {
             assertThat(payload.get("type")).isEqualTo("execution_log");
             assertThat(payload.get("executionId")).isEqualTo(42L);
             assertThat(payload.get("level")).isEqualTo("INFO");
+            assertThat(payload.get("visibility")).isEqualTo("audit");
+            assertThat(payload.get("importance")).isEqualTo("normal");
             assertThat(payload.get("message")).isEqualTo("Build started");
             assertThat(payload).containsKey("timestamp");
         }

@@ -19,4 +19,11 @@ public class ExecutionRequest {
 
     @JsonProperty("agent_id")
     private Long agentId;
+
+    /**
+     * Optional idempotency key for admission dedup (RFC-0005 §2.1). When two requests carry the same
+     * key for the same task, only the first creates a run; the rest resolve to {@code drop_duplicate}.
+     */
+    @JsonProperty("idempotency_key")
+    private String idempotencyKey;
 }

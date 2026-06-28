@@ -71,7 +71,8 @@ identificadores em EN.
   `addLog`/`RunEventMetadata`) — ab:R3 · RFC-0005 §1.2
 - [x] 5.3 Testes: backend `ExecutionServiceTest`/`RunAdmissionServiceTest`/`WebSocketEventServiceTest` ✓;
   frontend `execution-logs` ✓; client `test_run_event`/`test_context_packet`/`test_security` ✓ — todas · ADR-0005
-- [ ] 5.4 Materializar: promover deltas para `openspec/specs/` ao aceitar/arquivar — todas
+- [x] 5.4 Materializado: deltas promovidos para `openspec/specs/{attention-budget,run-admission,
+  context-packet,sandbox-hardening}/spec.md`; change arquivado em `changes/archive/` — todas
 
 ## Estado
 

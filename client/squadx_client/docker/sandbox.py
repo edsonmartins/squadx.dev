@@ -11,7 +11,7 @@ from .manager import DockerManager, ContainerConfig, docker_manager
 from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
 from .file_ops import SandboxFileOps
 from .metrics import ContainerMetricsCollector, ContainerMetrics
-from .network_policy import NetworkPolicy, get_predefined_policy
+from .network_policy import NetworkPolicy, generate_network_setup_script, get_predefined_policy
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +161,21 @@ class AgentSandbox:
             if not await self.manager.start_container(self.container_id):
                 self._set_status(SandboxStatus.ERROR)
                 return False
+
+            # Apply network policy if one was configured. Failure is non-fatal:
+            # we keep the sandbox up but log a warning, so a missing iptables
+            # in the agent image or a malformed rule set doesn't break runs.
+            if self._network_policy:
+                script = generate_network_setup_script(self._network_policy)
+                ok, log = await self.manager.apply_network_setup(
+                    self.container_id, script
+                )
+                if not ok:
+                    logger.warning(
+                        f"network_policy_apply_failed task={self.task_id} "
+                        f"policy={self._network_policy.default_action.value} "
+                        f"log={log[:500]}"
+                    )
 
             # Initialize enhanced file operations and metrics collector
             if self.manager.client:

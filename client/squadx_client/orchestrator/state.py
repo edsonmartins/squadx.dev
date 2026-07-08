@@ -135,6 +135,11 @@ class OrchestratorState(BaseModel):
     current_subtask_id: str | None = None
     completed_subtasks: list[str] = Field(default_factory=list)
     failed_subtasks: list[str] = Field(default_factory=list)
+    # Per-subtask git worktree branches (subtask_id -> branch name). Populated by
+    # execute_subtask when SQUADX_USE_WORKTREES=true and the workspace is a git
+    # repo. Consumed by commit_changes to merge each specialist's branch back
+    # into the integration branch before the final commit.
+    subtask_worktrees: dict[str, str] = Field(default_factory=dict)
 
     # Results
     final_result: str | None = None

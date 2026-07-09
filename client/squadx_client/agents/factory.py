@@ -1,6 +1,6 @@
 """Agent factory for creating specialist agents."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from squadx_client.agents.base import BaseAgent
 
@@ -271,7 +271,7 @@ def create_agent(
         sandbox: Optional AgentSandbox for tool-based execution
         runtime_kind: "NATIVE" (default) or "EXTERNAL_CLI" to drive an external CLI
         cli_provider: CLI to use when runtime_kind is EXTERNAL_CLI
-            (CLAUDE_CODE, CODEX, GEMINI_CLI)
+            (CLAUDE_CODE, CODEX, GEMINI_CLI, AIDER, OPENCODE)
 
     Returns:
         An instance of the appropriate agent class

@@ -112,7 +112,15 @@ def assess_prompt(text: str) -> list[SecurityFinding]:
 
 # ── Internal-artifact cleanup ──────────────────────────────────────────────────
 
-INTERNAL_ARTIFACT_ROOTS: tuple[str, ...] = (".claude", ".codex", ".omx")
+INTERNAL_ARTIFACT_ROOTS: tuple[str, ...] = (
+    ".claude",
+    ".codex",
+    ".omx",
+    ".aider",
+    ".aider.chat.history.md",
+    ".aider.input.history",
+    ".opencode",
+)
 
 
 def is_internal_artifact_path(path: str) -> bool:

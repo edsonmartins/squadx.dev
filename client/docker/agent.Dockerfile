@@ -78,7 +78,14 @@ RUN npm install -g \
         @anthropic-ai/claude-code \
         @openai/codex \
         @google/gemini-cli \
+        opencode-ai@latest \
     && npm cache clean --force
+
+# Aider is a Python package, installed for the `agent` user so it lands on PATH.
+# It is a chat-style CLI; the runtime adapter invokes it headless via
+# `aider --no-auto-commits --yes-always --message "..."`.
+RUN pip install --no-cache-dir aider-chat==0.86.1 \
+    && aider --version >/dev/null
 
 # Install Java 21 (Temurin/Adoptium)
 RUN curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \

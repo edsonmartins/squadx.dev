@@ -2,15 +2,14 @@
 
 import pytest
 
+from squadx_client.agents.external_cli_agent import ExternalCliAgent
 from squadx_client.agents.security import (
     assess_prompt,
     filter_internal_artifacts,
     is_internal_artifact_path,
     scrub_env,
 )
-from squadx_client.agents.external_cli_agent import ExternalCliAgent
 from squadx_client.orchestrator.context_packet import build_context_packet
-
 
 # ── assess_prompt ──────────────────────────────────────────────────────────────
 
@@ -58,12 +57,28 @@ def test_internal_artifact_detection():
     assert is_internal_artifact_path(".claude/settings.json")
     assert is_internal_artifact_path(".codex")
     assert is_internal_artifact_path(".omx/state")
+    assert is_internal_artifact_path(".aider.chat.history.md")
+    assert is_internal_artifact_path(".aider/input.history")
+    assert is_internal_artifact_path(".opencode/cache")
     assert not is_internal_artifact_path("src/app.py")
     assert not is_internal_artifact_path(".claudefile")  # not under the root dir
 
 
 def test_filter_internal_artifacts():
     files = [".claude/x.json", "src/a.py", ".omx/y", "README.md"]
+    assert filter_internal_artifacts(files) == ["src/a.py", "README.md"]
+
+
+def test_filter_internal_artifacts_includes_aider_and_opencode():
+    """Added in the Aider/OpenCode adapter expansion: those CLIs drop
+    workspace-local state files that must not enter a commit."""
+    files = [
+        "src/a.py",
+        ".aider.chat.history.md",
+        ".aider/input.history",
+        ".opencode/cache.json",
+        "README.md",
+    ]
     assert filter_internal_artifacts(files) == ["src/a.py", "README.md"]
 
 

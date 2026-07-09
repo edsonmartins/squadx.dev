@@ -6,7 +6,7 @@ sandbox. The CLI does its own planning/editing; we stream its output as live
 progress and derive ``files_modified`` from git afterwards.
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 # Supported providers and the CLI binary name we expect on the sandbox PATH.
-SUPPORTED_PROVIDERS = {"CLAUDE_CODE", "CODEX", "GEMINI_CLI"}
+SUPPORTED_PROVIDERS = {"CLAUDE_CODE", "CODEX", "GEMINI_CLI", "AIDER", "OPENCODE"}
 
 
 class ExternalCliAgent(BaseAgent):
@@ -86,6 +86,23 @@ class ExternalCliAgent(BaseAgent):
             return ["codex", "exec", "--full-auto", prompt]
         if self.provider == "GEMINI_CLI":
             return ["gemini", "--yolo", "-p", prompt]
+        if self.provider == "AIDER":
+            # Aider is chat-style: --no-auto-commits leaves the commit to us
+            # (the orchestrator's commit_changes merges the worktree branch);
+            # --yes-always auto-accepts confirmations; --message runs the
+            # given task non-interactively.
+            return [
+                "aider",
+                "--no-auto-commits",
+                "--yes-always",
+                "--message",
+                prompt,
+            ]
+        if self.provider == "OPENCODE":
+            # OpenCode's `run` subcommand executes a single task headless and
+            # streams the result to stdout. It picks up ANTHROPIC_API_KEY /
+            # OPENAI_API_KEY / GOOGLE_API_KEY from env.
+            return ["opencode", "run", prompt]
         raise ValueError(f"Unsupported CLI provider: {self.provider}")
 
     async def execute(

@@ -173,8 +173,8 @@
 │  │  Agents (7+1 implemented):                                   │    │
 │  │  • 7 specialists: Frontend, Backend, Fullstack, DevOps,      │    │
 │  │    QA, Database, Coordinator                                 │    │
-│  │  • +1 runtime adapter: ExternalCliAgent (Claude Code /       │    │
-│  │    Codex / Gemini CLI in the sandbox)                        │    │
+│  │  • +1 runtime adapter: ExternalCliAgent, supports 5 CLIs:    │    │
+│  │    Claude Code, Codex, Gemini CLI, Aider, OpenCode           │    │
 │  │                                                              │    │
 │  │  Orchestration: LangGraph (analyze→plan→execute→review→commit)│    │
 │  │  LLM Routing: LiteLLM (OpenAI, Anthropic, Gemini)            │    │
@@ -645,6 +645,8 @@ Latency: 30-80ms (P2P direto)
 │  │    - CoordinatorAgent               │   │
 │  │  • agents/external_cli_agent.py     │   │
 │  │    - ExternalCliAgent (adapter)     │   │
+│  │    - Providers: Claude Code, Codex, │   │
+│  │      Gemini CLI, Aider, OpenCode    │   │
 │  │  • agents/base.py (BaseAgent ABC)   │   │
 │  │  • agents/tools.py (agent tools)    │   │
 │  └─────────────────────────────────────┘   │

@@ -32,7 +32,9 @@ Empresas de software enfrentam desafios crescentes:
 
 ## Agentes Especializados
 
-O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área:
+O SquadX disponibiliza **7 agentes especializados + 1 runtime adapter** para desenvolvimento de software:
+
+### 7 Especialistas
 
 | Agente | Especialização | Modelo |
 |--------|---------------|--------|
@@ -43,6 +45,12 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 | **QA** | Testes unitários, integração, E2E (Playwright, Cypress) | GPT-4o Mini |
 | **Database** | PostgreSQL, schema design, migrations, query optimization | Claude Sonnet |
 | **Fullstack** | Tarefas cross-cutting que envolvem múltiplas áreas | GPT-4o |
+
+### +1 Runtime Adapter
+
+| Agente | Especialização | Modelo |
+|--------|---------------|--------|
+| **ExternalCliAgent** | Adapter que executa Claude Code / Codex / Gemini CLI dentro do sandbox (BYOK). Substitui o loop LangGraph nativo quando o time prefere o workflow das CLIs externas. | Claude Code / Codex / Gemini CLI |
 
 ---
 
@@ -67,7 +75,7 @@ O SquadX disponibiliza 7 tipos de agentes AI, cada um especializado em uma área
 - **Kanban Board** com drag-and-drop para gestão de tasks
 - **Task Dependencies** com DAG e auto-unblock (blocked_by/blocks)
 - **Team Templates** pré-configurados (software-dev, code-review, full-stack, data-pipeline)
-- **7 agentes AI especializados** com agentic loop e 9 ferramentas (bash, file I/O, git, Python, dependencies)
+- **7 agentes AI especializados + 1 runtime adapter** com agentic loop e 9 ferramentas (bash, file I/O, git, Python, dependencies). Runtime adapter executa Claude Code/Codex/Gemini CLI dentro do sandbox.
 - **LangGraph orchestration** com state machine (analyze → plan → execute → review)
 - **Inter-agent messaging** com mailbox point-to-point e broadcast
 - **WebSocket real-time** via STOMP/SockJS para updates de progresso
@@ -377,7 +385,7 @@ squadx.dev/
 │       └── manifest.json       # PWA manifest
 ├── client/                     # Python Daemon
 │   ├── squadx_client/
-│   │   ├── agents/             # 7 agentes especializados + tools
+│   │   ├── agents/             # 7+1 agentes (7 specialists + ExternalCli runtime adapter) + tools
 │   │   ├── checkpoint/         # Snapshot/restore de execuções
 │   │   ├── docker/             # Sandbox, hardening, lifecycle,
 │   │   │                       #   file_ops, metrics, network_policy
@@ -470,7 +478,7 @@ squadx.dev/
 ### Phase 1 - MVP (Completed)
 - [x] Backend REST API + WebSocket
 - [x] Frontend Kanban + dashboard
-- [x] 7 agentes AI especializados
+- [x] 7 agentes AI especializados + 1 runtime adapter (ExternalCli: Claude Code/Codex/Gemini)
 - [x] Docker sandbox hardened
 - [x] Live View (VNC -> WebRTC)
 - [x] Chat + controle remoto

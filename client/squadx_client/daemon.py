@@ -12,6 +12,7 @@ import structlog
 
 from squadx_client.agents.security import scrub_env
 from squadx_client.config import settings
+from squadx_client.docker.manager import docker_manager
 from squadx_client.memory import BrainSentryClient
 from squadx_client.messaging.run_event import default_run_event_metadata
 from squadx_client.orchestrator.graph import create_orchestrator
@@ -102,6 +103,8 @@ class SquadXDaemon:
         self.current_tasks: dict[int, asyncio.Task] = {}
         self._bg_tasks: set[asyncio.Task] = set()
         self._task_handler = TaskMessageHandler(self)
+        # Warm container pool — set in run() when SQUADX_SANDBOX_POOL_ENABLED
+        self.warm_pool: Any = None
 
     @staticmethod
     def pid_file_path() -> Path:
@@ -147,6 +150,16 @@ class SquadXDaemon:
             poll_task = None
             if settings.poll_fallback_interval_seconds > 0:
                 poll_task = asyncio.create_task(self._poll_fallback_loop())
+
+            # Warm container pool (opt-in via SQUADX_SANDBOX_POOL_ENABLED).
+            # Trims the 10-20s Docker cold start to <1s by handing tasks a
+            # pre-created container; safe to leave disabled in dev.
+            if settings.sandbox_pool_enabled:
+                from squadx_client.docker.pool import build_pool_from_settings
+
+                self.warm_pool = build_pool_from_settings(docker_manager)
+                docker_manager.warm_pool = self.warm_pool
+                await self.warm_pool.initialize()
 
             try:
                 # Run with automatic reconnection
@@ -747,6 +760,11 @@ class SquadXDaemon:
             logger.info("task_cancelled_on_shutdown", task_id=task_id)
 
         self.current_tasks.clear()
+
+        # Tear down the warm container pool if it was started
+        if self.warm_pool is not None:
+            await self.warm_pool.shutdown()
+            self.warm_pool = None
 
         # Stop all streaming sessions
         await stream_manager.stop_all()

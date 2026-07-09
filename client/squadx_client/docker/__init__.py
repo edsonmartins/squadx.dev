@@ -29,6 +29,13 @@ from squadx_client.docker.network_policy import (
     get_predefined_policy,
     generate_network_setup_script,
 )
+from squadx_client.docker.pool import (
+    PooledContainer,
+    PoolStats,
+    WarmContainerPool,
+    build_pool_from_settings,
+    warm_pool,
+)
 
 __all__ = [
     # Manager
@@ -66,4 +73,10 @@ __all__ = [
     "EgressSidecarConfig",
     "get_predefined_policy",
     "generate_network_setup_script",
+    # Warm Container Pool
+    "WarmContainerPool",
+    "PooledContainer",
+    "PoolStats",
+    "build_pool_from_settings",
+    "warm_pool",
 ]

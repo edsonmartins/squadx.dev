@@ -271,6 +271,9 @@ export interface ExecutionLogEvent {
   type: "execution_log";
   executionId: number;
   level: string;
+  /** Attention Budget channel (RFC-0005 §1); absent on older backends. */
+  visibility?: "human" | "audit" | "debug";
+  importance?: "low" | "normal" | "high" | "blocking";
   message: string;
   timestamp: number;
 }

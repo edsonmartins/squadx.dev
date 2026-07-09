@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     enable_network: bool = Field(default=False, alias="SQUADX_ENABLE_NETWORK")
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
+    # External-CLI prompt-injection policy: "enforce" | "audit" | "off" (RFC-0005 / ADR-0007).
+    cli_security_mode: str = Field(default="audit", alias="SQUADX_CLI_SECURITY_MODE")
 
     # Network policy
     network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full
@@ -85,6 +87,25 @@ class Settings(BaseSettings):
     gvisor_threshold: int = Field(default=100, alias="SQUADX_GVISOR_THRESHOLD")
     # Daily execution threshold to auto-upgrade to Firecracker
     firecracker_threshold: int = Field(default=1000, alias="SQUADX_FIRECRACKER_THRESHOLD")
+
+    # Warm container pool (cuts Docker cold start from 10-20s to <1s)
+    # Off by default — opt-in per deployment.
+    sandbox_pool_enabled: bool = Field(default=False, alias="SQUADX_SANDBOX_POOL_ENABLED")
+    # Target number of pre-created containers kept warm in the background
+    sandbox_pool_size: int = Field(default=4, alias="SQUADX_SANDBOX_POOL_SIZE")
+    # Minimum number of containers kept warm even if no traffic — eliminates
+    # the cold-start penalty on the very first task after daemon start
+    sandbox_pool_min_ready: int = Field(default=1, alias="SQUADX_SANDBOX_POOL_MIN_READY")
+    # Host directory bind-mounted into every pool container as /workspace.
+    # Pair with worktree-per-subtask (SQUADX_USE_WORKTREES=true) for isolation
+    # between concurrent tasks sharing the same pool container.
+    sandbox_pool_workspace_root: str = Field(
+        default="/var/squadx/workspaces", alias="SQUADX_SANDBOX_POOL_WORKSPACE_ROOT"
+    )
+    # How often the background refill checks the pool size
+    sandbox_pool_refill_interval_seconds: float = Field(
+        default=5.0, alias="SQUADX_SANDBOX_POOL_REFILL_INTERVAL_SECONDS"
+    )
 
     # BrainSentry Integration (Agent Memory)
     brainsentry_url: str | None = Field(default=None, alias="SQUADX_BRAINSENTRY_URL")

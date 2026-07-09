@@ -296,7 +296,17 @@ Format your response as:
         }
 
     def _build_context_string(self, context: dict[str, Any] | None) -> str:
-        """Build context string from context dict."""
+        """Build context string from context dict.
+
+        Prefers a curated Context Packet (ADR-0007) when present; falls back to the raw
+        concatenation for compatibility with callers that don't build a packet.
+        """
+        if context:
+            packet = context.get("context_packet")
+            if packet is not None and hasattr(packet, "render"):
+                rendered = packet.render()
+                if rendered:
+                    return "\n\n" + rendered
         context_str = ""
         if context:
             if context.get("main_task") is not None:

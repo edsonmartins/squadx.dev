@@ -652,6 +652,8 @@ export const executionsApi = {
   get: (id: number) => api.get<ExecutionResponse>(`/api/v1/executions/${id}`),
   listByTask: (taskId: number) =>
     api.get<PageResponse<ExecutionResponse>>(`/api/v1/executions/task/${taskId}`),
+  listPendingFollowUps: (taskId: number) =>
+    api.get<PageResponse<FollowUpResponse>>(`/api/v1/executions/task/${taskId}/follow-ups`),
   listByProject: (projectId: number) =>
     api.get<PageResponse<ExecutionResponse>>(`/api/v1/executions/project/${projectId}`),
   listByOrganization: (organizationId: number) =>
@@ -910,6 +912,37 @@ export interface UpdateAgentRequest {
 // Execution Types
 export type ExecutionStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
+// Attention Budget (RFC-0005 §1): how a log/event is surfaced.
+export type RunEventVisibility = "human" | "audit" | "debug";
+export type RunEventImportance = "low" | "normal" | "high" | "blocking";
+
+export interface ExecutionLogEntry {
+  id?: number;
+  level: string;
+  visibility?: RunEventVisibility;
+  importance?: RunEventImportance;
+  message: string;
+  metadata?: string;
+  created_at?: string;
+}
+
+// Run Admission outcome (RFC-0005 §2), embedded in the start-execution response.
+export type RunAdmissionAction =
+  | "START"
+  | "DROP_DUPLICATE"
+  | "QUEUE_FOLLOW_UP"
+  | "NEEDS_HUMAN_DECISION";
+
+export interface RunAdmissionDecision {
+  action: RunAdmissionAction;
+  reason?: string;
+  reason_code?: string;
+  decided_at?: string;
+  active_execution_id?: number;
+  idempotency_key?: string;
+  follow_up_request_id?: number;
+}
+
 export interface ExecutionResponse {
   id: number;
   task_id: number;
@@ -924,12 +957,25 @@ export interface ExecutionResponse {
   started_at?: string;
   completed_at?: string;
   duration_seconds?: number;
+  logs?: ExecutionLogEntry[];
+  admission?: RunAdmissionDecision;
   created_at: string;
 }
 
 export interface StartExecutionRequest {
   task_id: number;
   agent_id?: number;
+  /** Optional idempotency key for admission dedup (RFC-0005 §2.1). */
+  idempotency_key?: string;
+}
+
+export interface FollowUpResponse {
+  id: number;
+  task_id: number;
+  active_execution_id?: number;
+  requested_agent_id?: number;
+  status: "PENDING" | "PROMOTED" | "CANCELLED";
+  created_at: string;
 }
 
 // Live Session Types

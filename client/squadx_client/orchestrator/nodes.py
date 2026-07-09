@@ -15,9 +15,12 @@ from squadx_client.llm.router import get_llm
 from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
 from squadx_client.memory.policy import MemoryScopeContext
 from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
+from squadx_client.orchestrator.context_packet import build_context_packet
 from squadx_client.agents.factory import create_agent
+from squadx_client.agents.security import filter_internal_artifacts
 from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
+from squadx_client.git.worktree import WorktreeManager
 
 logger = structlog.get_logger()
 
@@ -102,6 +105,22 @@ def _as_scope_value(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _is_git_repo(path: str) -> bool:
+    """Cheap guard: a worktree is only useful when the workspace is a git repo.
+
+    Uses gitpython because the daemon already depends on it (git/manager.py);
+    avoids spawning a `git` subprocess for a hot-path check.
+    """
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, NoSuchPathError
+
+    try:
+        Repo(path)
+        return True
+    except (InvalidGitRepositoryError, NoSuchPathError):
+        return False
 
 
 def _map_complexity(value: Any) -> str:
@@ -328,6 +347,34 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             workspace_path = os.path.join(tempfile.gettempdir(), f"squadx-task-{state.task_id}")
             os.makedirs(workspace_path, exist_ok=True)
 
+        # Worktree isolation (SQUADX_USE_WORKTREES=true + git repo): each subtask
+        # gets its own branch under .worktrees/<unique-name>/, branched from main.
+        # The sandbox mounts that worktree path as /workspace, so the agent's edits
+        # stay isolated from sibling subtasks and from the integration branch.
+        # Falls back to the shared workspace on any failure — worktree is a hardening
+        # layer, never a hard dependency.
+        subtask_worktree_branch: str | None = None
+        subtask_work_path = workspace_path
+        if getattr(settings, "use_worktrees", False) and _is_git_repo(workspace_path):
+            try:
+                # Unique key per subtask so two backend subtasks don't collide.
+                wt_key = f"{subtask.agent_type}-{subtask_id}"
+                wm = WorktreeManager(workspace_path)
+                wt_info = wm.create(
+                    agent_name=wt_key,
+                    task_id=str(state.task_id),
+                    base_branch="main",
+                )
+                subtask_work_path = wt_info.path
+                subtask_worktree_branch = wt_info.branch
+                logger.info(
+                    f"worktree_created subtask={subtask_id} branch={wt_info.branch}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"worktree_setup_failed_falling_back subtask={subtask_id} error={e}"
+                )
+
         # Check if sandbox execution is enabled
         use_sandbox = getattr(settings, "enable_sandbox", True)
 
@@ -336,7 +383,7 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             sandbox = AgentSandbox(
                 task_id=state.task_id,
                 agent_type=subtask.agent_type,
-                workspace_path=workspace_path,
+                workspace_path=subtask_work_path,
             )
 
             # Start the sandbox
@@ -358,19 +405,24 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
             brainsentry_session_id=state.brainsentry_session_id,
         )
 
+        # Assemble a curated, auditable Context Packet (ADR-0007, RFC-0005) and pass it alongside
+        # the raw context. Prompt builders prefer the packet; raw keys remain for compatibility.
+        subtask_context: dict[str, Any] = {
+            "main_task": state.task,
+            "execution_id": state.execution_id or state.task_id,
+            "completed_subtasks": [
+                st for st in state.plan.subtasks if st.id in state.completed_subtasks
+            ],
+            "acceptance_criteria": subtask.acceptance_criteria,
+            "reuse_map": state.plan.reuse,
+        }
+        subtask_context["context_packet"] = build_context_packet(subtask_context)
+
         # Execute the subtask
         result = await agent.execute(
             task_title=subtask.title,
             task_description=subtask.description,
-            context={
-                "main_task": state.task,
-                "execution_id": state.execution_id or state.task_id,
-                "completed_subtasks": [
-                    st for st in state.plan.subtasks if st.id in state.completed_subtasks
-                ],
-                "acceptance_criteria": subtask.acceptance_criteria,
-                "reuse_map": state.plan.reuse,
-            },
+            context=subtask_context,
         )
 
         execution_time = time.time() - start_time
@@ -446,6 +498,23 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
         }
 
     finally:
+        # Checkpoint the worktree BEFORE tearing down the sandbox so the host
+        # bind-mount path is still valid. Files live on the host, so cleanup()
+        # doesn't lose them — but we want a recorded commit on the branch.
+        if subtask_worktree_branch and _is_git_repo(workspace_path):
+            try:
+                wt_key = f"{subtask.agent_type}-{subtask_id}"
+                wm = WorktreeManager(workspace_path)
+                wm.checkpoint(
+                    agent_name=wt_key,
+                    message=f"subtask {subtask_id} completed",
+                )
+                # Persist for the commit_changes merge step. Only on success.
+                state.subtask_worktrees[subtask_id] = subtask_worktree_branch
+            except Exception as e:
+                logger.warning(
+                    f"worktree_checkpoint_failed subtask={subtask_id} error={e}"
+                )
         # Always cleanup sandbox
         if sandbox:
             try:
@@ -688,11 +757,13 @@ async def commit_changes(state: OrchestratorState) -> dict[str, Any]:
         logger.warning("commit_blocked_unapproved", verdict=state.review_verdict, task_id=state.task_id)
         return {"should_end": True}
 
-    # Collect all modified files
+    # Collect all modified files, dropping internal agent-CLI artifacts (.claude/.codex/.omx)
+    # so they never pollute the task commit (ADR-0007).
     all_files = []
     for subtask in state.plan.subtasks:
         if subtask.id in state.completed_subtasks:
             all_files.extend(subtask.files_modified)
+    all_files = filter_internal_artifacts(all_files)
 
     if not all_files:
         logger.info("no_files_to_commit")
@@ -700,6 +771,28 @@ async def commit_changes(state: OrchestratorState) -> dict[str, Any]:
 
     try:
         git_manager = GitManager()
+
+        # Fold each per-subtask worktree branch into the integration branch.
+        # Done BEFORE create_branch so the merge commits sit on top of the
+        # pre-task state and the final commit captures the merged result.
+        # Failure of any individual merge is non-fatal — we log and continue
+        # so one broken subtask doesn't kill the whole task commit.
+        for subtask_id, branch_name in state.subtask_worktrees.items():
+            try:
+                if not git_manager.merge_branch(
+                    branch_name,
+                    no_ff=True,
+                    message=f"Merge subtask {subtask_id} work from {branch_name}",
+                ):
+                    logger.warning(
+                        f"worktree_merge_returned_false subtask={subtask_id} "
+                        f"branch={branch_name}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"worktree_merge_failed subtask={subtask_id} "
+                    f"branch={branch_name} error={e}"
+                )
 
         # Create branch
         branch_name = f"squadx/task-{state.task_id}"

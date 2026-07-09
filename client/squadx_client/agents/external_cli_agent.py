@@ -6,11 +6,12 @@ sandbox. The CLI does its own planning/editing; we stream its output as live
 progress and derive ``files_modified`` from git afterwards.
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
 
 from squadx_client.agents.base import BaseAgent
+from squadx_client.agents.security import assess_prompt, filter_internal_artifacts
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 # Supported providers and the CLI binary name we expect on the sandbox PATH.
-SUPPORTED_PROVIDERS = {"CLAUDE_CODE", "CODEX", "GEMINI_CLI"}
+SUPPORTED_PROVIDERS = {"CLAUDE_CODE", "CODEX", "GEMINI_CLI", "AIDER", "OPENCODE"}
 
 
 class ExternalCliAgent(BaseAgent):
@@ -54,9 +55,14 @@ class ExternalCliAgent(BaseAgent):
         self, task_title: str, task_description: str, context: dict[str, Any] | None
     ) -> str:
         parts = [f"# Task: {task_title}", "", task_description or ""]
-        main_task = (context or {}).get("main_task")
-        if isinstance(main_task, dict) and main_task.get("description"):
-            parts += ["", "## Project context", str(main_task["description"])]
+        packet = (context or {}).get("context_packet")
+        rendered = packet.render() if packet is not None and hasattr(packet, "render") else ""
+        if rendered:
+            parts += ["", "## SquadX context packet", rendered]
+        else:
+            main_task = (context or {}).get("main_task")
+            if isinstance(main_task, dict) and main_task.get("description"):
+                parts += ["", "## Project context", str(main_task["description"])]
         parts += [
             "",
             "Work in the current directory (/workspace). Make the changes "
@@ -80,6 +86,23 @@ class ExternalCliAgent(BaseAgent):
             return ["codex", "exec", "--full-auto", prompt]
         if self.provider == "GEMINI_CLI":
             return ["gemini", "--yolo", "-p", prompt]
+        if self.provider == "AIDER":
+            # Aider is chat-style: --no-auto-commits leaves the commit to us
+            # (the orchestrator's commit_changes merges the worktree branch);
+            # --yes-always auto-accepts confirmations; --message runs the
+            # given task non-interactively.
+            return [
+                "aider",
+                "--no-auto-commits",
+                "--yes-always",
+                "--message",
+                prompt,
+            ]
+        if self.provider == "OPENCODE":
+            # OpenCode's `run` subcommand executes a single task headless and
+            # streams the result to stdout. It picks up ANTHROPIC_API_KEY /
+            # OPENAI_API_KEY / GOOGLE_API_KEY from env.
+            return ["opencode", "run", prompt]
         raise ValueError(f"Unsupported CLI provider: {self.provider}")
 
     async def execute(
@@ -94,6 +117,7 @@ class ExternalCliAgent(BaseAgent):
         context = context or {}
         progress_callback = context.get("progress_callback")
         prompt = self._build_prompt(task_title, task_description, context)
+        self._assess_prompt_security(prompt)
         command = self._build_command(prompt)
         timeout = float(
             context.get("cli_timeout")
@@ -138,6 +162,23 @@ class ExternalCliAgent(BaseAgent):
             "tool_calls": 0,
         }
 
+    def _assess_prompt_security(self, prompt: str) -> None:
+        """Scan the prompt for injection/exfiltration patterns (ADR-0007).
+
+        Mode comes from ``settings.cli_security_mode``: ``off`` skips; ``audit`` logs findings;
+        ``enforce`` raises and aborts the run.
+        """
+        mode = getattr(settings, "cli_security_mode", "audit")
+        if mode == "off":
+            return
+        findings = assess_prompt(prompt)
+        if not findings:
+            return
+        codes = [f.code for f in findings]
+        self.logger.warning("prompt_security_findings", mode=mode, findings=codes)
+        if mode == "enforce" and any(f.severity == "block" for f in findings):
+            raise RuntimeError("Prompt blocked by security policy: " + ", ".join(codes))
+
     async def _collect_changed_files(self) -> list[str]:
         """Derive the list of changed files from git working-tree status."""
         try:
@@ -167,4 +208,5 @@ class ExternalCliAgent(BaseAgent):
                 path = path[1:-1]  # unquote git-quoted path
             if path:
                 files.append(path)
-        return files
+        # Internal agent-CLI artifacts (.claude/.codex/.omx) must not be committed (ADR-0007).
+        return filter_internal_artifacts(files)

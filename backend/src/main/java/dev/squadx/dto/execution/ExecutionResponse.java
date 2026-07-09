@@ -1,5 +1,6 @@
 package dev.squadx.dto.execution;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.squadx.model.enums.ExecutionStatus;
 import lombok.AllArgsConstructor;
@@ -72,6 +73,10 @@ public class ExecutionResponse {
 
     private List<LogEntry> logs;
 
+    /** Admission outcome for this request (RFC-0005 §2). Only populated on start-execution. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private RunAdmissionDecision admission;
+
     @JsonProperty("created_at")
     private Instant createdAt;
 
@@ -82,6 +87,13 @@ public class ExecutionResponse {
     public static class LogEntry {
         private Long id;
         private String level;
+
+        /** Attention Budget channel (RFC-0005 §1): human | audit | debug. */
+        private String visibility;
+
+        /** Attention Budget rank (RFC-0005 §1): low | normal | high | blocking. */
+        private String importance;
+
         private String message;
         private String metadata;
 

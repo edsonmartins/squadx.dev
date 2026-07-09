@@ -1,7 +1,9 @@
 """Docker container manager for SquadX agents."""
 
 import asyncio
+import io
 import logging
+import tarfile
 from typing import Optional, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 
@@ -364,6 +366,52 @@ class DockerManager:
             # ends — which the caller forces by stopping the sandbox/container.
             if worker.done():
                 worker.result()
+
+    async def apply_network_setup(
+        self,
+        container_id: str,
+        script: str,
+    ) -> tuple[bool, str]:
+        """Stage and execute an iptables-based network policy script inside a running container.
+
+        Returns (success, combined_stdout_stderr). Failures (missing iptables, exec errors)
+        are surfaced to the caller as (False, log); never raised, so the caller can choose
+        whether to degrade gracefully.
+        """
+        if not self.client:
+            return False, "Docker client not connected"
+
+        try:
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w") as tf:
+                payload = script.encode("utf-8")
+                info = tarfile.TarInfo(name="netpolicy.sh")
+                info.size = len(payload)
+                info.mode = 0o755
+                tf.addfile(info, io.BytesIO(payload))
+            buf.seek(0)
+
+            container = self.client.containers.get(container_id)
+            ok, _ = container.put_archive("/tmp", buf.read())
+            if not ok:
+                return False, "put_archive returned False"
+
+            result = container.exec_run(["sh", "/tmp/netpolicy.sh"], demux=True)
+            stdout = result.output[0].decode("utf-8", "replace") if result.output[0] else ""
+            stderr = result.output[1].decode("utf-8", "replace") if result.output[1] else ""
+            log = stdout + stderr
+            if result.exit_code != 0:
+                logger.warning(
+                    f"network_setup_script_failed exit={result.exit_code} log={log[:500]}"
+                )
+            return result.exit_code == 0, log
+
+        except (NotFound, APIError) as e:
+            logger.error(f"apply_network_setup_failed: {e}")
+            return False, str(e)
+        except Exception as e:  # noqa: BLE001 - surface to caller as log
+            logger.error(f"apply_network_setup_unexpected_error: {e}")
+            return False, str(e)
 
     async def get_vnc_port(self, container_id: str) -> Optional[int]:
         """Get the mapped VNC port for a container."""

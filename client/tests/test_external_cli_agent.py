@@ -27,8 +27,9 @@ class TestFactoryRouting:
         assert agent.provider == "CLAUDE_CODE"
 
     def test_native_runtime_still_returns_specialist(self):
-        from squadx_client.agents.factory import BackendAgent
         from unittest.mock import patch
+
+        from squadx_client.agents.factory import BackendAgent
 
         with patch("squadx_client.agents.base.get_coding_llm", return_value=MagicMock()):
             agent = create_agent("backend", runtime_kind="NATIVE")
@@ -49,6 +50,25 @@ class TestExternalCliAgent:
     def test_build_command_per_provider(self):
         assert ExternalCliAgent(provider="CODEX")._build_command("x")[0] == "codex"
         assert ExternalCliAgent(provider="GEMINI_CLI")._build_command("x")[0] == "gemini"
+        assert ExternalCliAgent(provider="AIDER")._build_command("x")[0] == "aider"
+        assert ExternalCliAgent(provider="OPENCODE")._build_command("x")[0] == "opencode"
+
+    def test_build_command_aider_passes_through_flags(self):
+        """Aider headless: --no-auto-commits + --yes-always + --message."""
+        cmd = ExternalCliAgent(provider="AIDER")._build_command("hello")
+        # Must include all three flags; order matches the implementation.
+        assert "--no-auto-commits" in cmd
+        assert "--yes-always" in cmd
+        assert "--message" in cmd
+        # The prompt is the last positional arg
+        assert cmd[-1] == "hello"
+
+    def test_build_command_opencode_uses_run_subcommand(self):
+        """OpenCode's `run` subcommand is the headless entry point."""
+        cmd = ExternalCliAgent(provider="OPENCODE")._build_command("hello")
+        assert cmd[0] == "opencode"
+        assert cmd[1] == "run"
+        assert cmd[2] == "hello"
 
     @pytest.mark.asyncio
     async def test_requires_sandbox(self):

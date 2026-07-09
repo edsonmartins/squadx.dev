@@ -1,9 +1,11 @@
 """Tests for squadx_client.agents.factory module."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadx_client.agents.base import BaseAgent
+from squadx_client.agents.external_cli_agent import ExternalCliAgent
 from squadx_client.agents.factory import (
     BackendAgent,
     CoordinatorAgent,
@@ -14,7 +16,6 @@ from squadx_client.agents.factory import (
     QAAgent,
     create_agent,
 )
-from squadx_client.agents.base import BaseAgent
 
 
 @pytest.fixture(autouse=True)
@@ -123,3 +124,19 @@ class TestAgentPromptContent:
     def test_coordinator_prompt_mentions_subtasks(self):
         agent = create_agent("coordinator")
         assert "subtask" in agent.get_system_prompt().lower()
+
+
+class TestExternalCliProviderRouting:
+    """All EXTERNAL_CLI providers route to ExternalCliAgent; the new
+    AIDER and OPENCODE providers follow the same path as the original three."""
+
+    @pytest.mark.parametrize(
+        "provider",
+        ["CLAUDE_CODE", "CODEX", "GEMINI_CLI", "AIDER", "OPENCODE"],
+    )
+    def test_factory_routes_to_external_cli(self, provider):
+        agent = create_agent(
+            "external_cli", runtime_kind="EXTERNAL_CLI", cli_provider=provider
+        )
+        assert isinstance(agent, ExternalCliAgent)
+        assert agent.provider == provider

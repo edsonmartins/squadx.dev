@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
+import { ExecutionLogs } from "@/components/executions/execution-logs";
 import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/stores/task-store";
 import { cn } from "@/lib/utils";
@@ -100,15 +101,30 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
     retry: false,
   });
 
-  // Start execution mutation
+  // Start execution mutation. An idempotency key lets the backend dedup repeated triggers
+  // (RFC-0005 §2). The admission outcome is surfaced so duplicate/queued runs are not silent.
   const startExecutionMutation = useMutation({
-    mutationFn: () => executionsApi.start({ task_id: task!.id }),
-    onSuccess: () => {
+    mutationFn: (idempotencyKey: string) =>
+      executionsApi.start({ task_id: task!.id, idempotency_key: idempotencyKey }),
+    onSuccess: (execution) => {
       queryClient.invalidateQueries({ queryKey: ["executions", task?.id] });
-      toast({
-        title: "Execution started",
-        description: "The AI agent is now working on this task.",
-      });
+      const action = execution.admission?.action;
+      if (action === "DROP_DUPLICATE") {
+        toast({
+          title: "Duplicate ignored",
+          description: "This task already has a run for that trigger.",
+        });
+      } else if (action === "QUEUE_FOLLOW_UP") {
+        toast({
+          title: "Queued as follow-up",
+          description: "A run is already active; your request was queued behind it.",
+        });
+      } else {
+        toast({
+          title: "Execution started",
+          description: "The AI agent is now working on this task.",
+        });
+      }
     },
     onError: () => {
       toast({
@@ -305,12 +321,22 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
             </div>
           )}
 
+          {/* Execution Logs — Attention Budget: quiet by default (RFC-0005 §1) */}
+          {latestExecution && (
+            <div className="rounded-lg border p-4">
+              <ExecutionLogs
+                executionId={latestExecution.id}
+                initialLogs={latestExecution.logs}
+              />
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="space-y-2">
             {task?.status === "TODO" && (
               <Button
                 className="w-full"
-                onClick={() => startExecutionMutation.mutate()}
+                onClick={() => startExecutionMutation.mutate(crypto.randomUUID())}
                 disabled={startExecutionMutation.isPending}
                 data-testid="start-execution-button"
               >

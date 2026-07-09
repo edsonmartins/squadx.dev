@@ -170,10 +170,11 @@
 │  │  │  └───────────┘  └───────────┘                       │  │    │
 │  │  └──────────────────────────────────────────────────────┘  │    │
 │  │                                                              │    │
-│  │  Agents (5 implemented):                                     │    │
-│  │  • Frontend, Backend, Fullstack, DevOps, QA                  │    │
-│  │  Note: Coordinator exists as enum in backend but has         │    │
-│  │  no Python implementation                                    │    │
+│  │  Agents (7+1 implemented):                                   │    │
+│  │  • 7 specialists: Frontend, Backend, Fullstack, DevOps,      │    │
+│  │    QA, Database, Coordinator                                 │    │
+│  │  • +1 runtime adapter: ExternalCliAgent, supports 5 CLIs:    │    │
+│  │    Claude Code, Codex, Gemini CLI, Aider, OpenCode           │    │
 │  │                                                              │    │
 │  │  Orchestration: LangGraph (analyze→plan→execute→review→commit)│    │
 │  │  LLM Routing: LiteLLM (OpenAI, Anthropic, Gemini)            │    │
@@ -632,7 +633,7 @@ Latency: 30-80ms (P2P direto)
 │  │          review→commit              │   │
 │  └─────────────────────────────────────┘   │
 │                                             │
-│  Agents (5 implemented):                    │
+│  Agents (7+1 implemented):                  │
 │  ┌─────────────────────────────────────┐   │
 │  │  • agents/factory.py                │   │
 │  │    - FrontendAgent                  │   │
@@ -640,6 +641,12 @@ Latency: 30-80ms (P2P direto)
 │  │    - FullstackAgent                 │   │
 │  │    - DevOpsAgent                    │   │
 │  │    - QAAgent                        │   │
+│  │    - DatabaseAgent                  │   │
+│  │    - CoordinatorAgent               │   │
+│  │  • agents/external_cli_agent.py     │   │
+│  │    - ExternalCliAgent (adapter)     │   │
+│  │    - Providers: Claude Code, Codex, │   │
+│  │      Gemini CLI, Aider, OpenCode    │   │
 │  │  • agents/base.py (BaseAgent ABC)   │   │
 │  │  • agents/tools.py (agent tools)    │   │
 │  └─────────────────────────────────────┘   │

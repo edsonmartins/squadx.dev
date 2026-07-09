@@ -20,6 +20,16 @@ public class ExecutionLog extends BaseEntity {
     @Builder.Default
     private String level = "INFO";
 
+    /** Attention Budget channel: human | audit | debug (RFC-0005 §1). Stored as String for drift safety. */
+    @Column(nullable = false)
+    @Builder.Default
+    private String visibility = "human";
+
+    /** Attention Budget rank within the channel: low | normal | high | blocking (RFC-0005 §1). */
+    @Column(nullable = false)
+    @Builder.Default
+    private String importance = "normal";
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 

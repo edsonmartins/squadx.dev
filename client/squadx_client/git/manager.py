@@ -96,6 +96,39 @@ class GitManager:
             logger.error("staging_failed", error=str(e))
             return False
 
+    def merge_branch(
+        self,
+        branch_name: str,
+        no_ff: bool = True,
+        message: str | None = None,
+    ) -> bool:
+        """Merge a branch into the currently checked-out branch.
+
+        Used by the orchestrator's commit_changes to fold per-subtask worktree
+        branches back into the integration branch. With no_ff=True the merge
+        always produces a merge commit, preserving the per-subtask history that
+        shows what each specialist did.
+
+        Conflicts are reported as (False, log) via exceptions caught by the caller;
+        we don't try to auto-resolve. Non-conflict failures (branch missing, not
+        a repo) also return False.
+        """
+        if not self.repo:
+            return False
+
+        try:
+            args = [branch_name]
+            if no_ff:
+                args.insert(0, "--no-ff")
+            if message:
+                args.extend(["-m", message])
+            self.repo.git.merge(*args)
+            logger.info(f"branch_merged branch={branch_name}")
+            return True
+        except Exception as e:
+            logger.error(f"merge_failed branch={branch_name} error={e}")
+            return False
+
     def commit(self, files: list[str], message: str) -> str | None:
         """Stage files and create a commit.
 

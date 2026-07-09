@@ -66,6 +66,13 @@ public class Execution extends BaseEntity {
     @Column(name = "git_commit")
     private String gitCommit;
 
+    /**
+     * Idempotency key for admission dedup (RFC-0005 §2.1). Unique per task when non-null; a replay
+     * with the same key resolves to {@code drop_duplicate} instead of creating a new run.
+     */
+    @Column(name = "idempotency_key")
+    private String idempotencyKey;
+
     @OneToMany(mappedBy = "execution", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
     @Builder.Default

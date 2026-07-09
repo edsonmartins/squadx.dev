@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import Enum
 
@@ -11,7 +11,10 @@ from .manager import DockerManager, ContainerConfig, docker_manager
 from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
 from .file_ops import SandboxFileOps
 from .metrics import ContainerMetricsCollector, ContainerMetrics
-from .network_policy import NetworkPolicy, get_predefined_policy
+from .network_policy import NetworkPolicy, generate_network_setup_script, get_predefined_policy
+
+if TYPE_CHECKING:
+    from .pool import PooledContainer
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,10 @@ class AgentSandbox:
         self.status = SandboxStatus.CREATED
         self.vnc_port: Optional[int] = None
         self.live_join_code: Optional[str] = None
+
+        # Set to the pool handle when the container came from the warm pool;
+        # cleanup() uses this to release back to the pool instead of removing.
+        self._pooled_container: Optional["PooledContainer"] = None
 
         # Enhanced file operations and metrics (initialized after container start)
         self.file_ops: Optional[SandboxFileOps] = None
@@ -147,20 +154,61 @@ class AgentSandbox:
                 **runtime_kwargs,
             )
 
-            # Create and start container
-            self.container_id = await self.manager.create_container(
-                config=config,
-                task_id=self.task_id,
-                agent_type=self.agent_type,
-            )
+            # Pool fast path: if the manager has a warm pool, get a started
+            # container in sub-second instead of paying the 10-20s cold start.
+            # Falls back to create+start on any failure so the daemon never
+            # depends on the pool being healthy.
+            warm_pool = getattr(self.manager, "warm_pool", None)
+            used_pool = False
+            if warm_pool is not None and warm_pool.is_enabled:
+                try:
+                    pooled = await warm_pool.acquire(
+                        task_id=self.task_id, agent_type=self.agent_type
+                    )
+                    self.container_id = pooled.container_id
+                    self._pooled_container = pooled
+                    used_pool = True
+                    logger.info(
+                        f"sandbox_acquired_from_pool task={self.task_id} "
+                        f"container_id={pooled.container_id[:12]} "
+                        f"use_count={pooled.use_count}"
+                    )
+                except Exception as e:  # noqa: BLE001 - cold fallback is below
+                    logger.warning(
+                        f"warm_pool_acquire_failed_falling_back task={self.task_id} "
+                        f"error={e}"
+                    )
 
-            if not self.container_id:
-                self._set_status(SandboxStatus.ERROR)
-                return False
+            if not used_pool:
+                # Create and start container
+                self.container_id = await self.manager.create_container(
+                    config=config,
+                    task_id=self.task_id,
+                    agent_type=self.agent_type,
+                )
 
-            if not await self.manager.start_container(self.container_id):
-                self._set_status(SandboxStatus.ERROR)
-                return False
+                if not self.container_id:
+                    self._set_status(SandboxStatus.ERROR)
+                    return False
+
+                if not await self.manager.start_container(self.container_id):
+                    self._set_status(SandboxStatus.ERROR)
+                    return False
+
+            # Apply network policy if one was configured. Failure is non-fatal:
+            # we keep the sandbox up but log a warning, so a missing iptables
+            # in the agent image or a malformed rule set doesn't break runs.
+            if self._network_policy:
+                script = generate_network_setup_script(self._network_policy)
+                ok, log = await self.manager.apply_network_setup(
+                    self.container_id, script
+                )
+                if not ok:
+                    logger.warning(
+                        f"network_policy_apply_failed task={self.task_id} "
+                        f"policy={self._network_policy.default_action.value} "
+                        f"log={log[:500]}"
+                    )
 
             # Initialize enhanced file operations and metrics collector
             if self.manager.client:
@@ -217,7 +265,7 @@ class AgentSandbox:
             return False
 
     async def cleanup(self) -> bool:
-        """Remove the sandbox container."""
+        """Remove the sandbox container, or return it to the warm pool."""
         if not self.container_id:
             return True
 
@@ -227,6 +275,24 @@ class AgentSandbox:
                 await self.manager.stop_live_stream(self.container_id)
                 self.live_join_code = None
 
+            # Pool fast path: hand the container back to the pool so the
+            # next task gets a sub-second acquire instead of a 10-20s create.
+            if self._pooled_container is not None:
+                warm_pool = getattr(self.manager, "warm_pool", None)
+                if warm_pool is not None and warm_pool.is_enabled:
+                    await warm_pool.release(self._pooled_container)
+                    self._pooled_container = None
+                    self.container_id = None
+                    self.vnc_port = None
+                    self._set_status(SandboxStatus.STOPPED)
+                    logger.info(
+                        f"Sandbox returned to pool for task {self.task_id}"
+                    )
+                    return True
+                # Pool was disabled between acquire and release; fall through
+                # to remove. Don't leak the pooled handle.
+                self._pooled_container = None
+
             await self.manager.remove_container(self.container_id, force=True)
             self.container_id = None
             self.vnc_port = None
@@ -235,6 +301,7 @@ class AgentSandbox:
             return True
         except Exception as e:
             logger.error(f"Failed to cleanup sandbox: {e}")
+            self._set_status(SandboxStatus.ERROR)
             return False
 
     async def execute(

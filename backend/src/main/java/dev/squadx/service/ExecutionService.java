@@ -45,6 +45,7 @@ public class ExecutionService {
     private final SquadAgentResolver squadAgentResolver;
     private final RunAdmissionService runAdmissionService;
     private final FollowUpRequestRepository followUpRequestRepository;
+    private final ApprovalService approvalService;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -477,6 +478,13 @@ public class ExecutionService {
         taskRepository.save(task);
 
         executionRepository.save(execution);
+
+        // Opt-in human-approval gate: a completed run on a task that requires approval parks at
+        // IN_REVIEW with a PENDING approval; it only reaches DONE via ApprovalService.review.
+        if (Boolean.TRUE.equals(task.getRequiresApproval())) {
+            approvalService.autoCreateForCompletedExecution(task, execution);
+        }
+
         publishExecutionCompletedEventIfNeeded(execution);
         promoteNextFollowUp(task);
     }

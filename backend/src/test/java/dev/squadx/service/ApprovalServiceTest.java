@@ -4,13 +4,16 @@ import dev.squadx.dto.approval.ApprovalResponse;
 import dev.squadx.dto.approval.CreateApprovalRequest;
 import dev.squadx.dto.approval.ReviewApprovalRequest;
 import dev.squadx.exception.BadRequestException;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.ApprovalStatus;
 import dev.squadx.model.enums.ApprovalType;
+import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.ApprovalRepository;
 import dev.squadx.repository.ExecutionRepository;
+import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +43,9 @@ class ApprovalServiceTest {
 
     @Mock
     private ExecutionRepository executionRepository;
+
+    @Mock
+    private OrganizationMemberRepository memberRepository;
 
     @InjectMocks
     private ApprovalService approvalService;
@@ -67,15 +74,29 @@ class ApprovalServiceTest {
                 .build();
         testReviewer.setId(2L);
 
+        Organization organization = Organization.builder().build();
+        organization.setId(1L);
+        Project project = Project.builder().organization(organization).build();
+        project.setId(1L);
+
         testTask = Task.builder()
                 .title("Task")
+                .status(TaskStatus.IN_REVIEW)
+                .project(project)
+                .createdBy(testUser)
                 .build();
         testTask.setId(1L);
 
         testExecution = Execution.builder()
                 .task(testTask)
+                .gitCommit("abc123")
+                .gitBranch("squadx/task-1")
                 .build();
         testExecution.setId(1L);
+
+        // Both requester and reviewer are members of the task's organization by default.
+        lenient().when(memberRepository.existsByOrganizationIdAndUserId(eq(1L), any()))
+                .thenReturn(true);
 
         testApproval = Approval.builder()
                 .task(testTask)
@@ -202,8 +223,12 @@ class ApprovalServiceTest {
             assertThat(testApproval.getReviewedAt()).isNotNull();
             assertThat(testApproval.getReviewer()).isEqualTo(testReviewer);
             assertThat(testApproval.getReviewComment()).isEqualTo("Looks good");
+            // Approval drives the task to DONE (IN_REVIEW -> DONE is valid).
+            assertThat(testTask.getStatus()).isEqualTo(TaskStatus.DONE);
+            assertThat(testTask.getCompletedAt()).isNotNull();
 
             verify(approvalRepository).save(any(Approval.class));
+            verify(taskRepository).save(testTask);
         }
 
         @Test
@@ -221,8 +246,43 @@ class ApprovalServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.getStatus()).isEqualTo(ApprovalStatus.REJECTED);
             assertThat(testApproval.getReviewedAt()).isNotNull();
+            // Rejection reopens the task (IN_REVIEW -> IN_PROGRESS).
+            assertThat(testTask.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
 
             verify(approvalRepository).save(any(Approval.class));
+            verify(taskRepository).save(testTask);
+        }
+
+        @Test
+        @DisplayName("should leave task unchanged when transition is invalid")
+        void shouldLeaveTaskUnchangedWhenTransitionInvalid() {
+            // A DONE task cannot go to DONE again; approval still records but task state is untouched.
+            testTask.setStatus(TaskStatus.DONE);
+            ReviewApprovalRequest request = new ReviewApprovalRequest();
+            request.setApproved(true);
+
+            when(approvalRepository.findById(1L)).thenReturn(Optional.of(testApproval));
+            when(approvalRepository.save(any(Approval.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            approvalService.review(1L, request, testReviewer);
+
+            assertThat(testTask.getStatus()).isEqualTo(TaskStatus.DONE);
+            verify(taskRepository, never()).save(any(Task.class));
+        }
+
+        @Test
+        @DisplayName("should throw Forbidden when reviewer is not an org member")
+        void shouldThrowForbiddenWhenReviewerNotMember() {
+            when(approvalRepository.findById(1L)).thenReturn(Optional.of(testApproval));
+            when(memberRepository.existsByOrganizationIdAndUserId(eq(1L), eq(2L))).thenReturn(false);
+
+            ReviewApprovalRequest request = new ReviewApprovalRequest();
+            request.setApproved(true);
+
+            assertThatThrownBy(() -> approvalService.review(1L, request, testReviewer))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verify(approvalRepository, never()).save(any(Approval.class));
         }
 
         @Test
@@ -253,6 +313,42 @@ class ApprovalServiceTest {
             assertThatThrownBy(() -> approvalService.review(99L, request, testReviewer))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("Approval not found");
+        }
+    }
+
+    @Nested
+    @DisplayName("autoCreateForCompletedExecution()")
+    class AutoCreate {
+
+        @Test
+        @DisplayName("should create a PENDING COMMIT approval attributed to the task creator")
+        void shouldCreatePendingCommitApproval() {
+            when(approvalRepository.save(any(Approval.class))).thenAnswer(invocation -> {
+                Approval saved = invocation.getArgument(0);
+                saved.setId(5L);
+                return saved;
+            });
+
+            Approval approval = approvalService.autoCreateForCompletedExecution(testTask, testExecution);
+
+            assertThat(approval).isNotNull();
+            assertThat(approval.getStatus()).isEqualTo(ApprovalStatus.PENDING);
+            assertThat(approval.getApprovalType()).isEqualTo(ApprovalType.COMMIT);
+            assertThat(approval.getRequestedBy()).isEqualTo(testUser);
+            assertThat(approval.getChangesSummary()).contains("abc123");
+
+            verify(approvalRepository).save(any(Approval.class));
+        }
+
+        @Test
+        @DisplayName("should return null and skip when the task has no creator")
+        void shouldReturnNullWhenNoCreator() {
+            testTask.setCreatedBy(null);
+
+            Approval approval = approvalService.autoCreateForCompletedExecution(testTask, testExecution);
+
+            assertThat(approval).isNull();
+            verify(approvalRepository, never()).save(any(Approval.class));
         }
     }
 

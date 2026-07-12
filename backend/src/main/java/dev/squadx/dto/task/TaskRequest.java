@@ -50,5 +50,8 @@ public class TaskRequest {
     @JsonProperty("assigned_squad_id")
     private Long assignedSquadId;
 
+    @JsonProperty("requires_approval")
+    private Boolean requiresApproval;
+
     private Set<String> tags;
 }

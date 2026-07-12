@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ const taskSchema = z.object({
   due_date: z.string().optional().nullable().or(z.literal("")),
   assigned_agent_id: z.number().optional().nullable(),
   assigned_squad_id: z.number().optional().nullable(),
+  requires_approval: z.boolean().optional(),
   tags: z.string().optional(),
 });
 
@@ -121,6 +123,7 @@ export function TaskModal({
       due_date: null,
       assigned_agent_id: null,
       assigned_squad_id: null,
+      requires_approval: false,
       tags: "",
     },
   });
@@ -144,6 +147,7 @@ export function TaskModal({
           due_date: task.due_date?.split("T")[0] || null,
           assigned_agent_id: task.assigned_agent_id || null,
           assigned_squad_id: task.assigned_squad_id ?? null,
+          requires_approval: task.requires_approval ?? false,
           tags: task.tags?.join(", ") || "",
         });
       } else {
@@ -157,6 +161,7 @@ export function TaskModal({
           due_date: null,
           assigned_agent_id: null,
           assigned_squad_id: null,
+          requires_approval: false,
           tags: "",
         });
       }
@@ -179,6 +184,7 @@ export function TaskModal({
         due_date: data.due_date || undefined,
         assigned_agent_id: data.assigned_agent_id || undefined,
         assigned_squad_id: data.assigned_squad_id ?? undefined,
+        requires_approval: data.requires_approval ?? undefined,
         project_id: projectId,
         tags,
       });
@@ -216,6 +222,7 @@ export function TaskModal({
         due_date: data.due_date || undefined,
         assigned_agent_id: data.assigned_agent_id || undefined,
         assigned_squad_id: data.assigned_squad_id ?? undefined,
+        requires_approval: data.requires_approval ?? undefined,
         tags,
       });
     },
@@ -419,6 +426,20 @@ export function TaskModal({
               <p className="text-xs text-muted-foreground">
                 Separate tags with commas
               </p>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="requires_approval">Require human approval</Label>
+                <p className="text-xs text-muted-foreground">
+                  When on, a completed run waits for human sign-off before it can reach Done.
+                </p>
+              </div>
+              <Switch
+                id="requires_approval"
+                checked={watch("requires_approval") ?? false}
+                onCheckedChange={(checked) => setValue("requires_approval", checked)}
+              />
             </div>
           </div>
 

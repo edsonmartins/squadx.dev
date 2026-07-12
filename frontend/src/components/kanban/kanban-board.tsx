@@ -10,14 +10,15 @@ import { useTaskStore } from "@/stores/task-store";
 import { TaskCardContent } from "./task-card";
 import type { TaskStatus, TaskResponse, LiveSessionResponse } from "@/lib/api";
 import { liveViewApi } from "@/lib/api";
+import { TASK_STATUS_TONE, TONE_DOT } from "@/lib/design/semantics";
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: "TODO", title: "To Do", color: "bg-slate-500" },
-  { id: "IN_PROGRESS", title: "In Progress", color: "bg-blue-500" },
-  { id: "IN_REVIEW", title: "In Review", color: "bg-purple-500" },
-  { id: "BLOCKED", title: "Blocked", color: "bg-red-500" },
-  { id: "DONE", title: "Done", color: "bg-green-500" },
-  { id: "CANCELLED", title: "Cancelled", color: "bg-gray-500" },
+  { id: "TODO", title: "To Do", color: TONE_DOT[TASK_STATUS_TONE.TODO] },
+  { id: "IN_PROGRESS", title: "In Progress", color: TONE_DOT[TASK_STATUS_TONE.IN_PROGRESS] },
+  { id: "IN_REVIEW", title: "In Review", color: TONE_DOT[TASK_STATUS_TONE.IN_REVIEW] },
+  { id: "BLOCKED", title: "Blocked", color: TONE_DOT[TASK_STATUS_TONE.BLOCKED] },
+  { id: "DONE", title: "Done", color: TONE_DOT[TASK_STATUS_TONE.DONE] },
+  { id: "CANCELLED", title: "Cancelled", color: TONE_DOT[TASK_STATUS_TONE.CANCELLED] },
 ];
 
 interface KanbanBoardProps {

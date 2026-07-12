@@ -24,7 +24,6 @@ import {
   liveViewApi,
   TaskResponse,
   TaskStatus,
-  TaskPriority,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,16 +46,13 @@ import { ExecutionLogs } from "@/components/executions/execution-logs";
 import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/stores/task-store";
 import { cn } from "@/lib/utils";
+import {
+  TASK_STATUS_TONE,
+  TASK_PRIORITY_TONE,
+  TONE_BADGE,
+  TONE_TEXT,
+} from "@/lib/design/semantics";
 import { format } from "date-fns";
-
-const statusColors: Record<TaskStatus, string> = {
-  TODO: "bg-slate-500",
-  IN_PROGRESS: "bg-blue-500",
-  IN_REVIEW: "bg-purple-500",
-  BLOCKED: "bg-red-500",
-  DONE: "bg-green-500",
-  CANCELLED: "bg-gray-400",
-};
 
 const statusLabels: Record<TaskStatus, string> = {
   TODO: "To Do",
@@ -65,13 +61,6 @@ const statusLabels: Record<TaskStatus, string> = {
   BLOCKED: "Blocked",
   DONE: "Done",
   CANCELLED: "Cancelled",
-};
-
-const priorityColors: Record<TaskPriority, string> = {
-  LOW: "bg-slate-500",
-  MEDIUM: "bg-blue-500",
-  HIGH: "bg-orange-500",
-  URGENT: "bg-red-500",
 };
 
 interface TaskDetailSheetProps {
@@ -151,18 +140,17 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Badge className={cn(statusColors[task?.status || "TODO"], "text-white")}>
+                <Badge
+                  className={cn(
+                    TONE_BADGE[TASK_STATUS_TONE[task?.status || "TODO"]],
+                    "border-transparent"
+                  )}
+                >
                   {statusLabels[task?.status || "TODO"]}
                 </Badge>
                 <Badge
                   variant="outline"
-                  className={cn(
-                    "border-2",
-                    task?.priority === "URGENT" && "border-red-500 text-red-500",
-                    task?.priority === "HIGH" && "border-orange-500 text-orange-500",
-                    task?.priority === "MEDIUM" && "border-blue-500 text-blue-500",
-                    task?.priority === "LOW" && "border-slate-500 text-slate-500"
-                  )}
+                  className={cn("border-2", TONE_TEXT[TASK_PRIORITY_TONE[task?.priority || "LOW"]])}
                 >
                   {task?.priority}
                 </Badge>

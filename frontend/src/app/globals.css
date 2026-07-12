@@ -36,13 +36,24 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    /* Semantic tones (Design System v2 "Mission Control" — see lib/design/semantics.ts) */
+    --ok: 152 64% 32%;
+    --ok-soft: 150 55% 94%;
+    --warn: 28 85% 38%;
+    --warn-soft: 42 95% 93%;
+    --danger: 356 72% 44%;
+    --danger-soft: 356 85% 96%;
+    --info: 224 76% 48%;
+    --info-soft: 220 90% 96%;
+    --neutral: 226 10% 44%;
+    --neutral-soft: 220 16% 93%;
+    --live: 152 70% 38%;
 
-    /* Warning */
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 20% 10%;
+    /* Success / Warning (legacy aliases, kept for existing consumers) */
+    --success: var(--ok);
+    --success-foreground: 0 0% 100%;
+    --warning: 36 92% 44%;
+    --warning-foreground: 228 25% 12%;
 
     /* Border - warm subtle */
     --border: 20 10% 90%;
@@ -86,6 +97,23 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Semantic tones (dark) */
+    --ok: 152 55% 55%;
+    --ok-soft: 152 45% 13%;
+    --warn: 40 90% 60%;
+    --warn-soft: 36 50% 13%;
+    --danger: 356 80% 64%;
+    --danger-soft: 356 45% 14%;
+    --info: 217 91% 66%;
+    --info-soft: 222 50% 15%;
+    --neutral: 224 10% 62%;
+    --neutral-soft: 226 16% 17%;
+    --live: 152 60% 50%;
+    --success: var(--ok);
+    --success-foreground: 0 0% 100%;
+    --warning: 40 90% 56%;
+    --warning-foreground: 222 47% 11%;
+
     /* Border */
     --border: 20 15% 18%;
     --input: 20 15% 18%;
@@ -124,6 +152,25 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/50;
+}
+
+/* Pulse ring para indicadores live */
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--live) / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px hsl(var(--live) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--live) / 0);
+  }
+}
+
+.live-dot {
+  @apply rounded-full;
+  background: hsl(var(--live));
+  animation: live-pulse 2s infinite;
 }
 
 /* Kanban styles */

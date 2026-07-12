@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     external_cli_timeout_seconds: int = Field(
         default=1800, alias="SQUADX_EXTERNAL_CLI_TIMEOUT_SECONDS"
     )
+    # Generic harness fallback: register a new coding CLI with no code change.
+    # JSON object of PROVIDER -> shell-style command template, where "{prompt}" is
+    # substituted with the task prompt, e.g.
+    #   {"MYCLI": "mycli run --task {prompt}"}
+    # Providers here augment the built-in set (CLAUDE_CODE/CODEX/GEMINI_CLI/AIDER/OPENCODE).
+    external_cli_command_templates: dict[str, str] = Field(
+        default_factory=dict, alias="SQUADX_EXTERNAL_CLI_COMMAND_TEMPLATES"
+    )
 
     # Resilience: periodically claim pending tasks over HTTP as a fallback when the
     # STOMP push is missed (NAT/firewall, reconnect gaps). 0 disables polling.

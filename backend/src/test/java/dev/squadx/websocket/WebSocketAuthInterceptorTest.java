@@ -11,6 +11,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,6 +33,9 @@ class WebSocketAuthInterceptorTest {
 
     @Mock
     private UserDetailsService userDetailsService;
+
+    @Mock
+    private StompSubscriptionAuthorizer subscriptionAuthorizer;
 
     @InjectMocks
     private WebSocketAuthInterceptor interceptor;
@@ -109,5 +113,39 @@ class WebSocketAuthInterceptorTest {
 
         assertThat(result).isSameAs(send);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    void subscribeDelegatesToAuthorizerWithDestinationAndUser() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities());
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
+        accessor.setDestination("/topic/organizations/7");
+        accessor.setUser(auth);
+        Message<byte[]> sub = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        interceptor.preSend(sub, null);
+
+        // The interceptor resolves the session principal (UserDetails) and hands it to the authorizer.
+        org.mockito.Mockito.verify(subscriptionAuthorizer)
+                .authorize(org.mockito.ArgumentMatchers.eq("/topic/organizations/7"), any());
+    }
+
+    @Test
+    void subscribeDenialFromAuthorizerPropagates() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities());
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
+        accessor.setDestination("/topic/organizations/99");
+        accessor.setUser(auth);
+        Message<byte[]> sub = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("nope"))
+                .when(subscriptionAuthorizer).authorize(anyString(), any());
+
+        assertThatThrownBy(() -> interceptor.preSend(sub, null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 }

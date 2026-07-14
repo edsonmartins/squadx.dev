@@ -19,7 +19,7 @@ execução real / ausente.
 
 | # | Fronteira | Entrada não-confiável | Controles exigidos | Estado (evidência) |
 |---|-----------|----------------------|--------------------|--------------------|
-| 1 | **Sandbox Docker** (agente executa código) | código/comandos gerados pelo agente ou pela CLI externa | cap-drop ALL, no-new-privileges, rootfs read-only, non-root, limites de recurso, tmpfs noexec, **seccomp**, egress restrito | ✅ cap-drop/no-new-priv/ro-rootfs/non-root/limites/tmpfs (`docker/hardening.py:96-149`); ❌ **seccomp não aplicado** (perfil existe em `docker/seccomp/agent.json` mas `to_docker_kwargs` omite — `hardening.py:150-151`); 🟡 gVisor/Firecracker só se o binário existir (`hardening.py:436-466`) |
+| 1 | **Sandbox Docker** (agente executa código) | código/comandos gerados pelo agente ou pela CLI externa | cap-drop ALL, no-new-privileges, rootfs read-only, non-root, limites de recurso, tmpfs noexec, **seccomp**, egress restrito | ✅ cap-drop/no-new-priv/ro-rootfs/non-root/limites/tmpfs; ✅ **seccomp agora aplicado** (`to_docker_kwargs` inlina o JSON de `docker/seccomp/agent.json` como `seccomp=<json>` — o SDK exige conteúdo, não path; degrada com WARN se o perfil sumir); 🟡 gVisor/Firecracker só se o binário existir (`hardening.py`) |
 | 2 | **Rede do sandbox** (egress) | tentativa de exfiltração / acesso a metadata cloud | default-deny + allowlist de domínios; bloquear 169.254.169.254 | 🟡 **metadata bloqueado host-side por default** (ADR-0008 Fase 0, `egress_guard.py` → DROP em `DOCKER-USER` p/ 169.254.169.254 + 169.254.170.2, aplicado em `connect`, degrada com log ERROR). **Egress geral ainda aberto**: `enable_vnc=True` força `bridge` (`docker/manager.py:173-174`) e `network_policy=` não é passado por caller — allowlist default-deny é Fase 1 (sidecar). O iptables in-container (`network_policy.py`) segue morto por design (cap-drop ALL) |
 | 3 | **Chaves de provider** (env no sandbox) | vazamento de segredo p/ o container | injeção em runtime (nunca na imagem) + allowlist | ✅ `scrub_env` com allowlist das 3 chaves ANTHROPIC/OPENAI/GOOGLE (`agents/security.py:42-58`, `daemon.py:383-392`); imagens sem segredo (grep limpo). 🟡 allowlist é por **nome** de var (segredo em var de nome benigno passa); scrub só no caminho External-CLI |
 | 4 | **Prompt do agente** (injection) | instruction-override, exfiltração, acesso a arquivo sensível | detectar e **bloquear** | 🟡 `assess_prompt` detecta os 3 padrões mas **default é `audit` (só loga)** (`agents/security.py:73-110`, `config.py:82`); só no caminho External-CLI, não no nativo |
@@ -65,12 +65,14 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    *viewer* (assinado/TTL/escopado) para fechar o hijack de stream de forma forte — Fase 2/gVisor.
    Evidência: `LiveViewController.java`, `SupabaseLiveSessionService.java`.
 
-3. **[MÉDIO] Seccomp não é aplicado aos containers.** O perfil `SCMP_ACT_ERRNO` existe
-   (`docker/seccomp/agent.json`) mas `to_docker_kwargs` o omite deliberadamente (só está no helper de
-   CLI de debug, não chamado). Containers sobem com o seccomp default do Docker — superfície de syscall
-   bem maior que a documentada. **Fix:** aplicar `security_opt=["seccomp=<perfil>"]` via SDK, ou mover
-   para a fase gVisor (que dá isolamento de syscall por construção). Evidência: `hardening.py:150-151`
-   vs `:355-356`.
+3. **[MÉDIO → CORRIGIDO] Seccomp não era aplicado aos containers.** Era: o perfil `SCMP_ACT_ERRNO`
+   (`docker/seccomp/agent.json`) existia mas `to_docker_kwargs` o omitia (só estava no helper de CLI de
+   debug), então containers subiam com o seccomp **default** do Docker. **Corrigido (2026-07):**
+   `to_docker_kwargs` agora resolve o perfil via `_resolve_seccomp_opt` e o inlina como
+   `seccomp=<json compacto>` no `security_opt` (o SDK exige o **conteúdo**, não um path — daí o bug
+   original). Degrada com WARNING (sem bloquear a criação) se o perfil sumir/for inválido, para o
+   container nunca *pensar* que está restrito sem estar. 6 testes em `test_hardening_seccomp.py`.
+   Reforço estrutural continua sendo a fase gVisor.
 
 4. **[MÉDIO] CONNECT STOMP não exige token.** O interceptor só barra token inválido; CONNECT sem
    `Authorization` passa. Verificar se a config de `WebSocketSecurity`/broker rejeita anônimo; se não,

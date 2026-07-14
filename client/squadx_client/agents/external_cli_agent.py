@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import structlog
 
 from squadx_client.agents.base import BaseAgent
-from squadx_client.agents.security import assess_prompt, filter_internal_artifacts
+from squadx_client.agents.security import enforce_prompt_security, filter_internal_artifacts
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
@@ -190,18 +190,11 @@ class ExternalCliAgent(BaseAgent):
         """Scan the prompt for injection/exfiltration patterns (ADR-0007).
 
         Mode comes from ``settings.cli_security_mode``: ``off`` skips; ``audit`` logs findings;
-        ``enforce`` raises and aborts the run.
+        ``enforce`` raises and aborts the run. Shared with the native path via
+        ``enforce_prompt_security``.
         """
-        mode = getattr(settings, "cli_security_mode", "audit")
-        if mode == "off":
-            return
-        findings = assess_prompt(prompt)
-        if not findings:
-            return
-        codes = [f.code for f in findings]
-        self.logger.warning("prompt_security_findings", mode=mode, findings=codes)
-        if mode == "enforce" and any(f.severity == "block" for f in findings):
-            raise RuntimeError("Prompt blocked by security policy: " + ", ".join(codes))
+        mode = getattr(settings, "cli_security_mode", "enforce")
+        enforce_prompt_security(prompt, mode=mode, logger=self.logger)
 
     async def _collect_changed_files(self) -> list[str]:
         """Derive the list of changed files from git working-tree status."""

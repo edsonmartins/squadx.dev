@@ -17,7 +17,7 @@ from squadx_client.memory.policy import MemoryScopeContext
 from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
 from squadx_client.orchestrator.context_packet import build_context_packet
 from squadx_client.agents.factory import create_agent
-from squadx_client.agents.security import filter_internal_artifacts
+from squadx_client.agents.security import enforce_prompt_security, filter_internal_artifacts
 from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 from squadx_client.git.worktree import WorktreeManager
@@ -170,6 +170,13 @@ Respond in JSON format:
 }"""
 
     task_prompt = f"Task: {task.get('title')}\n\nDescription: {task.get('description', 'No description')}"
+    # Apply the same prompt-injection policy as the External-CLI path (threat-model #5):
+    # the task title/description is untrusted input. enforce mode aborts here before any LLM call.
+    enforce_prompt_security(
+        task_prompt,
+        mode=getattr(settings, "cli_security_mode", "enforce"),
+        logger=logger,
+    )
     enriched_prompt = await _intercept_prompt(task_prompt, state)
 
     response = await llm.ainvoke(

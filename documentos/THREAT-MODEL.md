@@ -35,12 +35,20 @@ execução real / ausente.
 
 Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regressões**, não só "risco aceito".
 
-1. **[ALTO] Egress de rede irrestrito por default + motor de política é código morto.**
-   Um agente comprometido tem saída de rede aberta (exfiltração; alcança `169.254.169.254`). O commit
-   `02c6673` diz "wire network policy into sandbox start", mas nenhum caller passa `network_policy=` e
-   `enable_vnc` força `bridge`. **Fix:** passar a política aos dois call-sites, não sobrescrever
-   `network_mode` quando há política, e falhar fechado (hoje falha aberto, `sandbox.py:206`).
-   Evidência: `docker/manager.py:173-174`, `daemon.py:394`, `orchestrator/nodes.py:383`.
+1. **[ALTO] Egress de rede irrestrito por default — e a abordagem de enforcement é inviável com o
+   hardening atual (não é só "código não fiado").** Nenhum caller passa `network_policy=`
+   (`daemon.py:394`, `orchestrator/nodes.py:383`) e `enable_vnc` força `bridge`
+   (`docker/manager.py:173-174`). **Mas simplesmente fiar não resolve:** `apply_network_setup` roda o
+   script iptables via `container.exec_run(["sh", ...])` (`manager.py:399`) *dentro* do container — que
+   tem `cap-drop ALL` + non-root. `iptables` exige `NET_ADMIN`+root, e uma capability derrubada **não
+   pode** ser readquirida por exec. Logo o iptables in-container **sempre falha** (por isso o motor é
+   morto). Além disso os presets confundem: `POLICY_NONE` = **deny-all** (quebraria tudo),
+   `POLICY_PACKAGE_MANAGERS` não libera as APIs de LLM (quebraria os agentes), e só `POLICY_FULL_ACCESS`
+   (allow-all exceto metadata) é sensato. **Fix correto (arquitetural, não local):** aplicar egress no
+   nível de **rede do Docker** (rede dedicada por run sem rota para `169.254.169.254`) ou host-iptables
+   no bridge, ou um sidecar de firewall — **não** iptables in-container. Alvo mínimo: bloquear
+   `169.254.169.254`/`metadata.google.internal` por default (fecha o vetor de SSRF→credenciais de cloud)
+   mantendo o egress legítimo. Renomear os presets (`none`=deny-all é enganoso).
 
 2. **[ALTO] Live-view `/supabase/**` sem escopo de org.** Qualquer usuário autenticado de qualquer
    org enumera (`/supabase/sessions/active`), cria ou encerra sessões de sandbox de outros tenants —

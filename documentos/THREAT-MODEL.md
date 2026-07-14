@@ -49,6 +49,8 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    no bridge, ou um sidecar de firewall — **não** iptables in-container. Alvo mínimo: bloquear
    `169.254.169.254`/`metadata.google.internal` por default (fecha o vetor de SSRF→credenciais de cloud)
    mantendo o egress legítimo. Renomear os presets (`none`=deny-all é enganoso).
+   **Design proposto:** `docs/adr/ADR-0008-egress-enforcement-nivel-de-rede.md` (Fase 0 metadata-block
+   por default → Fase 1 sidecar de firewall default-deny → Fase 2 gVisor/Firecracker).
 
 2. **[ALTO → CORRIGIDO parcial] Live-view `/supabase/**` sem escopo de org.** Era: qualquer usuário
    autenticado de qualquer org enumerava (`/supabase/sessions/active`), criava ou encerrava sessões de

@@ -83,6 +83,9 @@ class Settings(BaseSettings):
 
     # Network policy
     network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full
+    # ADR-0008 Phase 0: block cloud metadata egress (169.254.169.254 / ECS creds) host-side,
+    # on the DOCKER-USER chain. Default on; degrades loudly if the host can't apply it.
+    block_cloud_metadata: bool = Field(default=True, alias="SQUADX_BLOCK_CLOUD_METADATA")
     sandbox_ttl_seconds: int = Field(default=3600, alias="SQUADX_SANDBOX_TTL")
     sandbox_max_ttl_seconds: int = Field(default=86400, alias="SQUADX_SANDBOX_MAX_TTL")
 

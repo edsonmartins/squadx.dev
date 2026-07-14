@@ -70,10 +70,28 @@ class DockerManager:
             # Test connection
             self.client.ping()
             logger.info("Connected to Docker daemon")
+            self._ensure_metadata_block()
             return True
         except DockerException as e:
             logger.error(f"Failed to connect to Docker: {e}")
             return False
+
+    def _ensure_metadata_block(self) -> None:
+        """Apply the ADR-0008 Phase 0 host-side cloud-metadata egress block (once).
+
+        Best-effort: never raises. On a host that can't enforce it (no privilege /
+        no iptables / remote daemon), ``ensure_cloud_metadata_blocked`` logs loudly
+        that egress is unrestricted, so the gap surfaces instead of hiding.
+        """
+        if not settings.block_cloud_metadata:
+            logger.warning(
+                "block_cloud_metadata disabled — sandbox egress to cloud metadata "
+                "(169.254.169.254) is UNRESTRICTED (SSRF->credentials vector). See ADR-0008."
+            )
+            return
+        from squadx_client.docker.egress_guard import ensure_cloud_metadata_blocked
+
+        ensure_cloud_metadata_blocked()
 
     async def disconnect(self):
         """Disconnect from Docker daemon."""

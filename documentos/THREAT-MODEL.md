@@ -20,7 +20,7 @@ execução real / ausente.
 | # | Fronteira | Entrada não-confiável | Controles exigidos | Estado (evidência) |
 |---|-----------|----------------------|--------------------|--------------------|
 | 1 | **Sandbox Docker** (agente executa código) | código/comandos gerados pelo agente ou pela CLI externa | cap-drop ALL, no-new-privileges, rootfs read-only, non-root, limites de recurso, tmpfs noexec, **seccomp**, egress restrito | ✅ cap-drop/no-new-priv/ro-rootfs/non-root/limites/tmpfs (`docker/hardening.py:96-149`); ❌ **seccomp não aplicado** (perfil existe em `docker/seccomp/agent.json` mas `to_docker_kwargs` omite — `hardening.py:150-151`); 🟡 gVisor/Firecracker só se o binário existir (`hardening.py:436-466`) |
-| 2 | **Rede do sandbox** (egress) | tentativa de exfiltração / acesso a metadata cloud | default-deny + allowlist de domínios; bloquear 169.254.169.254 | ❌ **egress aberto por default**: `enable_vnc=True` troca `network_mode` de `none`→`bridge` (`docker/manager.py:173-174`) e o `network_policy=` **não é passado** por nenhum caller (`daemon.py:394`, `orchestrator/nodes.py:383`) — o motor `network_policy.py` é código morto na prática |
+| 2 | **Rede do sandbox** (egress) | tentativa de exfiltração / acesso a metadata cloud | default-deny + allowlist de domínios; bloquear 169.254.169.254 | 🟡 **metadata bloqueado host-side por default** (ADR-0008 Fase 0, `egress_guard.py` → DROP em `DOCKER-USER` p/ 169.254.169.254 + 169.254.170.2, aplicado em `connect`, degrada com log ERROR). **Egress geral ainda aberto**: `enable_vnc=True` força `bridge` (`docker/manager.py:173-174`) e `network_policy=` não é passado por caller — allowlist default-deny é Fase 1 (sidecar). O iptables in-container (`network_policy.py`) segue morto por design (cap-drop ALL) |
 | 3 | **Chaves de provider** (env no sandbox) | vazamento de segredo p/ o container | injeção em runtime (nunca na imagem) + allowlist | ✅ `scrub_env` com allowlist das 3 chaves ANTHROPIC/OPENAI/GOOGLE (`agents/security.py:42-58`, `daemon.py:383-392`); imagens sem segredo (grep limpo). 🟡 allowlist é por **nome** de var (segredo em var de nome benigno passa); scrub só no caminho External-CLI |
 | 4 | **Prompt do agente** (injection) | instruction-override, exfiltração, acesso a arquivo sensível | detectar e **bloquear** | 🟡 `assess_prompt` detecta os 3 padrões mas **default é `audit` (só loga)** (`agents/security.py:73-110`, `config.py:82`); só no caminho External-CLI, não no nativo |
 | 5 | **Artefatos internos da CLI** (`.claude/.codex/.omx/.aider/.opencode`) | poluição de commit / vazamento de histórico | filtrar antes do commit | ✅ `filter_internal_artifacts` (`agents/security.py:115-136`) aplicado em coleta e no commit (`external_cli_agent.py:236`, `nodes.py:766`) |
@@ -49,8 +49,12 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    no bridge, ou um sidecar de firewall — **não** iptables in-container. Alvo mínimo: bloquear
    `169.254.169.254`/`metadata.google.internal` por default (fecha o vetor de SSRF→credenciais de cloud)
    mantendo o egress legítimo. Renomear os presets (`none`=deny-all é enganoso).
-   **Design proposto:** `docs/adr/ADR-0008-egress-enforcement-nivel-de-rede.md` (Fase 0 metadata-block
-   por default → Fase 1 sidecar de firewall default-deny → Fase 2 gVisor/Firecracker).
+   **Design:** `docs/adr/ADR-0008-egress-enforcement-nivel-de-rede.md`. **Fase 0 IMPLEMENTADA
+   (2026-07):** bloqueio host-side do metadata (`DOCKER-USER` DROP p/ 169.254.169.254 + 169.254.170.2)
+   via `egress_guard.py`, default on (`SQUADX_BLOCK_CLOUD_METADATA`), aplicado em `DockerManager.connect`;
+   degrada com log ERROR se o host não puder aplicar (sem privilégio/iptables/daemon remoto). **Resta:**
+   Fase 1 (allowlist default-deny via sidecar) + Fase 2 (gVisor). Verificação de efeito real exige host
+   Linux com iptables (dev/Mac faz no-op ruidoso).
 
 2. **[ALTO → CORRIGIDO parcial] Live-view `/supabase/**` sem escopo de org.** Era: qualquer usuário
    autenticado de qualquer org enumerava (`/supabase/sessions/active`), criava ou encerrava sessões de

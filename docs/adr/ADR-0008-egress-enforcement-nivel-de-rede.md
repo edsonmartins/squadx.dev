@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposto — 2026-07-13.
+Proposto — 2026-07-13. **Fase 0 implementada** (2026-07-13): bloqueio host-side do metadata via
+`client/squadx_client/docker/egress_guard.py` (`ensure_cloud_metadata_blocked`, regra DROP idempotente
+na chain `DOCKER-USER`), gate `settings.block_cloud_metadata` (default on), aplicado uma vez em
+`DockerManager.connect`; degrada **ruidosamente** (log ERROR) quando o host não pode aplicar. Fases 1/2
+pendentes.
 
 ## Contexto
 

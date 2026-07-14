@@ -30,29 +30,39 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
             List<String> authorization = accessor.getNativeHeader("Authorization");
 
-            if (authorization != null && !authorization.isEmpty()) {
-                String token = authorization.get(0);
+            // Reject anonymous CONNECT: no Authorization header means no principal.
+            // Previously this branch was skipped and the connection was allowed
+            // through unauthenticated (threat-model #4).
+            if (authorization == null || authorization.isEmpty()) {
+                throw new IllegalArgumentException("Missing Authorization header on STOMP CONNECT");
+            }
 
-                if (token.startsWith("Bearer ")) {
-                    token = token.substring(7);
+            String token = authorization.get(0);
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+
+            try {
+                String username = jwtService.extractUsername(token);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                // A parseable-but-invalid token (expired / wrong subject) must also
+                // be rejected, not silently allowed through with no authentication.
+                if (!jwtService.isTokenValid(token, userDetails)) {
+                    throw new IllegalArgumentException("Invalid or expired token on STOMP CONNECT");
                 }
 
-                try {
-                    String username = jwtService.extractUsername(token);
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-                    if (jwtService.isTokenValid(token, userDetails)) {
-                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-                        SecurityContextHolder.getContext().setAuthentication(auth);
-                        accessor.setUser(auth);
-                    }
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Invalid token");
-                }
+                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
+                );
+                SecurityContextHolder.getContext().setAuthentication(auth);
+                accessor.setUser(auth);
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid token on STOMP CONNECT");
             }
         }
 

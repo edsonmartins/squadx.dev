@@ -204,6 +204,14 @@ class AgentSandbox:
                         self._set_status(SandboxStatus.ERROR)
                         return False
 
+                    # Apply the egress policy on the sidecar (it holds NET_ADMIN) BEFORE
+                    # the agent joins the netns, so the agent never runs with open egress.
+                    # FAIL-CLOSED: abort the run if the policy cannot be applied.
+                    if not await self._apply_sidecar_policy():
+                        await self._teardown_sidecar()
+                        self._set_status(SandboxStatus.ERROR)
+                        return False
+
                 # Create and start container
                 self.container_id = await self.manager.create_container(
                     config=config,
@@ -220,31 +228,9 @@ class AgentSandbox:
                     self._set_status(SandboxStatus.ERROR)
                     return False
 
-            # Apply the egress policy. With the sidecar (RFC-0006) it is enforced on the
-            # sidecar (which holds NET_ADMIN) and is FAIL-CLOSED: if it cannot be applied
-            # the run aborts rather than proceeding with open egress. Without the sidecar
-            # this stays the legacy best-effort in-agent path (non-fatal), used only when
-            # an explicit policy was set on the sandbox.
-            if sidecar_enabled:
-                policy = self._network_policy or get_predefined_policy(
-                    getattr(settings, "network_policy", "agent-default")
-                )
-                script = generate_network_setup_script(policy)
-                ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
-                if not ok:
-                    if getattr(settings, "egress_fail_open", False):
-                        logger.warning(
-                            f"egress_policy_apply_failed_fail_open task={self.task_id} "
-                            f"log={log[:500]}"
-                        )
-                    else:
-                        logger.error(
-                            f"egress_policy_apply_failed_fail_closed task={self.task_id} "
-                            f"log={log[:500]}"
-                        )
-                        self._set_status(SandboxStatus.ERROR)
-                        return False
-            elif self._network_policy:
+            # Legacy in-agent network policy (non-sidecar path). Best-effort: kept up on
+            # failure. The sidecar path already applied its policy fail-closed, above.
+            if self._network_policy and not sidecar_enabled:
                 script = generate_network_setup_script(self._network_policy)
                 ok, log = await self.manager.apply_network_setup(
                     self.container_id, script
@@ -286,6 +272,36 @@ class AgentSandbox:
             logger.error(f"Failed to start sandbox: {e}")
             self._set_status(SandboxStatus.ERROR)
             return False
+
+    async def _apply_sidecar_policy(self) -> bool:
+        """Apply the egress policy on the sidecar. Returns False only when it could not
+        be applied AND fail-open is off (caller then aborts the run)."""
+        policy = self._network_policy or get_predefined_policy(
+            getattr(settings, "network_policy", "agent-default")
+        )
+        script = generate_network_setup_script(policy)
+        ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
+        if ok:
+            return True
+        if getattr(settings, "egress_fail_open", False):
+            logger.warning(
+                f"egress_policy_apply_failed_fail_open task={self.task_id} log={log[:500]}"
+            )
+            return True
+        logger.error(
+            f"egress_policy_apply_failed_fail_closed task={self.task_id} log={log[:500]}"
+        )
+        return False
+
+    async def _teardown_sidecar(self) -> None:
+        """Best-effort removal of the egress sidecar; never raises."""
+        if not self.sidecar_id:
+            return
+        try:
+            await self.manager.remove_container(self.sidecar_id, force=True)
+        except Exception as e:  # noqa: BLE001 - best effort
+            logger.warning(f"egress_sidecar_teardown_failed task={self.task_id} error={e}")
+        self.sidecar_id = None
 
     async def stop(self, timeout: int = 10) -> bool:
         """Stop the sandbox container."""
@@ -347,12 +363,7 @@ class AgentSandbox:
             self.container_id = None
             self.vnc_port = None
             # RFC-0006: tear down the egress sidecar alongside the agent.
-            if self.sidecar_id:
-                try:
-                    await self.manager.remove_container(self.sidecar_id, force=True)
-                except Exception as e:  # noqa: BLE001 - best effort; don't fail cleanup
-                    logger.warning(f"egress_sidecar_cleanup_failed task={self.task_id} error={e}")
-                self.sidecar_id = None
+            await self._teardown_sidecar()
             self._set_status(SandboxStatus.STOPPED)
             logger.info(f"Sandbox cleaned up for task {self.task_id}")
             return True

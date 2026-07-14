@@ -1,5 +1,11 @@
 # RFC-0006 — Egress firewall sidecar (default-deny + allowlist)
 
+> **Status:** Implementado atrás de flag (`SQUADX_EGRESS_SIDECAR`, default **off**) em 2026-07 —
+> `egress_sidecar.py` + wiring em `manager.py`/`sandbox.py`, preset `POLICY_AGENT_DEFAULT`, fail-closed.
+> **Pendente:** imagem `squadx/egress-proxy` (dns-proxy) e verificação ponta-a-ponta em host Linux
+> (testes de integração marcados `integration`, pulados por default). Rollout: ligar o flag, calibrar
+> allowlist por telemetria, então flip do default.
+>
 > Realiza **ADR-0008** Fase 1. Define como aplicar egress default-deny com allowlist de domínios ao
 > sandbox **sem** iptables dentro do container não-confiável, movendo o enforcement para um **sidecar
 > privilegiado** que compartilha o network namespace do agente. Reusa o motor já existente em

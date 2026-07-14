@@ -63,6 +63,8 @@ tocar. Três camadas, faseadas:
    de ser código morto, mas roda **no sidecar**, não no container do agente.
    **Design detalhado (implementável):** `docs/rfc/RFC-0006-egress-firewall-sidecar.md` — topologia
    `network_mode=container:<sidecar>`, presets corrigidos, ciclo de vida, fail-closed, rollout opt-in.
+   **Implementado atrás de flag** (`SQUADX_EGRESS_SIDECAR`, default off): `egress_sidecar.py` +
+   `manager.py`/`sandbox.py`, `POLICY_AGENT_DEFAULT`. Pendente: imagem do proxy + verificação em host Linux.
 
 3. **Fase 2 — Enforcement estrutural (gVisor/Firecracker).** Com `runtimeClass=runsc` (gVisor) ou
    microVM (Firecracker), a política de rede vira propriedade do runtime/host, alinhada ao

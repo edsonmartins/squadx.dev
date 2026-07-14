@@ -18,6 +18,7 @@ Upgrade Path:
 - Phase 3: Firecracker - When multi-tenant or >1000 exec/day
 """
 
+import json
 import logging
 import os
 import shutil
@@ -147,8 +148,12 @@ class SecurityConfig:
         security_opts = []
         if self.no_new_privileges:
             security_opts.append("no-new-privileges:true")
-        # Note: seccomp via Docker SDK is complex - use CLI for full hardening
-        # The seccomp_profile path is used in get_run_command() for CLI mode
+        # Apply the seccomp profile. Unlike the docker CLI (which reads a file path
+        # client-side), the SDK/daemon expects the profile JSON *content* inlined as
+        # `seccomp=<json>`; passing a path silently does nothing. Load and inline it.
+        seccomp_opt = self._resolve_seccomp_opt()
+        if seccomp_opt:
+            security_opts.append(seccomp_opt)
         if self.apparmor_profile:
             security_opts.append(f"apparmor={self.apparmor_profile}")
 
@@ -172,6 +177,36 @@ class SecurityConfig:
             kwargs["pid_mode"] = self.pid_mode
 
         return kwargs
+
+    def _resolve_seccomp_opt(self) -> str | None:
+        """Build the `seccomp=...` security_opt from the configured profile.
+
+        ``seccomp_profile`` is a filesystem path (or the literal ``unconfined``).
+        The Docker daemon expects the profile *content*, so the file is read and
+        inlined as compact JSON. Returns ``None`` (no seccomp opt) and logs a
+        WARNING when the profile is absent/invalid, so a container never comes up
+        *thinking* it is seccomp-restricted when it is not — but creation is never
+        blocked on a profile-load error.
+        """
+        profile = self.seccomp_profile
+        if not profile:
+            return None
+        if profile == "unconfined":
+            logger.warning("seccomp explicitly unconfined for %s container", self.level.value)
+            return "seccomp=unconfined"
+        try:
+            content = Path(profile).read_text(encoding="utf-8")
+            # Validate + compact so the opt is a single well-formed JSON string.
+            compact = json.dumps(json.loads(content), separators=(",", ":"))
+            return f"seccomp={compact}"
+        except (OSError, ValueError) as e:
+            logger.warning(
+                "seccomp profile not applied (path=%s): %s — container runs with "
+                "Docker's DEFAULT seccomp, a wider syscall surface than intended.",
+                profile,
+                e,
+            )
+            return None
 
 
 class HardeningManager:

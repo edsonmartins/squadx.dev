@@ -53,8 +53,8 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    (2026-07):** bloqueio host-side do metadata (`DOCKER-USER` DROP p/ 169.254.169.254 + 169.254.170.2)
    via `egress_guard.py`, default on (`SQUADX_BLOCK_CLOUD_METADATA`), aplicado em `DockerManager.connect`;
    degrada com log ERROR se o host não puder aplicar (sem privilégio/iptables/daemon remoto). **Resta:**
-   Fase 1 (allowlist default-deny via sidecar) + Fase 2 (gVisor). Verificação de efeito real exige host
-   Linux com iptables (dev/Mac faz no-op ruidoso).
+   Fase 1 (allowlist default-deny via sidecar — design em `docs/rfc/RFC-0006-egress-firewall-sidecar.md`)
+   + Fase 2 (gVisor). Verificação de efeito real exige host Linux com iptables (dev/Mac faz no-op ruidoso).
 
 2. **[ALTO → CORRIGIDO parcial] Live-view `/supabase/**` sem escopo de org.** Era: qualquer usuário
    autenticado de qualquer org enumerava (`/supabase/sessions/active`), criava ou encerrava sessões de

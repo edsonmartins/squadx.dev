@@ -61,6 +61,8 @@ tocar. Três camadas, faseadas:
    registries). O sidecar tem `NET_ADMIN`; o sandbox continua `cap-drop ALL`. Reusa
    `network_policy.py` (`EgressSidecarConfig`, `to_dns_config`, `to_iptables_rules`) — o motor deixa
    de ser código morto, mas roda **no sidecar**, não no container do agente.
+   **Design detalhado (implementável):** `docs/rfc/RFC-0006-egress-firewall-sidecar.md` — topologia
+   `network_mode=container:<sidecar>`, presets corrigidos, ciclo de vida, fail-closed, rollout opt-in.
 
 3. **Fase 2 — Enforcement estrutural (gVisor/Firecracker).** Com `runtimeClass=runsc` (gVisor) ou
    microVM (Firecracker), a política de rede vira propriedade do runtime/host, alinhada ao

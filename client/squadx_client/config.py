@@ -79,13 +79,19 @@ class Settings(BaseSettings):
     seccomp_profile: str | None = Field(default=None, alias="SQUADX_SECCOMP_PROFILE")
     apparmor_profile: str | None = Field(default=None, alias="SQUADX_APPARMOR_PROFILE")
     # External-CLI prompt-injection policy: "enforce" | "audit" | "off" (RFC-0005 / ADR-0007).
-    cli_security_mode: str = Field(default="audit", alias="SQUADX_CLI_SECURITY_MODE")
+    # Secure-by-default: block-severity findings (instruction-override, secret-exfiltration,
+    # credential-file-read) abort the run. Set "audit" to only log, "off" to skip.
+    cli_security_mode: str = Field(default="enforce", alias="SQUADX_CLI_SECURITY_MODE")
 
     # Network policy
     network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full
     # ADR-0008 Phase 0: block cloud metadata egress (169.254.169.254 / ECS creds) host-side,
     # on the DOCKER-USER chain. Default on; degrades loudly if the host can't apply it.
     block_cloud_metadata: bool = Field(default=True, alias="SQUADX_BLOCK_CLOUD_METADATA")
+    # Default per-run cost ceiling (USD). Over it the arbiter escalates to a human (see
+    # orchestrator nodes). Threaded into OrchestratorState by the daemon. Raise for large
+    # tasks; set very high to effectively disable. Complements the max_cycles=3 backstop.
+    cost_budget_usd: float | None = Field(default=5.0, alias="SQUADX_COST_BUDGET_USD")
     sandbox_ttl_seconds: int = Field(default=3600, alias="SQUADX_SANDBOX_TTL")
     sandbox_max_ttl_seconds: int = Field(default=86400, alias="SQUADX_SANDBOX_MAX_TTL")
 

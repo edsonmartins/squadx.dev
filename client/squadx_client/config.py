@@ -83,8 +83,13 @@ class Settings(BaseSettings):
     # credential-file-read) abort the run. Set "audit" to only log, "off" to skip.
     cli_security_mode: str = Field(default="enforce", alias="SQUADX_CLI_SECURITY_MODE")
 
-    # Network policy
-    network_policy: str = Field(default="none", alias="SQUADX_NETWORK_POLICY")  # none, package-managers, full
+    # Network policy (ADR-0008 / RFC-0006): agent-default | deny-all | full | (deprecated) none, package-managers
+    network_policy: str = Field(default="agent-default", alias="SQUADX_NETWORK_POLICY")
+    # RFC-0006 Phase 1: enforce egress via a privileged sidecar sharing the agent netns.
+    # Default off (opt-in rollout); when on, a run whose policy cannot be applied fails closed.
+    egress_sidecar_enabled: bool = Field(default=False, alias="SQUADX_EGRESS_SIDECAR")
+    egress_sidecar_image: str = Field(default="squadx/egress-proxy:latest", alias="SQUADX_EGRESS_PROXY_IMAGE")
+    egress_fail_open: bool = Field(default=False, alias="SQUADX_EGRESS_FAIL_OPEN")  # never true in prod
     # ADR-0008 Phase 0: block cloud metadata egress (169.254.169.254 / ECS creds) host-side,
     # on the DOCKER-USER chain. Default on; degrades loudly if the host can't apply it.
     block_cloud_metadata: bool = Field(default=True, alias="SQUADX_BLOCK_CLOUD_METADATA")

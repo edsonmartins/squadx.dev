@@ -79,12 +79,50 @@ POLICY_FULL_ACCESS = NetworkPolicy(
     ]
 )
 
+# Cloud instance-metadata endpoints, denied under every policy (SSRF -> credentials).
+# Mirrors egress_guard.CLOUD_METADATA_TARGETS (host-side Phase 0); kept here so the
+# sidecar (Phase 1, RFC-0006) enforces it too, as defense in depth.
+_METADATA_DENY_RULES = [
+    EgressRule(EgressAction.DENY, "169.254.169.254", description="Cloud metadata (IMDS)"),
+    EgressRule(EgressAction.DENY, "169.254.170.2", description="AWS ECS task credentials"),
+    EgressRule(EgressAction.DENY, "metadata.google.internal", description="GCP metadata"),
+]
+
+# The sane production default (ADR-0008 / RFC-0006): default-deny with an allowlist
+# that actually lets agents work — LLM providers + package registries + git — while
+# blocking metadata. Unlike POLICY_NONE (deny-all, breaks everything) and
+# POLICY_PACKAGE_MANAGERS (no LLM access), this is usable as the standing default.
+POLICY_AGENT_DEFAULT = NetworkPolicy(
+    default_action=EgressAction.DENY,
+    rules=[
+        EgressRule(EgressAction.ALLOW, "api.anthropic.com", description="Anthropic API"),
+        EgressRule(EgressAction.ALLOW, "api.openai.com", description="OpenAI API"),
+        EgressRule(EgressAction.ALLOW, "generativelanguage.googleapis.com", description="Google AI"),
+        EgressRule(EgressAction.ALLOW, "github.com", [80, 443, 22], description="GitHub"),
+        EgressRule(EgressAction.ALLOW, "*.githubusercontent.com", description="GitHub raw"),
+        EgressRule(EgressAction.ALLOW, "*.pypi.org", description="Python packages"),
+        EgressRule(EgressAction.ALLOW, "files.pythonhosted.org", description="PyPI files"),
+        EgressRule(EgressAction.ALLOW, "registry.npmjs.org", description="npm packages"),
+        EgressRule(EgressAction.ALLOW, "repo1.maven.org", description="Maven Central"),
+        *_METADATA_DENY_RULES,
+    ],
+)
+
 def get_predefined_policy(name: str) -> NetworkPolicy:
-    """Get a predefined network policy by name."""
+    """Get a predefined network policy by name.
+
+    ``agent-default`` (recommended) is default-deny + a working allowlist. ``deny-all``
+    blocks everything; ``full`` allows everything except metadata (debugging only). The
+    legacy ``none``/``package-managers`` names are deprecated (misleading: ``none`` is
+    deny-all, ``package-managers`` omits LLM APIs) — kept only for back-compat.
+    """
     policies = {
+        "agent-default": POLICY_AGENT_DEFAULT,
+        "deny-all": POLICY_NONE,
+        "full": POLICY_FULL_ACCESS,
+        # deprecated aliases
         "none": POLICY_NONE,
         "package-managers": POLICY_PACKAGE_MANAGERS,
-        "full": POLICY_FULL_ACCESS,
     }
     policy = policies.get(name)
     if policy is None:

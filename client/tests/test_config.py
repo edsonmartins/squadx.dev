@@ -65,6 +65,22 @@ class TestSettingsDefaults:
         s = Settings(_env_file=None)
         assert s.block_cloud_metadata is True
 
+    def test_default_network_policy_is_agent_default(self):
+        s = Settings(_env_file=None)
+        assert s.network_policy == "agent-default"
+
+    def test_egress_sidecar_off_by_default(self):
+        # RFC-0006 rollout is opt-in; default off means no behavior change.
+        s = Settings(_env_file=None)
+        assert s.egress_sidecar_enabled is False
+        assert s.egress_fail_open is False
+        assert s.egress_sidecar_image == "squadx/egress-proxy:latest"
+
+    def test_egress_sidecar_env_override(self):
+        with patch.dict(os.environ, {"SQUADX_EGRESS_SIDECAR": "true"}):
+            s = Settings(_env_file=None)
+        assert s.egress_sidecar_enabled is True
+
 
 class TestExpandedPaths:
     """Test path expansion properties."""

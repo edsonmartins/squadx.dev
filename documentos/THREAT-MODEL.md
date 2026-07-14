@@ -25,7 +25,7 @@ execução real / ausente.
 | 4 | **Prompt do agente** (injection) | instruction-override, exfiltração, acesso a arquivo sensível | detectar e **bloquear** | 🟡 `assess_prompt` detecta os 3 padrões mas **default é `audit` (só loga)** (`agents/security.py:73-110`, `config.py:82`); só no caminho External-CLI, não no nativo |
 | 5 | **Artefatos internos da CLI** (`.claude/.codex/.omx/.aider/.opencode`) | poluição de commit / vazamento de histórico | filtrar antes do commit | ✅ `filter_internal_artifacts` (`agents/security.py:115-136`) aplicado em coleta e no commit (`external_cli_agent.py:236`, `nodes.py:766`) |
 | 6 | **Worktree / repo git** | escrita fora do escopo, colisão entre runs | isolamento por run + cleanup | ✅ worktree por agente `squadx/<task_id>/<agent>` + cleanup (`git/worktree.py`); 🟡 chaveado por `agent_name` (não run-id) → dois runs do mesmo agente colidem no path (`worktree.py:43`) |
-| 7 | **Live view VNC→WebRTC** | enumeração/hijack de stream entre tenants | token por sessão + escopo de org/host | ❌ endpoints `/api/v1/live-view/supabase/**` **sem `@AuthenticationPrincipal` nem checagem de org** (`LiveViewController.java:152-217`) — qualquer JWT lista/cria/encerra sessões de qualquer org. (Os `/sessions/**` irmãos são corretos.) |
+| 7 | **Live view VNC→WebRTC** | enumeração/hijack de stream entre tenants | token por sessão + escopo de org/host | 🟡 **corrigido o escopo de org** (2026-07): `/api/v1/live-view/supabase/**` agora resolve session→task→org e exige membership (`@AuthenticationPrincipal` + `TaskRepository`/`OrganizationMemberRepository`): reads filtram/404 sem vazar, by-task/create/end **403** p/ não-membro (`LiveViewController.java`, 507 testes verdes). Resta o **token por viewer** (assinado/TTL) — Fase 2/gVisor. |
 | 8 | **STOMP / WebSocket** (daemon↔backend) | conexão não autenticada, subscrição cross-tenant | rejeitar CONNECT sem token + authz por destino | 🟡 `WebSocketAuthInterceptor` só rejeita token **inválido**; CONNECT **sem** header passa (`WebSocketAuthInterceptor.java:33,59`); sem authz por destino nesta camada — depende de config de broker separada (verificar) |
 | 9 | **API REST pública** (multi-tenant) | acesso cross-org | `validateUserAccess` (membership) em toda camada de serviço | ✅ `existsByOrganizationIdAndUserId` aplicado em 12 serviços + 3 controllers; exceção crítica na fronteira #7 |
 | 10 | **Admissão de run** (gatilhos duplicados/concorrentes) | replay, corrida, ação sem aprovação | idempotência + follow-up + gate humano | ✅ `RunAdmissionService.admit` (dedup/queue_follow_up/start) + gate de aprovação humana opt-in (`ApprovalService`, migração V35) |
@@ -50,11 +50,14 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    `169.254.169.254`/`metadata.google.internal` por default (fecha o vetor de SSRF→credenciais de cloud)
    mantendo o egress legítimo. Renomear os presets (`none`=deny-all é enganoso).
 
-2. **[ALTO] Live-view `/supabase/**` sem escopo de org.** Qualquer usuário autenticado de qualquer
-   org enumera (`/supabase/sessions/active`), cria ou encerra sessões de sandbox de outros tenants —
-   view/hijack/DoS cross-tenant do stream ao vivo. **Fix:** adicionar `@AuthenticationPrincipal` +
-   `validateUserAccess`/host-check nesses endpoints (como nos `/sessions/**`), e token por viewer.
-   Evidência: `LiveViewController.java:152-217`.
+2. **[ALTO → CORRIGIDO parcial] Live-view `/supabase/**` sem escopo de org.** Era: qualquer usuário
+   autenticado de qualquer org enumerava (`/supabase/sessions/active`), criava ou encerrava sessões de
+   sandbox de outros tenants. **Corrigido (2026-07):** os 5 endpoints supabase agora resolvem
+   session→task→org e exigem membership — reads filtram/404 (sem vazar existência), by-task/create/end
+   retornam **403** p/ não-membro; `SupabaseLiveSessionService.getSessionById` resolve a task no
+   end-by-id. Cobertura em `LiveViewControllerTest` (suite backend 507 verde). **Resta:** token por
+   *viewer* (assinado/TTL/escopado) para fechar o hijack de stream de forma forte — Fase 2/gVisor.
+   Evidência: `LiveViewController.java`, `SupabaseLiveSessionService.java`.
 
 3. **[MÉDIO] Seccomp não é aplicado aos containers.** O perfil `SCMP_ACT_ERRNO` existe
    (`docker/seccomp/agent.json`) mas `to_docker_kwargs` o omite deliberadamente (só está no helper de

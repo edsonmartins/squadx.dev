@@ -22,14 +22,14 @@ execução real / ausente.
 | 1 | **Sandbox Docker** (agente executa código) | código/comandos gerados pelo agente ou pela CLI externa | cap-drop ALL, no-new-privileges, rootfs read-only, non-root, limites de recurso, tmpfs noexec, **seccomp**, egress restrito | ✅ cap-drop/no-new-priv/ro-rootfs/non-root/limites/tmpfs; ✅ **seccomp agora aplicado** (`to_docker_kwargs` inlina o JSON de `docker/seccomp/agent.json` como `seccomp=<json>` — o SDK exige conteúdo, não path; degrada com WARN se o perfil sumir); 🟡 gVisor/Firecracker só se o binário existir (`hardening.py`) |
 | 2 | **Rede do sandbox** (egress) | tentativa de exfiltração / acesso a metadata cloud | default-deny + allowlist de domínios; bloquear 169.254.169.254 | 🟡 **metadata bloqueado host-side por default** (ADR-0008 Fase 0, `egress_guard.py` → DROP em `DOCKER-USER` p/ 169.254.169.254 + 169.254.170.2, aplicado em `connect`, degrada com log ERROR). **Egress geral ainda aberto**: `enable_vnc=True` força `bridge` (`docker/manager.py:173-174`) e `network_policy=` não é passado por caller — allowlist default-deny é Fase 1 (sidecar). O iptables in-container (`network_policy.py`) segue morto por design (cap-drop ALL) |
 | 3 | **Chaves de provider** (env no sandbox) | vazamento de segredo p/ o container | injeção em runtime (nunca na imagem) + allowlist | ✅ `scrub_env` com allowlist das 3 chaves ANTHROPIC/OPENAI/GOOGLE (`agents/security.py:42-58`, `daemon.py:383-392`); imagens sem segredo (grep limpo). 🟡 allowlist é por **nome** de var (segredo em var de nome benigno passa); scrub só no caminho External-CLI |
-| 4 | **Prompt do agente** (injection) | instruction-override, exfiltração, acesso a arquivo sensível | detectar e **bloquear** | 🟡 `assess_prompt` detecta os 3 padrões mas **default é `audit` (só loga)** (`agents/security.py:73-110`, `config.py:82`); só no caminho External-CLI, não no nativo |
+| 4 | **Prompt do agente** (injection) | instruction-override, exfiltração, acesso a arquivo sensível | detectar e **bloquear** | 🟡 `assess_prompt` detecta os 3 padrões e o **default agora é `enforce`** (block-severity aborta o run; `agents/security.py:73-110`, `config.py`); ainda **só no caminho External-CLI**, não no nativo |
 | 5 | **Artefatos internos da CLI** (`.claude/.codex/.omx/.aider/.opencode`) | poluição de commit / vazamento de histórico | filtrar antes do commit | ✅ `filter_internal_artifacts` (`agents/security.py:115-136`) aplicado em coleta e no commit (`external_cli_agent.py:236`, `nodes.py:766`) |
 | 6 | **Worktree / repo git** | escrita fora do escopo, colisão entre runs | isolamento por run + cleanup | ✅ worktree por agente `squadx/<task_id>/<agent>` + cleanup (`git/worktree.py`); 🟡 chaveado por `agent_name` (não run-id) → dois runs do mesmo agente colidem no path (`worktree.py:43`) |
 | 7 | **Live view VNC→WebRTC** | enumeração/hijack de stream entre tenants | token por sessão + escopo de org/host | 🟡 **corrigido o escopo de org** (2026-07): `/api/v1/live-view/supabase/**` agora resolve session→task→org e exige membership (`@AuthenticationPrincipal` + `TaskRepository`/`OrganizationMemberRepository`): reads filtram/404 sem vazar, by-task/create/end **403** p/ não-membro (`LiveViewController.java`, 507 testes verdes). Resta o **token por viewer** (assinado/TTL) — Fase 2/gVisor. |
 | 8 | **STOMP / WebSocket** (daemon↔backend) | conexão não autenticada, subscrição cross-tenant | rejeitar CONNECT sem token + authz por destino | 🟡 **CONNECT anônimo agora rejeitado** (2026-07): `WebSocketAuthInterceptor` lança em CONNECT sem header **e** em token parseável-mas-inválido (`isTokenValid` false) — antes ambos passavam. Resta: **authz por destino** (subscrição cross-tenant) nesta camada — hoje depende de config de broker separada (verificar) |
 | 9 | **API REST pública** (multi-tenant) | acesso cross-org | `validateUserAccess` (membership) em toda camada de serviço | ✅ `existsByOrganizationIdAndUserId` aplicado em 12 serviços + 3 controllers; exceção crítica na fronteira #7 |
 | 10 | **Admissão de run** (gatilhos duplicados/concorrentes) | replay, corrida, ação sem aprovação | idempotência + follow-up + gate humano | ✅ `RunAdmissionService.admit` (dedup/queue_follow_up/start) + gate de aprovação humana opt-in (`ApprovalService`, migração V35) |
-| 11 | **Custo / loop** | loop infinito, gasto ilimitado | teto de ciclos + teto de custo | 🟡 `max_cycles=3` (hard backstop) sempre ativo; `cost_budget_usd` **default None = sem teto** (`orchestrator/state.py:162`); custo é freio pós-subtask, não pré-empta subtask em curso |
+| 11 | **Custo / loop** | loop infinito, gasto ilimitado | teto de ciclos + teto de custo | ✅ `max_cycles=3` (hard backstop) sempre ativo; ✅ **teto de custo default $5/run** agora (`settings.cost_budget_usd`, `SQUADX_COST_BUDGET_USD`, injetado no state pelo daemon) — over-budget escala p/ humano; 🟡 custo é freio pós-subtask, não pré-empta subtask em curso |
 
 ## 2. Lacunas conhecidas / riscos residuais (ranqueados)
 
@@ -82,11 +82,13 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    **por destino** (impedir subscrição a filas de outra org) — hoje não há checagem nesta camada;
    depende da config de broker. Evidência: `WebSocketAuthInterceptor.java`.
 
-5. **[BAIXO-MÉDIO] Defaults seguros-por-config, não seguros-por-default.** `cli_security_mode="audit"`
-   (injection é logado, não bloqueado) e `cost_budget_usd=None` (sem teto de gasto). **Fix:** considerar
-   `enforce` e um teto de custo default em produção. Secundário: `assess_prompt` só roda no caminho
-   External-CLI (não no nativo); `scrub_env` faz allowlist por nome de var. Evidência: `config.py:82`,
-   `orchestrator/state.py:162`, `agents/security.py:56-57`.
+5. **[BAIXO-MÉDIO → CORRIGIDO defaults] Defaults agora seguros-por-default.** Era: `cli_security_mode="audit"`
+   (injection logada, não bloqueada) e `cost_budget_usd=None` (sem teto). **Corrigido (2026-07):**
+   default `cli_security_mode="enforce"` (findings block-severity abortam o run) e teto de custo default
+   `cost_budget_usd=$5/run` com wiring (`SQUADX_COST_BUDGET_USD` → state via daemon). Ambos overrideáveis
+   por env. **Resta (secundário):** `assess_prompt` só roda no caminho External-CLI (não no nativo);
+   `scrub_env` faz allowlist por **nome** de var (segredo em var de nome benigno passa). Evidência:
+   `config.py`, `daemon.py`, `agents/security.py:56-57`.
 
 ## 3. Caminho de endurecimento
 

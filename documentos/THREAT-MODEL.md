@@ -26,7 +26,7 @@ execução real / ausente.
 | 5 | **Artefatos internos da CLI** (`.claude/.codex/.omx/.aider/.opencode`) | poluição de commit / vazamento de histórico | filtrar antes do commit | ✅ `filter_internal_artifacts` (`agents/security.py:115-136`) aplicado em coleta e no commit (`external_cli_agent.py:236`, `nodes.py:766`) |
 | 6 | **Worktree / repo git** | escrita fora do escopo, colisão entre runs | isolamento por run + cleanup | ✅ worktree por agente `squadx/<task_id>/<agent>` + cleanup (`git/worktree.py`); 🟡 chaveado por `agent_name` (não run-id) → dois runs do mesmo agente colidem no path (`worktree.py:43`) |
 | 7 | **Live view VNC→WebRTC** | enumeração/hijack de stream entre tenants | token por sessão + escopo de org/host | 🟡 **corrigido o escopo de org** (2026-07): `/api/v1/live-view/supabase/**` agora resolve session→task→org e exige membership (`@AuthenticationPrincipal` + `TaskRepository`/`OrganizationMemberRepository`): reads filtram/404 sem vazar, by-task/create/end **403** p/ não-membro (`LiveViewController.java`, 507 testes verdes). Resta o **token por viewer** (assinado/TTL) — Fase 2/gVisor. |
-| 8 | **STOMP / WebSocket** (daemon↔backend) | conexão não autenticada, subscrição cross-tenant | rejeitar CONNECT sem token + authz por destino | 🟡 **CONNECT anônimo agora rejeitado** (2026-07): `WebSocketAuthInterceptor` lança em CONNECT sem header **e** em token parseável-mas-inválido (`isTokenValid` false) — antes ambos passavam. Resta: **authz por destino** (subscrição cross-tenant) nesta camada — hoje depende de config de broker separada (verificar) |
+| 8 | **STOMP / WebSocket** (daemon↔backend) | conexão não autenticada, subscrição cross-tenant | rejeitar CONNECT sem token + authz por destino | ✅ **CONNECT anônimo rejeitado** + ✅ **authz por destino** (2026-07): `WebSocketAuthInterceptor` lança em CONNECT sem header/token inválido; `StompSubscriptionAuthorizer` resolve `/topic/{organizations,projects,tasks,executions,live}/…`→org e exige membership no SUBSCRIBE (deny p/ não-membro/recurso inexistente; `/user/**` já é por-principal). Cobertura: `StompSubscriptionAuthorizerTest` + `WebSocketAuthInterceptorTest` |
 | 9 | **API REST pública** (multi-tenant) | acesso cross-org | `validateUserAccess` (membership) em toda camada de serviço | ✅ `existsByOrganizationIdAndUserId` aplicado em 12 serviços + 3 controllers; exceção crítica na fronteira #7 |
 | 10 | **Admissão de run** (gatilhos duplicados/concorrentes) | replay, corrida, ação sem aprovação | idempotência + follow-up + gate humano | ✅ `RunAdmissionService.admit` (dedup/queue_follow_up/start) + gate de aprovação humana opt-in (`ApprovalService`, migração V35) |
 | 11 | **Custo / loop** | loop infinito, gasto ilimitado | teto de ciclos + teto de custo | ✅ `max_cycles=3` (hard backstop) sempre ativo; ✅ **teto de custo default $5/run** agora (`settings.cost_budget_usd`, `SQUADX_COST_BUDGET_USD`, injetado no state pelo daemon) — over-budget escala p/ humano; 🟡 custo é freio pós-subtask, não pré-empta subtask em curso |
@@ -74,13 +74,16 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    container nunca *pensar* que está restrito sem estar. 6 testes em `test_hardening_seccomp.py`.
    Reforço estrutural continua sendo a fase gVisor.
 
-4. **[MÉDIO → CORRIGIDO parcial] CONNECT STOMP não exigia token.** Era: o interceptor pulava o bloco
-   quando não havia header (CONNECT anônimo passava) e também deixava passar um token
-   parseável-mas-inválido (`isTokenValid` false, sem throw). **Corrigido (2026-07):**
-   `WebSocketAuthInterceptor` agora lança `IllegalArgumentException` em ambos os casos, só definindo o
-   principal quando o token é válido (5 testes em `WebSocketAuthInterceptorTest`). **Resta:** authz
-   **por destino** (impedir subscrição a filas de outra org) — hoje não há checagem nesta camada;
-   depende da config de broker. Evidência: `WebSocketAuthInterceptor.java`.
+4. **[MÉDIO → CORRIGIDO] CONNECT STOMP + authz por destino.** Era: o interceptor pulava o bloco
+   quando não havia header (CONNECT anônimo passava), deixava passar token parseável-mas-inválido, e
+   **não havia authz por destino** — qualquer usuário autenticado podia subscrever
+   `/topic/organizations/{qualquer}` e receber eventos de outro tenant. **Corrigido (2026-07):**
+   (a) `WebSocketAuthInterceptor` lança em CONNECT sem header e em token inválido, só setando o
+   principal quando válido; (b) novo `StompSubscriptionAuthorizer` resolve os tópicos tenant-scoped
+   (`organizations`/`projects`/`tasks`/`executions`/`live`) → org e exige membership no SUBSCRIBE,
+   negando não-membro/recurso inexistente/id inválido (`/user/**` já é por-principal; tópicos não
+   escopados são liberados). 18 testes (`WebSocketAuthInterceptorTest` + `StompSubscriptionAuthorizerTest`).
+   Evidência: `WebSocketAuthInterceptor.java`, `StompSubscriptionAuthorizer.java`.
 
 5. **[BAIXO-MÉDIO → CORRIGIDO defaults] Defaults agora seguros-por-default.** Era: `cli_security_mode="audit"`
    (injection logada, não bloqueada) e `cost_budget_usd=None` (sem teto). **Corrigido (2026-07):**

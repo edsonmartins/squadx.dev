@@ -60,6 +60,36 @@ public class SupabaseLiveSessionService {
     }
 
     /**
+     * Get a live session by its Supabase id (UUID).
+     *
+     * @param sessionId The session UUID
+     * @return The session if found
+     */
+    public Optional<SupabaseLiveSession> getSessionById(String sessionId) {
+        try {
+            List<SupabaseLiveSession> sessions = supabaseWebClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/live_sessions")
+                            .queryParam("id", "eq." + sessionId)
+                            .queryParam("select", "*")
+                            .queryParam("limit", "1")
+                            .build())
+                    .retrieve()
+                    .bodyToFlux(SupabaseLiveSession.class)
+                    .collectList()
+                    .block();
+
+            if (sessions != null && !sessions.isEmpty()) {
+                return Optional.of(sessions.get(0));
+            }
+            return Optional.empty();
+        } catch (WebClientResponseException e) {
+            log.error("Failed to get session by id from Supabase: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Get a live session by task ID from Supabase.
      *
      * @param taskId The task ID

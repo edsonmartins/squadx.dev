@@ -492,6 +492,7 @@ export interface TaskResponse {
   started_at?: string;
   completed_at?: string;
   order_index: number;
+  requires_approval?: boolean;
   project_id: number;
   project_name: string;
   assigned_agent_id?: number;
@@ -524,6 +525,7 @@ export interface CreateTaskRequest {
   parent_task_id?: number;
   assigned_agent_id?: number;
   assigned_squad_id?: number | null;
+  requires_approval?: boolean;
   tags?: string[];
 }
 
@@ -537,6 +539,7 @@ export interface UpdateTaskRequest {
   due_date?: string;
   assigned_agent_id?: number;
   assigned_squad_id?: number | null;
+  requires_approval?: boolean;
   tags?: string[];
 }
 

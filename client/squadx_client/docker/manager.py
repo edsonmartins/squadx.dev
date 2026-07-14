@@ -70,10 +70,28 @@ class DockerManager:
             # Test connection
             self.client.ping()
             logger.info("Connected to Docker daemon")
+            self._ensure_metadata_block()
             return True
         except DockerException as e:
             logger.error(f"Failed to connect to Docker: {e}")
             return False
+
+    def _ensure_metadata_block(self) -> None:
+        """Apply the ADR-0008 Phase 0 host-side cloud-metadata egress block (once).
+
+        Best-effort: never raises. On a host that can't enforce it (no privilege /
+        no iptables / remote daemon), ``ensure_cloud_metadata_blocked`` logs loudly
+        that egress is unrestricted, so the gap surfaces instead of hiding.
+        """
+        if not settings.block_cloud_metadata:
+            logger.warning(
+                "block_cloud_metadata disabled — sandbox egress to cloud metadata "
+                "(169.254.169.254) is UNRESTRICTED (SSRF->credentials vector). See ADR-0008."
+            )
+            return
+        from squadx_client.docker.egress_guard import ensure_cloud_metadata_blocked
+
+        ensure_cloud_metadata_blocked()
 
     async def disconnect(self):
         """Disconnect from Docker daemon."""
@@ -102,8 +120,15 @@ class DockerManager:
         config: ContainerConfig,
         task_id: int,
         agent_type: str,
+        netns_container: Optional[str] = None,
     ) -> Optional[str]:
-        """Create a new container for an agent."""
+        """Create a new container for an agent.
+
+        When ``netns_container`` is set (RFC-0006 egress sidecar), the agent shares that
+        container's network namespace (``network_mode=container:<id>``): egress is
+        filtered by the sidecar and the agent cannot open its own ports, so port
+        publishing and the bridge override are skipped here — the sidecar owns them.
+        """
         if not self.client:
             logger.error("Docker client not connected")
             return None
@@ -135,9 +160,10 @@ class DockerManager:
                     **config.volumes,
                 }
 
-                # Prepare ports
-                ports = {**config.ports}
-                if config.enable_vnc:
+                # Prepare ports. When joining a sidecar netns the agent has no own
+                # network stack to publish on — the sidecar exposes the VNC port.
+                ports = {} if netns_container else {**config.ports}
+                if config.enable_vnc and not netns_container:
                     ports[f"{config.vnc_port}/tcp"] = None  # Auto-assign host port
 
                 # Build container kwargs
@@ -187,6 +213,16 @@ class DockerManager:
                         "network": config.network,
                     })
 
+                # RFC-0006: join the egress sidecar's netns. This wins over any bridge/
+                # network setting above; Docker forbids port publishing or a separate
+                # network alongside container-mode networking, so clear both.
+                if netns_container:
+                    from squadx_client.docker.egress_sidecar import agent_netns_mode
+
+                    container_kwargs["network_mode"] = agent_netns_mode(netns_container)
+                    container_kwargs["ports"] = {}
+                    container_kwargs.pop("network", None)
+
                 # Create container
                 container = self.client.containers.create(**container_kwargs)
 
@@ -197,6 +233,47 @@ class DockerManager:
 
             except APIError as e:
                 logger.error(f"Failed to create container: {e}")
+                return None
+
+    async def create_egress_sidecar(
+        self,
+        task_id: int,
+        agent_type: str,
+        published_ports: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Create and start the RFC-0006 egress sidecar; return its container id.
+
+        The sidecar owns the network namespace the agent will join, holds NET_ADMIN to
+        program iptables, and publishes the ports (e.g. VNC) the agent would otherwise
+        expose. Returns None on failure so the caller can fail the run closed.
+        """
+        if not self.client:
+            logger.error("Docker client not connected")
+            return None
+
+        from squadx_client.docker.egress_sidecar import build_sidecar_kwargs, sidecar_name
+
+        async with self._lock:
+            name = sidecar_name(task_id, agent_type)
+            try:
+                try:
+                    existing = self.client.containers.get(name)
+                    existing.remove(force=True)
+                except NotFound:
+                    pass
+
+                kwargs = build_sidecar_kwargs(
+                    name=name,
+                    image=settings.egress_sidecar_image,
+                    published_ports=published_ports,
+                )
+                container = self.client.containers.create(**kwargs)
+                container.start()
+                self.containers[container.id] = container
+                logger.info(f"egress_sidecar_started task={task_id} id={container.short_id}")
+                return container.id
+            except APIError as e:
+                logger.error(f"egress_sidecar_create_failed task={task_id}: {e}")
                 return None
 
     async def start_container(self, container_id: str) -> bool:

@@ -65,6 +65,9 @@ class ExecutionServiceTest {
     @Mock
     private FollowUpRequestRepository followUpRequestRepository;
 
+    @Mock
+    private ApprovalService approvalService;
+
     @InjectMocks
     private ExecutionService executionService;
 

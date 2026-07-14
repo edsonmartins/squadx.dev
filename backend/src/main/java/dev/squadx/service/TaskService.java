@@ -55,6 +55,7 @@ public class TaskService {
                 .storyPoints(request.getStoryPoints())
                 .estimatedHours(request.getEstimatedHours())
                 .dueDate(request.getDueDate())
+                .requiresApproval(Boolean.TRUE.equals(request.getRequiresApproval()))
                 .project(project)
                 .createdBy(currentUser)
                 .tags(request.getTags())
@@ -150,6 +151,9 @@ public class TaskService {
         }
         if (request.getDueDate() != null) {
             task.setDueDate(request.getDueDate());
+        }
+        if (request.getRequiresApproval() != null) {
+            task.setRequiresApproval(request.getRequiresApproval());
         }
         if (request.getTags() != null) {
             task.setTags(request.getTags());
@@ -459,6 +463,7 @@ public class TaskService {
                 .startedAt(task.getStartedAt())
                 .completedAt(task.getCompletedAt())
                 .orderIndex(task.getOrderIndex())
+                .requiresApproval(task.getRequiresApproval())
                 .projectId(task.getProject().getId())
                 .projectName(task.getProject().getName())
                 .assignedAgentId(task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null)

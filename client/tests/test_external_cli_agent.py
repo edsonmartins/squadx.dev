@@ -70,6 +70,39 @@ class TestExternalCliAgent:
         assert cmd[1] == "run"
         assert cmd[2] == "hello"
 
+    def test_build_command_keeps_prompt_with_spaces_as_single_arg(self):
+        """A prompt with spaces stays one argv token (no shell splitting)."""
+        cmd = ExternalCliAgent(provider="CLAUDE_CODE")._build_command("fix the login bug")
+        assert "fix the login bug" in cmd
+
+    def test_generic_template_registers_provider_without_code(self, monkeypatch):
+        """A provider configured via settings needs no code change."""
+        from squadx_client.agents import external_cli_agent as mod
+
+        monkeypatch.setattr(
+            mod.settings,
+            "external_cli_command_templates",
+            {"MYCLI": "mycli run --task {prompt}"},
+            raising=False,
+        )
+        agent = ExternalCliAgent(provider="mycli")  # case-insensitive
+        assert agent.provider == "MYCLI"
+        cmd = agent._build_command("hello world")
+        assert cmd == ["mycli", "run", "--task", "hello world"]
+
+    def test_generic_template_without_placeholder_raises(self, monkeypatch):
+        from squadx_client.agents import external_cli_agent as mod
+
+        monkeypatch.setattr(
+            mod.settings,
+            "external_cli_command_templates",
+            {"NOPROMPT": "noprompt run"},
+            raising=False,
+        )
+        agent = ExternalCliAgent(provider="NOPROMPT")
+        with pytest.raises(ValueError, match="no .*placeholder"):
+            agent._build_command("x")
+
     @pytest.mark.asyncio
     async def test_requires_sandbox(self):
         agent = ExternalCliAgent(provider="CLAUDE_CODE")

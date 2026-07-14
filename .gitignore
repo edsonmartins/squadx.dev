@@ -29,6 +29,9 @@ frontend/.pnp/
 frontend/.pnp.js
 frontend/coverage/
 frontend/.vercel
+frontend/tsconfig.tsbuildinfo
+frontend/playwright-report/
+frontend/test-results/
 
 # ===== Client (Python) =====
 **/__pycache__/
@@ -46,6 +49,9 @@ client/.coverage
 client/htmlcov/
 client/venv/
 client/.venv/
+# accidental literal-~ dir + local daemon SQLite when run with cwd=client (data_dir=~/.squadx)
+client/~/
+**/.squadx/
 
 # ===== Docker =====
 *.log

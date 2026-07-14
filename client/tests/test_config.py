@@ -3,8 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 from squadx_client.config import Settings
 
 
@@ -42,6 +40,46 @@ class TestSettingsDefaults:
     def test_default_log_level(self):
         s = Settings(_env_file=None)
         assert s.log_level == "INFO"
+
+    def test_default_cli_security_mode_is_enforce(self):
+        # Secure-by-default (threat-model #5): block-severity injection aborts the run.
+        s = Settings(_env_file=None)
+        assert s.cli_security_mode == "enforce"
+
+    def test_cli_security_mode_env_override(self):
+        with patch.dict(os.environ, {"SQUADX_CLI_SECURITY_MODE": "audit"}):
+            s = Settings(_env_file=None)
+        assert s.cli_security_mode == "audit"
+
+    def test_default_cost_budget_usd(self):
+        # Threat-model #5: a per-run cost ceiling is set by default (was uncapped None).
+        s = Settings(_env_file=None)
+        assert s.cost_budget_usd == 5.0
+
+    def test_cost_budget_usd_env_override(self):
+        with patch.dict(os.environ, {"SQUADX_COST_BUDGET_USD": "25"}):
+            s = Settings(_env_file=None)
+        assert s.cost_budget_usd == 25.0
+
+    def test_default_block_cloud_metadata(self):
+        s = Settings(_env_file=None)
+        assert s.block_cloud_metadata is True
+
+    def test_default_network_policy_is_agent_default(self):
+        s = Settings(_env_file=None)
+        assert s.network_policy == "agent-default"
+
+    def test_egress_sidecar_off_by_default(self):
+        # RFC-0006 rollout is opt-in; default off means no behavior change.
+        s = Settings(_env_file=None)
+        assert s.egress_sidecar_enabled is False
+        assert s.egress_fail_open is False
+        assert s.egress_sidecar_image == "squadx/egress-proxy:latest"
+
+    def test_egress_sidecar_env_override(self):
+        with patch.dict(os.environ, {"SQUADX_EGRESS_SIDECAR": "true"}):
+            s = Settings(_env_file=None)
+        assert s.egress_sidecar_enabled is True
 
 
 class TestExpandedPaths:

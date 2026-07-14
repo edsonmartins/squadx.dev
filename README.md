@@ -184,6 +184,9 @@ docker build -f agent.Dockerfile --target base -t squadx/agent:latest .
 
 # Com Live View (VNC + noVNC)
 docker build -f agent.Dockerfile --target live-view -t squadx/agent:live .
+
+# Egress firewall sidecar (RFC-0006, opcional via SQUADX_EGRESS_SIDECAR)
+docker build -f egress-proxy.Dockerfile -t squadx/egress-proxy:latest .
 ```
 
 ### Docker Compose com TLS

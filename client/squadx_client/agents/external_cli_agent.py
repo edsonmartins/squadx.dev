@@ -1,17 +1,23 @@
 """Runtime adapter agent that runs an external coding-agent CLI in the sandbox.
 
 Instead of SquadX's native LangGraph + LiteLLM loop, this agent shells out to a
-frontier coding CLI (Claude Code, Codex, or Gemini CLI) inside the hardened
-sandbox. The CLI does its own planning/editing; we stream its output as live
-progress and derive ``files_modified`` from git afterwards.
+frontier coding CLI inside the hardened sandbox. The CLI does its own
+planning/editing; we stream its output as live progress and derive
+``files_modified`` from git afterwards.
+
+Harnesses are declarative: each provider maps to an argv template in
+``BUILTIN_HARNESS_TEMPLATES`` (Claude Code, Codex, Gemini CLI, Aider, OpenCode).
+A new CLI can be registered with *no code change* via a JSON command template in
+``settings.external_cli_command_templates`` — see ``_resolve_template``.
 """
 
+import shlex
 from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
 
 from squadx_client.agents.base import BaseAgent
-from squadx_client.agents.security import assess_prompt, filter_internal_artifacts
+from squadx_client.agents.security import enforce_prompt_security, filter_internal_artifacts
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
@@ -19,8 +25,48 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
-# Supported providers and the CLI binary name we expect on the sandbox PATH.
-SUPPORTED_PROVIDERS = {"CLAUDE_CODE", "CODEX", "GEMINI_CLI", "AIDER", "OPENCODE"}
+# Placeholder replaced with the task prompt when rendering a harness command.
+# Kept as a standalone argv token so prompts containing spaces stay a single arg.
+PROMPT_PLACEHOLDER = "{prompt}"
+
+# Built-in harness command templates: provider -> argv template. A new provider is
+# a new entry here — or, with zero code, a JSON entry in
+# settings.external_cli_command_templates (SQUADX_EXTERNAL_CLI_COMMAND_TEMPLATES).
+BUILTIN_HARNESS_TEMPLATES: dict[str, list[str]] = {
+    # Headless, non-interactive run that auto-accepts edits.
+    "CLAUDE_CODE": ["claude", "-p", PROMPT_PLACEHOLDER, "--permission-mode", "acceptEdits",
+                    "--output-format", "text"],
+    "CODEX": ["codex", "exec", "--full-auto", PROMPT_PLACEHOLDER],
+    "GEMINI_CLI": ["gemini", "--yolo", "-p", PROMPT_PLACEHOLDER],
+    # Aider is chat-style: --no-auto-commits leaves the commit to us (the
+    # orchestrator's commit_changes merges the worktree branch); --yes-always
+    # auto-accepts confirmations; --message runs the given task non-interactively.
+    "AIDER": ["aider", "--no-auto-commits", "--yes-always", "--message", PROMPT_PLACEHOLDER],
+    # OpenCode's `run` subcommand executes a single task headless and streams the
+    # result to stdout. It picks up ANTHROPIC/OPENAI/GOOGLE_API_KEY from env.
+    "OPENCODE": ["opencode", "run", PROMPT_PLACEHOLDER],
+}
+
+# The built-in providers. Configured generic templates extend this at runtime.
+SUPPORTED_PROVIDERS = frozenset(BUILTIN_HARNESS_TEMPLATES)
+
+
+def _configured_templates() -> dict[str, str]:
+    """User-registered generic harness templates (provider -> shell-style string)."""
+    return {
+        str(k).upper(): v
+        for k, v in (getattr(settings, "external_cli_command_templates", None) or {}).items()
+    }
+
+
+def _resolve_template(provider: str) -> list[str]:
+    """Return the argv template for a provider (built-in first, then configured)."""
+    if provider in BUILTIN_HARNESS_TEMPLATES:
+        return BUILTIN_HARNESS_TEMPLATES[provider]
+    configured = _configured_templates().get(provider)
+    if configured:
+        return shlex.split(configured) if isinstance(configured, str) else list(configured)
+    raise ValueError(f"Unsupported CLI provider: {provider}")
 
 
 class ExternalCliAgent(BaseAgent):
@@ -38,7 +84,7 @@ class ExternalCliAgent(BaseAgent):
         # native LLM/tool wiring or memory plumbing — the external CLI owns the
         # full agentic loop. We only need the sandbox.
         self.provider = (provider or "CLAUDE_CODE").upper()
-        if self.provider not in SUPPORTED_PROVIDERS:
+        if self.provider not in SUPPORTED_PROVIDERS and self.provider not in _configured_templates():
             raise ValueError(f"Unsupported CLI provider: {self.provider}")
         self.sandbox = sandbox
         self.brainsentry_session_id = brainsentry_session_id
@@ -71,39 +117,17 @@ class ExternalCliAgent(BaseAgent):
         return "\n".join(parts)
 
     def _build_command(self, prompt: str) -> list[str]:
-        if self.provider == "CLAUDE_CODE":
-            # Headless, non-interactive run that auto-accepts edits.
-            return [
-                "claude",
-                "-p",
-                prompt,
-                "--permission-mode",
-                "acceptEdits",
-                "--output-format",
-                "text",
-            ]
-        if self.provider == "CODEX":
-            return ["codex", "exec", "--full-auto", prompt]
-        if self.provider == "GEMINI_CLI":
-            return ["gemini", "--yolo", "-p", prompt]
-        if self.provider == "AIDER":
-            # Aider is chat-style: --no-auto-commits leaves the commit to us
-            # (the orchestrator's commit_changes merges the worktree branch);
-            # --yes-always auto-accepts confirmations; --message runs the
-            # given task non-interactively.
-            return [
-                "aider",
-                "--no-auto-commits",
-                "--yes-always",
-                "--message",
-                prompt,
-            ]
-        if self.provider == "OPENCODE":
-            # OpenCode's `run` subcommand executes a single task headless and
-            # streams the result to stdout. It picks up ANTHROPIC_API_KEY /
-            # OPENAI_API_KEY / GOOGLE_API_KEY from env.
-            return ["opencode", "run", prompt]
-        raise ValueError(f"Unsupported CLI provider: {self.provider}")
+        """Render the provider's argv template, substituting the task prompt.
+
+        The prompt replaces ``{prompt}`` inside each token, so a prompt with
+        spaces stays a single argv element (no shell splitting).
+        """
+        template = _resolve_template(self.provider)
+        if not any(PROMPT_PLACEHOLDER in token for token in template):
+            raise ValueError(
+                f"CLI command template for {self.provider} has no {PROMPT_PLACEHOLDER} placeholder"
+            )
+        return [token.replace(PROMPT_PLACEHOLDER, prompt) for token in template]
 
     async def execute(
         self,
@@ -166,18 +190,11 @@ class ExternalCliAgent(BaseAgent):
         """Scan the prompt for injection/exfiltration patterns (ADR-0007).
 
         Mode comes from ``settings.cli_security_mode``: ``off`` skips; ``audit`` logs findings;
-        ``enforce`` raises and aborts the run.
+        ``enforce`` raises and aborts the run. Shared with the native path via
+        ``enforce_prompt_security``.
         """
-        mode = getattr(settings, "cli_security_mode", "audit")
-        if mode == "off":
-            return
-        findings = assess_prompt(prompt)
-        if not findings:
-            return
-        codes = [f.code for f in findings]
-        self.logger.warning("prompt_security_findings", mode=mode, findings=codes)
-        if mode == "enforce" and any(f.severity == "block" for f in findings):
-            raise RuntimeError("Prompt blocked by security policy: " + ", ".join(codes))
+        mode = getattr(settings, "cli_security_mode", "enforce")
+        enforce_prompt_security(prompt, mode=mode, logger=self.logger)
 
     async def _collect_changed_files(self) -> list[str]:
         """Derive the list of changed files from git working-tree status."""

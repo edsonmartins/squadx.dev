@@ -59,6 +59,11 @@ public class Task extends BaseEntity {
     @Builder.Default
     private Integer orderIndex = 0;
 
+    /** Opt-in gate: when true, a completed run requires human approval before reaching DONE. */
+    @Column(name = "requires_approval", nullable = false)
+    @Builder.Default
+    private Boolean requiresApproval = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;

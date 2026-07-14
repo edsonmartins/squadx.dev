@@ -6,6 +6,7 @@ from typing import Optional, Callable, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import Enum
 
+from squadx_client.config import settings
 from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
 from .manager import DockerManager, ContainerConfig, docker_manager
 from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
@@ -77,6 +78,8 @@ class AgentSandbox:
                 logger.warning(f"Unknown network policy '{network_policy}', using none")
 
         self.container_id: Optional[str] = None
+        # RFC-0006: id of the egress sidecar whose netns the agent joins (when enabled).
+        self.sidecar_id: Optional[str] = None
         self.status = SandboxStatus.CREATED
         self.vnc_port: Optional[int] = None
         self.live_join_code: Optional[str] = None
@@ -158,9 +161,14 @@ class AgentSandbox:
             # container in sub-second instead of paying the 10-20s cold start.
             # Falls back to create+start on any failure so the daemon never
             # depends on the pool being healthy.
+            sidecar_enabled = getattr(settings, "egress_sidecar_enabled", False)
+
             warm_pool = getattr(self.manager, "warm_pool", None)
             used_pool = False
-            if warm_pool is not None and warm_pool.is_enabled:
+            # The egress sidecar must own the netns at agent-create time, which pre-created
+            # warm-pool agents can't provide — so the pool fast-path is bypassed when egress
+            # enforcement is on (RFC-0006).
+            if warm_pool is not None and warm_pool.is_enabled and not sidecar_enabled:
                 try:
                     pooled = await warm_pool.acquire(
                         task_id=self.task_id, agent_type=self.agent_type
@@ -180,11 +188,36 @@ class AgentSandbox:
                     )
 
             if not used_pool:
+                # RFC-0006: bring up the egress sidecar first so the agent can join its
+                # netns. The sidecar publishes the VNC port the agent would expose.
+                if sidecar_enabled:
+                    published = {f"{config.vnc_port}/tcp": None} if enable_vnc else {}
+                    self.sidecar_id = await self.manager.create_egress_sidecar(
+                        task_id=self.task_id,
+                        agent_type=self.agent_type,
+                        published_ports=published,
+                    )
+                    if not self.sidecar_id:
+                        logger.error(
+                            f"egress_sidecar_failed_fail_closed task={self.task_id}"
+                        )
+                        self._set_status(SandboxStatus.ERROR)
+                        return False
+
+                    # Apply the egress policy on the sidecar (it holds NET_ADMIN) BEFORE
+                    # the agent joins the netns, so the agent never runs with open egress.
+                    # FAIL-CLOSED: abort the run if the policy cannot be applied.
+                    if not await self._apply_sidecar_policy():
+                        await self._teardown_sidecar()
+                        self._set_status(SandboxStatus.ERROR)
+                        return False
+
                 # Create and start container
                 self.container_id = await self.manager.create_container(
                     config=config,
                     task_id=self.task_id,
                     agent_type=self.agent_type,
+                    netns_container=self.sidecar_id,
                 )
 
                 if not self.container_id:
@@ -195,10 +228,9 @@ class AgentSandbox:
                     self._set_status(SandboxStatus.ERROR)
                     return False
 
-            # Apply network policy if one was configured. Failure is non-fatal:
-            # we keep the sandbox up but log a warning, so a missing iptables
-            # in the agent image or a malformed rule set doesn't break runs.
-            if self._network_policy:
+            # Legacy in-agent network policy (non-sidecar path). Best-effort: kept up on
+            # failure. The sidecar path already applied its policy fail-closed, above.
+            if self._network_policy and not sidecar_enabled:
                 script = generate_network_setup_script(self._network_policy)
                 ok, log = await self.manager.apply_network_setup(
                     self.container_id, script
@@ -215,10 +247,12 @@ class AgentSandbox:
                 self.file_ops = SandboxFileOps(self.manager.client, self.container_id)
                 self.metrics_collector = ContainerMetricsCollector(self.manager.client)
 
-            # Get VNC port if enabled
+            # Get VNC port if enabled. With the sidecar the port is published on the
+            # sidecar (the agent has no own network stack), so query it there.
             if enable_vnc:
                 await asyncio.sleep(2)  # Wait for VNC to be ready
-                self.vnc_port = await self.manager.get_vnc_port(self.container_id)
+                vnc_host_container = self.sidecar_id or self.container_id
+                self.vnc_port = await self.manager.get_vnc_port(vnc_host_container)
                 logger.info(f"VNC available on port: {self.vnc_port}")
 
                 # Start live streaming if enabled
@@ -239,6 +273,36 @@ class AgentSandbox:
             self._set_status(SandboxStatus.ERROR)
             return False
 
+    async def _apply_sidecar_policy(self) -> bool:
+        """Apply the egress policy on the sidecar. Returns False only when it could not
+        be applied AND fail-open is off (caller then aborts the run)."""
+        policy = self._network_policy or get_predefined_policy(
+            getattr(settings, "network_policy", "agent-default")
+        )
+        script = generate_network_setup_script(policy)
+        ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
+        if ok:
+            return True
+        if getattr(settings, "egress_fail_open", False):
+            logger.warning(
+                f"egress_policy_apply_failed_fail_open task={self.task_id} log={log[:500]}"
+            )
+            return True
+        logger.error(
+            f"egress_policy_apply_failed_fail_closed task={self.task_id} log={log[:500]}"
+        )
+        return False
+
+    async def _teardown_sidecar(self) -> None:
+        """Best-effort removal of the egress sidecar; never raises."""
+        if not self.sidecar_id:
+            return
+        try:
+            await self.manager.remove_container(self.sidecar_id, force=True)
+        except Exception as e:  # noqa: BLE001 - best effort
+            logger.warning(f"egress_sidecar_teardown_failed task={self.task_id} error={e}")
+        self.sidecar_id = None
+
     async def stop(self, timeout: int = 10) -> bool:
         """Stop the sandbox container."""
         if not self.container_id:
@@ -256,6 +320,8 @@ class AgentSandbox:
                 self.live_join_code = None
 
             await self.manager.stop_container(self.container_id, timeout=timeout)
+            if self.sidecar_id:
+                await self.manager.stop_container(self.sidecar_id, timeout=timeout)
             self._set_status(SandboxStatus.STOPPED)
             logger.info(f"Sandbox stopped for task {self.task_id}")
             return True
@@ -296,6 +362,8 @@ class AgentSandbox:
             await self.manager.remove_container(self.container_id, force=True)
             self.container_id = None
             self.vnc_port = None
+            # RFC-0006: tear down the egress sidecar alongside the agent.
+            await self._teardown_sidecar()
             self._set_status(SandboxStatus.STOPPED)
             logger.info(f"Sandbox cleaned up for task {self.task_id}")
             return True

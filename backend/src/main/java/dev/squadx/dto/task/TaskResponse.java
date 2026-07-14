@@ -45,6 +45,9 @@ public class TaskResponse {
     @JsonProperty("order_index")
     private Integer orderIndex;
 
+    @JsonProperty("requires_approval")
+    private Boolean requiresApproval;
+
     @JsonProperty("project_id")
     private Long projectId;
 

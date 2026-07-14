@@ -333,6 +333,7 @@ class SquadXDaemon:
                         "execution_id": execution_id,
                         "brainsentry_session_id": brainsentry_session_id,
                         "project_path": task_data.get("project_path", settings.workspace_path),
+                        "cost_budget_usd": settings.cost_budget_usd,
                         "messages": [],
                     }
                 )

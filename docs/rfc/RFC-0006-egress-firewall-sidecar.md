@@ -1,10 +1,13 @@
 # RFC-0006 — Egress firewall sidecar (default-deny + allowlist)
 
 > **Status:** Implementado atrás de flag (`SQUADX_EGRESS_SIDECAR`, default **off**) em 2026-07 —
-> `egress_sidecar.py` + wiring em `manager.py`/`sandbox.py`, preset `POLICY_AGENT_DEFAULT`, fail-closed.
-> **Pendente:** imagem `squadx/egress-proxy` (dns-proxy) e verificação ponta-a-ponta em host Linux
-> (testes de integração marcados `integration`, pulados por default). Rollout: ligar o flag, calibrar
-> allowlist por telemetria, então flip do default.
+> `egress_sidecar.py` + wiring em `manager.py`/`sandbox.py` (política aplicada **antes** do agente
+> entrar no netns, fail-closed), preset `POLICY_AGENT_DEFAULT`, e a imagem
+> `client/docker/egress-proxy.Dockerfile` (+ entrypoint: baseline metadata-drop + stay-alive; iptables
+> injetado em runtime). **Pendente:** verificação ponta-a-ponta de drop em host Linux (testes marcados
+> `integration`, pulados por default; `SQUADX_DOCKER_IT=1`) e, se necessário, o modo dns-proxy vivo
+> (§3 camada 2 — hoje o allowlist de domínio é resolvido uma vez via `dig`). Rollout: ligar o flag,
+> calibrar allowlist por telemetria, então flip do default.
 >
 > Realiza **ADR-0008** Fase 1. Define como aplicar egress default-deny com allowlist de domínios ao
 > sandbox **sem** iptables dentro do container não-confiável, movendo o enforcement para um **sidecar

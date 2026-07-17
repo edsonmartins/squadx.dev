@@ -3,9 +3,12 @@ package dev.squadx.service;
 import dev.squadx.dto.brand.BrandConfigRequest;
 import dev.squadx.dto.brand.BrandConfigResponse;
 import dev.squadx.exception.BadRequestException;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.BrandConfig;
 import dev.squadx.model.Organization;
+import dev.squadx.model.User;
+import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.BrandConfigRepository;
 import dev.squadx.repository.OrganizationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,14 +38,26 @@ class BrandServiceTest {
     @Mock
     private OrganizationRepository organizationRepository;
 
+    @Mock
+    private OrganizationAccessGuard accessGuard;
+
     @InjectMocks
     private BrandService brandService;
 
     private Organization testOrg;
     private BrandConfig testConfig;
+    private User testUser;
 
     @BeforeEach
     void setUp() {
+        testUser = User.builder()
+                .email("test@example.com")
+                .fullName("Test User")
+                .role(UserRole.USER)
+                .isActive(true)
+                .build();
+        testUser.setId(1L);
+
         testOrg = Organization.builder()
                 .name("Test Org")
                 .slug("test-org")
@@ -69,7 +85,7 @@ class BrandServiceTest {
         void shouldReturnConfigWhenFound() {
             when(brandConfigRepository.findByOrganizationId(1L)).thenReturn(Optional.of(testConfig));
 
-            BrandConfigResponse response = brandService.getByOrganization(1L);
+            BrandConfigResponse response = brandService.getByOrganization(1L, testUser);
 
             assertThat(response).isNotNull();
             assertThat(response.getAppName()).isEqualTo("MyApp");
@@ -82,7 +98,7 @@ class BrandServiceTest {
         void shouldThrowWhenNotFound() {
             when(brandConfigRepository.findByOrganizationId(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> brandService.getByOrganization(99L))
+            assertThatThrownBy(() -> brandService.getByOrganization(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Brand config not found");
         }
@@ -110,7 +126,7 @@ class BrandServiceTest {
                 return saved;
             });
 
-            BrandConfigResponse response = brandService.upsert(1L, request);
+            BrandConfigResponse response = brandService.upsert(1L, request, testUser);
 
             assertThat(response).isNotNull();
             assertThat(response.getAppName()).isEqualTo("NewApp");
@@ -129,7 +145,7 @@ class BrandServiceTest {
             when(brandConfigRepository.findByOrganizationId(1L)).thenReturn(Optional.of(testConfig));
             when(brandConfigRepository.save(any(BrandConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            BrandConfigResponse response = brandService.upsert(1L, request);
+            BrandConfigResponse response = brandService.upsert(1L, request, testUser);
 
             assertThat(response).isNotNull();
             assertThat(response.getAppName()).isEqualTo("UpdatedApp");
@@ -146,7 +162,7 @@ class BrandServiceTest {
 
             when(organizationRepository.findById(1L)).thenReturn(Optional.of(testOrg));
 
-            assertThatThrownBy(() -> brandService.upsert(1L, request))
+            assertThatThrownBy(() -> brandService.upsert(1L, request, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Invalid hex color format");
 
@@ -162,7 +178,7 @@ class BrandServiceTest {
 
             when(organizationRepository.findById(1L)).thenReturn(Optional.of(testOrg));
 
-            assertThatThrownBy(() -> brandService.upsert(1L, request))
+            assertThatThrownBy(() -> brandService.upsert(1L, request, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Invalid hex color format")
                     .hasMessageContaining("secondaryColor");
@@ -178,7 +194,7 @@ class BrandServiceTest {
         void shouldDeleteConfig() {
             when(brandConfigRepository.existsByOrganizationId(1L)).thenReturn(true);
 
-            brandService.delete(1L);
+            brandService.delete(1L, testUser);
 
             verify(brandConfigRepository).deleteByOrganizationId(1L);
         }
@@ -188,7 +204,7 @@ class BrandServiceTest {
         void shouldThrowWhenNotFound() {
             when(brandConfigRepository.existsByOrganizationId(99L)).thenReturn(false);
 
-            assertThatThrownBy(() -> brandService.delete(99L))
+            assertThatThrownBy(() -> brandService.delete(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Brand config not found");
         }
@@ -207,7 +223,7 @@ class BrandServiceTest {
 
             when(organizationRepository.findById(1L)).thenReturn(Optional.of(testOrg));
 
-            assertThatThrownBy(() -> brandService.upsert(1L, request))
+            assertThatThrownBy(() -> brandService.upsert(1L, request, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Invalid domain format");
         }
@@ -231,9 +247,26 @@ class BrandServiceTest {
             when(organizationRepository.findById(1L)).thenReturn(Optional.of(testOrg));
             when(brandConfigRepository.findByCustomDomain("taken.example.com")).thenReturn(Optional.of(otherConfig));
 
-            assertThatThrownBy(() -> brandService.upsert(1L, request))
+            assertThatThrownBy(() -> brandService.upsert(1L, request, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Domain already in use");
+        }
+    }
+
+    @Nested
+    @DisplayName("cross-tenant access control")
+    class CrossTenantAccess {
+
+        @Test
+        @DisplayName("getByOrganization denies a non-member and never reads the config")
+        void getByOrganization_deniesNonMember() {
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> brandService.getByOrganization(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verifyNoInteractions(brandConfigRepository);
         }
     }
 }

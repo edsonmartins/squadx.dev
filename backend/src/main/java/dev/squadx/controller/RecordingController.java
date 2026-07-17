@@ -31,7 +31,7 @@ public class RecordingController {
             @Valid @RequestBody StartRecordingRequest request,
             @AuthenticationPrincipal User user
     ) {
-        RecordingResponse response = recordingService.startRecording(request.getSessionId());
+        RecordingResponse response = recordingService.startRecording(request.getSessionId(), user);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Recording started"));
@@ -45,7 +45,7 @@ public class RecordingController {
             @AuthenticationPrincipal User user
     ) {
         RecordingResponse response = recordingService.completeRecording(
-                id, request.getFileSizeBytes(), request.getDurationSeconds());
+                id, request.getFileSizeBytes(), request.getDurationSeconds(), user);
         return ResponseEntity.ok(ApiResponse.success(response, "Recording completed"));
     }
 
@@ -55,7 +55,7 @@ public class RecordingController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        RecordingResponse response = recordingService.getRecordingUrl(id);
+        RecordingResponse response = recordingService.getRecordingUrl(id, user);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -65,7 +65,7 @@ public class RecordingController {
             @PathVariable Long sessionId,
             @AuthenticationPrincipal User user
     ) {
-        List<RecordingResponse> response = recordingService.listBySession(sessionId);
+        List<RecordingResponse> response = recordingService.listBySession(sessionId, user);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

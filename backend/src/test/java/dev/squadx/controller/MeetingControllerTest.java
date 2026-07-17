@@ -129,7 +129,7 @@ class MeetingControllerTest {
         @Test
         @DisplayName("should return meeting by id with 200")
         void shouldReturnMeetingById() throws Exception {
-            when(meetingService.getById(1L)).thenReturn(sampleMeeting);
+            when(meetingService.getById(eq(1L), nullable(User.class))).thenReturn(sampleMeeting);
 
             mockMvc.perform(get("/api/v1/meetings/1"))
                     .andExpect(status().isOk())
@@ -141,7 +141,7 @@ class MeetingControllerTest {
         @Test
         @DisplayName("should return 404 when meeting not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(meetingService.getById(999L))
+            when(meetingService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Meeting not found"));
 
             mockMvc.perform(get("/api/v1/meetings/999"))
@@ -160,7 +160,7 @@ class MeetingControllerTest {
         void shouldReturnMeetingsByOrganization() throws Exception {
             Page<MeetingResponse> page = new PageImpl<>(List.of(sampleMeeting));
 
-            when(meetingService.getByOrganization(eq(10L), any(Pageable.class)))
+            when(meetingService.getByOrganization(eq(10L), any(Pageable.class), nullable(User.class)))
                     .thenReturn(page);
 
             mockMvc.perform(get("/api/v1/meetings/organization/10"))
@@ -220,7 +220,7 @@ class MeetingControllerTest {
                     .status(MeetingStatus.CANCELLED)
                     .build();
 
-            when(meetingService.cancel(1L)).thenReturn(cancelled);
+            when(meetingService.cancel(eq(1L), nullable(User.class))).thenReturn(cancelled);
 
             mockMvc.perform(post("/api/v1/meetings/1/cancel"))
                     .andExpect(status().isOk())

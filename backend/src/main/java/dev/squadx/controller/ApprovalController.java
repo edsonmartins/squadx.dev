@@ -67,7 +67,8 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<ApprovalResponse>> getById(
             @PathVariable Long id,
             @AuthenticationPrincipal User user) {
-        ApprovalResponse response = approvalService.getById(id);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        ApprovalResponse response = approvalService.getById(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -77,7 +78,8 @@ public class ApprovalController {
             @PathVariable Long taskId,
             @PageableDefault Pageable pageable,
             @AuthenticationPrincipal User user) {
-        Page<ApprovalResponse> response = approvalService.getByTask(taskId, pageable);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        Page<ApprovalResponse> response = approvalService.getByTask(taskId, pageable, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -98,7 +100,8 @@ public class ApprovalController {
             @RequestParam(defaultValue = "PENDING") ApprovalStatus status,
             @PageableDefault Pageable pageable,
             @AuthenticationPrincipal User user) {
-        Page<ApprovalResponse> response = approvalService.getByStatus(status, pageable);
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        Page<ApprovalResponse> response = approvalService.getByStatus(status, pageable, currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

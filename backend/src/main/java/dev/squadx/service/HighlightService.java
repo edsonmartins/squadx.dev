@@ -3,8 +3,10 @@ package dev.squadx.service;
 import dev.squadx.dto.highlight.HighlightResponse;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.ExecutionLog;
+import dev.squadx.model.LiveSession;
 import dev.squadx.model.SessionHighlight;
 import dev.squadx.model.SessionRecording;
+import dev.squadx.model.User;
 import dev.squadx.model.enums.HighlightType;
 import dev.squadx.repository.ExecutionLogRepository;
 import dev.squadx.repository.SessionHighlightRepository;
@@ -30,16 +32,19 @@ public class HighlightService {
     private final SessionRecordingRepository recordingRepository;
     private final ExecutionLogRepository executionLogRepository;
     private final Optional<AiAnalysisService> aiAnalysisService;
+    private final OrganizationAccessGuard accessGuard;
 
     public HighlightService(
             SessionHighlightRepository highlightRepository,
             SessionRecordingRepository recordingRepository,
             ExecutionLogRepository executionLogRepository,
-            Optional<AiAnalysisService> aiAnalysisService
+            Optional<AiAnalysisService> aiAnalysisService,
+            OrganizationAccessGuard accessGuard
     ) {
         this.highlightRepository = highlightRepository;
         this.recordingRepository = recordingRepository;
         this.executionLogRepository = executionLogRepository;
+        this.accessGuard = accessGuard;
         this.aiAnalysisService = aiAnalysisService != null ? aiAnalysisService : Optional.empty();
         if (this.aiAnalysisService.isPresent()) {
             log.info("HighlightService initialized with AI analysis support");
@@ -68,17 +73,18 @@ public class HighlightService {
      * Analyze execution logs for a recording's session and generate highlights.
      */
     @Transactional
-    public List<HighlightResponse> generateHighlights(Long recordingId) {
-        return generateHighlights(recordingId, null);
+    public List<HighlightResponse> generateHighlights(Long recordingId, User currentUser) {
+        return generateHighlights(recordingId, null, currentUser);
     }
 
     /**
      * Analyze execution logs and optionally client-provided logs to generate highlights.
      */
     @Transactional
-    public List<HighlightResponse> generateHighlights(Long recordingId, List<String> clientLogs) {
+    public List<HighlightResponse> generateHighlights(Long recordingId, List<String> clientLogs, User currentUser) {
         SessionRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
+        accessGuard.requireMember(sessionOrgId(recording.getSession()), currentUser.getId());
 
         Instant recordingStart = recording.getStartedAt();
         List<SessionHighlight> highlights = new ArrayList<>();
@@ -121,10 +127,10 @@ public class HighlightService {
     /**
      * List all highlights for a recording, ordered by timestamp.
      */
-    public List<HighlightResponse> getByRecording(Long recordingId) {
-        if (!recordingRepository.existsById(recordingId)) {
-            throw new ResourceNotFoundException("Recording not found with id: " + recordingId);
-        }
+    public List<HighlightResponse> getByRecording(Long recordingId, User currentUser) {
+        SessionRecording recording = recordingRepository.findById(recordingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
+        accessGuard.requireMember(sessionOrgId(recording.getSession()), currentUser.getId());
 
         return highlightRepository.findByRecordingIdOrderByTimestampSecondsAsc(recordingId)
                 .stream()
@@ -135,9 +141,10 @@ public class HighlightService {
     /**
      * Generate a text summary of the session based on its highlights.
      */
-    public String getSummary(Long recordingId) {
+    public String getSummary(Long recordingId, User currentUser) {
         SessionRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
+        accessGuard.requireMember(sessionOrgId(recording.getSession()), currentUser.getId());
 
         List<SessionHighlight> highlights =
                 highlightRepository.findByRecordingIdOrderByTimestampSecondsAsc(recordingId);
@@ -187,6 +194,15 @@ public class HighlightService {
     }
 
     // ---- Internal helpers ----
+
+    private Long sessionOrgId(LiveSession session) {
+        if (session == null) {
+            throw new dev.squadx.exception.BadRequestException("Recording is not linked to a session");
+        }
+        if (session.getTask() != null) return session.getTask().getProject().getOrganization().getId();
+        if (session.getAgent() != null) return session.getAgent().getSquad().getOrganization().getId();
+        throw new dev.squadx.exception.BadRequestException("Session is not linked to a task or agent");
+    }
 
     private void analyzeLogMessage(String message, String level, int timestampSeconds,
                                    SessionRecording recording, List<SessionHighlight> highlights) {

@@ -2,6 +2,7 @@ package dev.squadx.service;
 
 import dev.squadx.dto.agent.AgentMessageRequest;
 import dev.squadx.dto.agent.AgentMessageResponse;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.AgentMessageType;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -43,6 +45,9 @@ class AgentMessageServiceTest {
 
     @Mock
     private WebSocketEventService webSocketEventService;
+
+    @Mock
+    private OrganizationAccessGuard accessGuard;
 
     @InjectMocks
     private AgentMessageService agentMessageService;
@@ -159,7 +164,7 @@ class AgentMessageServiceTest {
             return msg;
         });
 
-        List<AgentMessageResponse> responses = agentMessageService.broadcast(1L, 50L, "Broadcast message");
+        List<AgentMessageResponse> responses = agentMessageService.broadcast(1L, 50L, "Broadcast message", testUser);
 
         assertThat(responses).hasSize(2);
         assertThat(responses).allMatch(r -> r.isBroadcast());
@@ -207,7 +212,7 @@ class AgentMessageServiceTest {
         when(messageRepository.findById(1L)).thenReturn(Optional.of(message));
         when(messageRepository.save(any(AgentMessage.class))).thenReturn(message);
 
-        agentMessageService.markRead(1L);
+        agentMessageService.markRead(1L, testUser);
 
         ArgumentCaptor<AgentMessage> captor = ArgumentCaptor.forClass(AgentMessage.class);
         verify(messageRepository).save(captor.capture());
@@ -290,5 +295,27 @@ class AgentMessageServiceTest {
         assertThat(responses.get(1).getContent()).isEqualTo("Second message");
         assertThat(responses.get(0).getMessageType()).isEqualTo("TASK_UPDATE");
         assertThat(responses.get(1).getMessageType()).isEqualTo("RESULT");
+    }
+
+    @Test
+    @DisplayName("markRead denies a non-member of the source agent's organization")
+    void markRead_deniesNonMember() {
+        AgentMessage message = AgentMessage.builder()
+                .fromAgent(agentA)
+                .toAgent(agentB)
+                .messageType(AgentMessageType.TASK_UPDATE)
+                .content("Some message")
+                .isRead(false)
+                .build();
+        message.setId(1L);
+
+        when(messageRepository.findById(1L)).thenReturn(Optional.of(message));
+        doThrow(new ForbiddenException("nope"))
+                .when(accessGuard).requireMember(anyLong(), anyLong());
+
+        assertThatThrownBy(() -> agentMessageService.markRead(1L, testUser))
+                .isInstanceOf(ForbiddenException.class);
+
+        verify(messageRepository, never()).save(any(AgentMessage.class));
     }
 }

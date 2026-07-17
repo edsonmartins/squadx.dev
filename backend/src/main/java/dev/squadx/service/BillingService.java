@@ -13,6 +13,7 @@ import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.Organization;
 import dev.squadx.model.Subscription;
+import dev.squadx.model.User;
 import dev.squadx.model.enums.SubscriptionPlan;
 import dev.squadx.model.enums.SubscriptionStatus;
 import dev.squadx.repository.OrganizationRepository;
@@ -34,6 +35,7 @@ public class BillingService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final OrganizationRepository organizationRepository;
+    private final OrganizationAccessGuard accessGuard;
 
     @Value("${stripe.api-key:}")
     private String stripeApiKey;
@@ -58,7 +60,8 @@ public class BillingService {
     }
 
     @Transactional
-    public Map<String, String> createCheckoutSession(Long orgId, String plan) {
+    public Map<String, String> createCheckoutSession(Long orgId, String plan, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         validateStripeConfigured();
 
         Organization org = organizationRepository.findById(orgId)
@@ -146,13 +149,15 @@ public class BillingService {
     }
 
     @Transactional(readOnly = true)
-    public Subscription getSubscription(Long orgId) {
+    public Subscription getSubscription(Long orgId, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         return subscriptionRepository.findByOrganizationId(orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found for organization"));
     }
 
     @Transactional
-    public void cancelSubscription(Long orgId) {
+    public void cancelSubscription(Long orgId, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         validateStripeConfigured();
 
         Subscription subscription = subscriptionRepository.findByOrganizationId(orgId)

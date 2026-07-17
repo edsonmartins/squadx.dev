@@ -30,6 +30,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -99,7 +100,7 @@ class HighlightControllerTest {
                     .executionLogs(List.of("log1", "log2"))
                     .build();
 
-            when(highlightService.generateHighlights(eq(100L), any()))
+            when(highlightService.generateHighlights(eq(100L), any(), nullable(User.class)))
                     .thenReturn(List.of(sampleHighlight));
 
             mockMvc.perform(post("/api/v1/highlights/generate")
@@ -132,7 +133,7 @@ class HighlightControllerTest {
         @Test
         @DisplayName("should return highlights for a recording")
         void shouldReturnHighlightsForRecording() throws Exception {
-            when(highlightService.getByRecording(100L)).thenReturn(List.of(sampleHighlight));
+            when(highlightService.getByRecording(eq(100L), nullable(User.class))).thenReturn(List.of(sampleHighlight));
 
             mockMvc.perform(get("/api/v1/highlights/recording/100")
                             .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
@@ -150,7 +151,7 @@ class HighlightControllerTest {
         @Test
         @DisplayName("should return AI summary for a recording")
         void shouldReturnSummary() throws Exception {
-            when(highlightService.getSummary(100L)).thenReturn("Session had 2 bugs and 1 deploy.");
+            when(highlightService.getSummary(eq(100L), nullable(User.class))).thenReturn("Session had 2 bugs and 1 deploy.");
 
             mockMvc.perform(get("/api/v1/highlights/recording/100/summary")
                             .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
@@ -162,7 +163,7 @@ class HighlightControllerTest {
         @Test
         @DisplayName("should return 404 when recording not found")
         void shouldReturn404WhenRecordingNotFound() throws Exception {
-            when(highlightService.getSummary(999L))
+            when(highlightService.getSummary(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Recording not found"));
 
             mockMvc.perform(get("/api/v1/highlights/recording/999/summary")

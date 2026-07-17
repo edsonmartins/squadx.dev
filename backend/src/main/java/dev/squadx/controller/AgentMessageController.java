@@ -55,7 +55,8 @@ public class AgentMessageController {
         List<AgentMessageResponse> responses = agentMessageService.broadcast(
                 request.getFromAgentId(),
                 request.getExecutionId(),
-                request.getContent()
+                request.getContent(),
+                user
         );
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -76,9 +77,10 @@ public class AgentMessageController {
     @PutMapping("/{id}/read")
     @Operation(summary = "Mark a message as read")
     public ResponseEntity<ApiResponse<Void>> markRead(
-            @PathVariable Long id
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
     ) {
-        agentMessageService.markRead(id);
+        agentMessageService.markRead(id, user);
         return ResponseEntity.ok(ApiResponse.success(null, "Message marked as read"));
     }
 

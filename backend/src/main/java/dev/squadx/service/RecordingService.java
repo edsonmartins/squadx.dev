@@ -6,6 +6,7 @@ import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.LiveSession;
 import dev.squadx.model.SessionRecording;
+import dev.squadx.model.User;
 import dev.squadx.model.enums.RecordingStatus;
 import dev.squadx.repository.LiveSessionRepository;
 import dev.squadx.repository.SessionRecordingRepository;
@@ -34,6 +35,7 @@ public class RecordingService {
     private final LiveSessionRepository liveSessionRepository;
     private final S3Config s3Config;
     private final Optional<S3Presigner> s3Presigner;
+    private final OrganizationAccessGuard accessGuard;
 
     private static final Duration UPLOAD_URL_EXPIRY = Duration.ofHours(2);
     private static final Duration DOWNLOAD_URL_EXPIRY = Duration.ofHours(1);
@@ -42,11 +44,12 @@ public class RecordingService {
      * Start recording a session. Creates a database record and returns a pre-signed upload URL.
      */
     @Transactional
-    public RecordingResponse startRecording(Long sessionId) {
+    public RecordingResponse startRecording(Long sessionId, User currentUser) {
         ensureS3Available();
 
         LiveSession session = liveSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Live session not found with id: " + sessionId));
+        accessGuard.requireMember(sessionOrgId(session), currentUser.getId());
 
         String s3Key = generateS3Key(sessionId);
 
@@ -72,9 +75,10 @@ public class RecordingService {
      * Mark a recording as complete with file size and duration metadata.
      */
     @Transactional
-    public RecordingResponse completeRecording(Long recordingId, Long fileSizeBytes, Integer durationSeconds) {
+    public RecordingResponse completeRecording(Long recordingId, Long fileSizeBytes, Integer durationSeconds, User currentUser) {
         SessionRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
+        accessGuard.requireMember(sessionOrgId(recording.getSession()), currentUser.getId());
 
         recording = completeRecordingEntity(recording, fileSizeBytes, durationSeconds);
 
@@ -117,11 +121,12 @@ public class RecordingService {
     /**
      * Get a pre-signed download URL for a recording (1 hour expiry).
      */
-    public RecordingResponse getRecordingUrl(Long recordingId) {
+    public RecordingResponse getRecordingUrl(Long recordingId, User currentUser) {
         ensureS3Available();
 
         SessionRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recording not found with id: " + recordingId));
+        accessGuard.requireMember(sessionOrgId(recording.getSession()), currentUser.getId());
 
         if (recording.getStatus() != RecordingStatus.COMPLETED) {
             throw new BadRequestException("Recording is not yet completed");
@@ -135,16 +140,22 @@ public class RecordingService {
     /**
      * List all recordings for a given session.
      */
-    public List<RecordingResponse> listBySession(Long sessionId) {
+    public List<RecordingResponse> listBySession(Long sessionId, User currentUser) {
         // Verify session exists
-        if (!liveSessionRepository.existsById(sessionId)) {
-            throw new ResourceNotFoundException("Live session not found with id: " + sessionId);
-        }
+        LiveSession session = liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Live session not found with id: " + sessionId));
+        accessGuard.requireMember(sessionOrgId(session), currentUser.getId());
 
         return recordingRepository.findBySessionIdOrderByStartedAtDesc(sessionId)
                 .stream()
                 .map(recording -> mapToResponse(recording, null, null))
                 .toList();
+    }
+
+    private Long sessionOrgId(LiveSession session) {
+        if (session.getTask() != null) return session.getTask().getProject().getOrganization().getId();
+        if (session.getAgent() != null) return session.getAgent().getSquad().getOrganization().getId();
+        throw new dev.squadx.exception.BadRequestException("Session is not linked to a task or agent");
     }
 
     private void ensureS3Available() {

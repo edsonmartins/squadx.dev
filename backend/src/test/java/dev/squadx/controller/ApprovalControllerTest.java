@@ -184,7 +184,7 @@ class ApprovalControllerTest {
         @Test
         @DisplayName("should return approval by id with 200")
         void shouldReturnApprovalById() throws Exception {
-            when(approvalService.getById(1L)).thenReturn(sampleApproval);
+            when(approvalService.getById(eq(1L), nullable(User.class))).thenReturn(sampleApproval);
 
             mockMvc.perform(get("/api/v1/approvals/1"))
                     .andExpect(status().isOk())
@@ -196,7 +196,7 @@ class ApprovalControllerTest {
         @Test
         @DisplayName("should return 404 when approval not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(approvalService.getById(999L))
+            when(approvalService.getById(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Approval not found"));
 
             mockMvc.perform(get("/api/v1/approvals/999"))

@@ -32,7 +32,7 @@ public class HighlightController {
             @AuthenticationPrincipal User user
     ) {
         List<HighlightResponse> highlights = highlightService.generateHighlights(
-                request.getRecordingId(), request.getExecutionLogs());
+                request.getRecordingId(), request.getExecutionLogs(), user);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(highlights, "Highlights generated"));
@@ -44,7 +44,7 @@ public class HighlightController {
             @PathVariable Long recordingId,
             @AuthenticationPrincipal User user
     ) {
-        List<HighlightResponse> highlights = highlightService.getByRecording(recordingId);
+        List<HighlightResponse> highlights = highlightService.getByRecording(recordingId, user);
         return ResponseEntity.ok(ApiResponse.success(highlights));
     }
 
@@ -54,7 +54,7 @@ public class HighlightController {
             @PathVariable Long recordingId,
             @AuthenticationPrincipal User user
     ) {
-        String summary = highlightService.getSummary(recordingId);
+        String summary = highlightService.getSummary(recordingId, user);
         return ResponseEntity.ok(ApiResponse.success(Map.of("summary", summary)));
     }
 }

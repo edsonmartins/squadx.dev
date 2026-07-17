@@ -1,9 +1,11 @@
 package dev.squadx.service;
 
 import dev.squadx.dto.highlight.HighlightResponse;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.HighlightType;
+import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.ExecutionLogRepository;
 import dev.squadx.repository.SessionHighlightRepository;
 import dev.squadx.repository.SessionRecordingRepository;
@@ -25,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,21 +42,41 @@ class HighlightServiceTest {
     @Mock
     private ExecutionLogRepository executionLogRepository;
 
+    @Mock
+    private OrganizationAccessGuard accessGuard;
+
     @InjectMocks
     private HighlightService highlightService;
 
     private SessionRecording testRecording;
     private Execution testExecution;
     private LiveSession testSession;
+    private User testUser;
 
     @BeforeEach
     void setUp() {
+        testUser = User.builder()
+                .email("test@example.com")
+                .fullName("Test User")
+                .role(UserRole.USER)
+                .isActive(true)
+                .build();
+        testUser.setId(1L);
+
+        Organization org = Organization.builder().name("Org").slug("org").build();
+        org.setId(1L);
+        Project project = Project.builder().name("Proj").slug("proj").organization(org).build();
+        project.setId(1L);
+        Task task = Task.builder().title("Task").project(project).build();
+        task.setId(1L);
+
         testExecution = new Execution();
         testExecution.setId(1L);
 
         testSession = new LiveSession();
         testSession.setId(1L);
         testSession.setExecution(testExecution);
+        testSession.setTask(task);
 
         testRecording = SessionRecording.builder()
                 .session(testSession)
@@ -82,11 +105,11 @@ class HighlightServiceTest {
                     .build();
             highlight.setId(1L);
 
-            when(recordingRepository.existsById(1L)).thenReturn(true);
+            when(recordingRepository.findById(1L)).thenReturn(Optional.of(testRecording));
             when(highlightRepository.findByRecordingIdOrderByTimestampSecondsAsc(1L))
                     .thenReturn(List.of(highlight));
 
-            List<HighlightResponse> results = highlightService.getByRecording(1L);
+            List<HighlightResponse> results = highlightService.getByRecording(1L, testUser);
 
             assertThat(results).hasSize(1);
             assertThat(results.get(0).getHighlightType()).isEqualTo(HighlightType.ERROR_DETECTED);
@@ -96,9 +119,9 @@ class HighlightServiceTest {
         @Test
         @DisplayName("should throw ResourceNotFoundException when recording not found")
         void shouldThrowWhenRecordingNotFound() {
-            when(recordingRepository.existsById(99L)).thenReturn(false);
+            when(recordingRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> highlightService.getByRecording(99L))
+            assertThatThrownBy(() -> highlightService.getByRecording(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Recording not found");
         }
@@ -129,7 +152,7 @@ class HighlightServiceTest {
                 return highlights;
             });
 
-            List<HighlightResponse> results = highlightService.generateHighlights(1L);
+            List<HighlightResponse> results = highlightService.generateHighlights(1L, testUser);
 
             assertThat(results).isNotEmpty();
             assertThat(results).anyMatch(h -> h.getHighlightType() == HighlightType.ERROR_DETECTED);
@@ -151,7 +174,7 @@ class HighlightServiceTest {
 
             List<String> clientLogs = List.of("All tests passed successfully", "BUILD SUCCESS");
 
-            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs);
+            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs, testUser);
 
             assertThat(results).isNotEmpty();
             assertThat(results).anyMatch(h -> h.getHighlightType() == HighlightType.TEST_PASSED);
@@ -173,7 +196,7 @@ class HighlightServiceTest {
 
             List<String> clientLogs = List.of("git commit -m 'fix: resolve login issue'");
 
-            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs);
+            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs, testUser);
 
             assertThat(results).isNotEmpty();
             assertThat(results).anyMatch(h -> h.getHighlightType() == HighlightType.COMMIT_MADE);
@@ -195,7 +218,7 @@ class HighlightServiceTest {
 
             List<String> clientLogs = List.of("Deployed to production successfully");
 
-            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs);
+            List<HighlightResponse> results = highlightService.generateHighlights(1L, clientLogs, testUser);
 
             assertThat(results).isNotEmpty();
             assertThat(results).anyMatch(h -> h.getHighlightType() == HighlightType.DEPLOY);
@@ -206,7 +229,7 @@ class HighlightServiceTest {
         void shouldThrowWhenRecordingNotFound() {
             when(recordingRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> highlightService.generateHighlights(99L))
+            assertThatThrownBy(() -> highlightService.generateHighlights(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Recording not found");
         }
@@ -241,7 +264,7 @@ class HighlightServiceTest {
             when(highlightRepository.findByRecordingIdOrderByTimestampSecondsAsc(1L))
                     .thenReturn(List.of(errorHighlight, commitHighlight));
 
-            String summary = highlightService.getSummary(1L);
+            String summary = highlightService.getSummary(1L, testUser);
 
             assertThat(summary).contains("Session Summary");
             assertThat(summary).contains("Total highlights: 2");
@@ -257,7 +280,7 @@ class HighlightServiceTest {
             when(highlightRepository.findByRecordingIdOrderByTimestampSecondsAsc(1L))
                     .thenReturn(List.of());
 
-            String summary = highlightService.getSummary(1L);
+            String summary = highlightService.getSummary(1L, testUser);
 
             assertThat(summary).isEqualTo("No highlights detected for this recording session.");
         }
@@ -267,9 +290,27 @@ class HighlightServiceTest {
         void shouldThrowWhenRecordingNotFound() {
             when(recordingRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> highlightService.getSummary(99L))
+            assertThatThrownBy(() -> highlightService.getSummary(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Recording not found");
+        }
+    }
+
+    @Nested
+    @DisplayName("cross-tenant access control")
+    class CrossTenantAccess {
+
+        @Test
+        @DisplayName("getByRecording denies a non-member of the recording's organization")
+        void getByRecording_deniesNonMember() {
+            when(recordingRepository.findById(1L)).thenReturn(Optional.of(testRecording));
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> highlightService.getByRecording(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verifyNoInteractions(highlightRepository);
         }
     }
 }

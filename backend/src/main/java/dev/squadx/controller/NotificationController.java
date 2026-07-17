@@ -68,7 +68,7 @@ public class NotificationController {
     ) {
         User currentUser = AuthenticatedUserResolver.resolve(user, httpRequest);
         validateOrgAccess(orgId, currentUser);
-        NotificationConfigResponse config = notificationService.update(configId, request);
+        NotificationConfigResponse config = notificationService.update(configId, request, currentUser);
         return ResponseEntity.ok(ApiResponse.success(config, "Notification configuration updated successfully"));
     }
 
@@ -82,7 +82,7 @@ public class NotificationController {
     ) {
         User currentUser = AuthenticatedUserResolver.resolve(user, request);
         validateOrgAccess(orgId, currentUser);
-        notificationService.delete(configId);
+        notificationService.delete(configId, currentUser);
         return ResponseEntity.ok(ApiResponse.success(null, "Notification configuration deleted successfully"));
     }
 

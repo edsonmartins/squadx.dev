@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -90,7 +91,7 @@ class BillingControllerTest {
 
             Map<String, String> sessionResponse = Map.of("sessionUrl", "https://checkout.stripe.com/session123");
 
-            when(billingService.createCheckoutSession(eq(10L), eq("PRO")))
+            when(billingService.createCheckoutSession(eq(10L), eq("PRO"), nullable(User.class)))
                     .thenReturn(sessionResponse);
 
             mockMvc.perform(post("/api/v1/billing/checkout")
@@ -137,7 +138,7 @@ class BillingControllerTest {
                     .stripeSubscriptionId("sub_test")
                     .build();
 
-            when(billingService.getSubscription(10L)).thenReturn(subscription);
+            when(billingService.getSubscription(eq(10L), nullable(User.class))).thenReturn(subscription);
 
             mockMvc.perform(get("/api/v1/billing/subscription")
                             .param("organizationId", "10")
@@ -149,7 +150,7 @@ class BillingControllerTest {
         @Test
         @DisplayName("should return 404 when subscription not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(billingService.getSubscription(999L))
+            when(billingService.getSubscription(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Subscription not found"));
 
             mockMvc.perform(get("/api/v1/billing/subscription")
@@ -170,7 +171,7 @@ class BillingControllerTest {
         void shouldCancelSubscription() throws Exception {
             Map<String, Object> request = Map.of("organizationId", 10);
 
-            doNothing().when(billingService).cancelSubscription(10L);
+            doNothing().when(billingService).cancelSubscription(eq(10L), nullable(User.class));
 
             mockMvc.perform(post("/api/v1/billing/cancel")
                             .contentType(MediaType.APPLICATION_JSON)

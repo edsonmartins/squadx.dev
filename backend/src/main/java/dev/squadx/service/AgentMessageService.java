@@ -28,11 +28,13 @@ public class AgentMessageService {
     private final AgentRepository agentRepository;
     private final ExecutionRepository executionRepository;
     private final WebSocketEventService webSocketEventService;
+    private final OrganizationAccessGuard accessGuard;
 
     @Transactional
     public AgentMessageResponse send(AgentMessageRequest request, User user) {
         Agent fromAgent = agentRepository.findById(request.getFromAgentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Source agent not found"));
+        accessGuard.requireMember(fromAgent.getSquad().getOrganization().getId(), user.getId());
 
         Agent toAgent = null;
         if (request.getToAgentId() != null) {
@@ -83,9 +85,10 @@ public class AgentMessageService {
     }
 
     @Transactional
-    public List<AgentMessageResponse> broadcast(Long fromAgentId, Long executionId, String content) {
+    public List<AgentMessageResponse> broadcast(Long fromAgentId, Long executionId, String content, User user) {
         Agent fromAgent = agentRepository.findById(fromAgentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Source agent not found"));
+        accessGuard.requireMember(fromAgent.getSquad().getOrganization().getId(), user.getId());
 
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
@@ -129,9 +132,10 @@ public class AgentMessageService {
     }
 
     @Transactional
-    public void markRead(Long messageId) {
+    public void markRead(Long messageId, User user) {
         AgentMessage message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        accessGuard.requireMember(message.getFromAgent().getSquad().getOrganization().getId(), user.getId());
         message.setRead(true);
         messageRepository.save(message);
     }

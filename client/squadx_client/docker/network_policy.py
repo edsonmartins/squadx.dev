@@ -75,7 +75,8 @@ POLICY_PACKAGE_MANAGERS = NetworkPolicy(
 POLICY_FULL_ACCESS = NetworkPolicy(
     default_action=EgressAction.ALLOW,
     rules=[
-        EgressRule(EgressAction.DENY, "169.254.169.254", description="Block cloud metadata"),
+        EgressRule(EgressAction.DENY, "169.254.169.254", description="Block cloud metadata (IMDS)"),
+        EgressRule(EgressAction.DENY, "169.254.170.2", description="Block AWS ECS task credentials"),
         EgressRule(EgressAction.DENY, "metadata.google.internal", description="Block GCP metadata"),
     ]
 )
@@ -184,14 +185,19 @@ class EgressSidecarConfig:
     policy: NetworkPolicy = field(default_factory=lambda: POLICY_AGENT_DEFAULT)
 
     def to_dns_config(self) -> dict:
-        """Generate DNS proxy configuration."""
+        """Generate DNS proxy configuration.
+
+        Allow entries carry their ports so the proxy can pin ``(ip, port)`` pairs rather
+        than bare IPs: a domain restricted to :443 stays restricted to :443 even after
+        its address is known, instead of opening every port on that address.
+        """
         allow_domains = []
         deny_domains = []
 
         for rule in self.policy.rules:
             if not _is_ip_or_cidr(rule.target):
                 if rule.action == EgressAction.ALLOW:
-                    allow_domains.append(rule.target)
+                    allow_domains.append({"pattern": rule.target, "ports": list(rule.ports)})
                 else:
                     deny_domains.append(rule.target)
 
@@ -202,15 +208,21 @@ class EgressSidecarConfig:
             "listenPort": self.dns_port,
         }
 
-    def ip_rules(self) -> list[str]:
-        """Static iptables rules for IP/CIDR targets, which need no DNS at all."""
+    def ip_deny_rules(self) -> list[str]:
+        """DROP rules for IP/CIDR DENY targets (e.g. cloud metadata). IPv4 only — the
+        only literal-IP targets in the presets are v4, and ``_is_ip_or_cidr`` matches v4.
+        """
+        return [
+            f"iptables -A OUTPUT -d {rule.target} -j DROP"
+            for rule in self.policy.rules
+            if _is_ip_or_cidr(rule.target) and rule.action == EgressAction.DENY
+        ]
+
+    def ip_allow_rules(self) -> list[str]:
+        """Per-port ACCEPT rules for IP/CIDR ALLOW targets, which need no DNS at all."""
         rules = []
         for rule in self.policy.rules:
-            if not _is_ip_or_cidr(rule.target):
-                continue
-            if rule.action == EgressAction.DENY:
-                rules.append(f"iptables -A OUTPUT -d {rule.target} -j DROP")
-            else:
+            if _is_ip_or_cidr(rule.target) and rule.action == EgressAction.ALLOW:
                 for port in rule.ports:
                     rules.append(
                         f"iptables -A OUTPUT -d {rule.target} -p tcp --dport {port} -j ACCEPT"
@@ -240,96 +252,134 @@ def generate_sidecar_setup_script(config: EgressSidecarConfig) -> str:
 
     Ordering matters and is deliberate:
 
-      - default DROP is set *before* the flush, so re-applying (warm-pool reuse) never
-        opens a window with no policy;
-      - the proxy is started *before* the DNS redirect is installed, so the agent
-        cannot slip a query through while nothing is listening;
+      - default DROP is set (both families) *before* the flush, so re-applying
+        (warm-pool reuse) never opens a window with no policy;
+      - loopback and established are allowed *before* the readiness probe and the
+        proxy start, because both talk over loopback (an earlier version put the
+        probe ahead of the loopback ACCEPT, so it could never succeed);
+      - the proxy is started and confirmed listening (a TCP probe — a UDP one cannot
+        tell "open" from "silently dropped") *before* the DNS redirect is installed;
       - `-m owner --uid-owner` separates proxy traffic from agent traffic. They share
         the netns and thus a single OUTPUT chain, so uid is the only distinction
         available: the proxy may reach upstream DNS, the agent may only reach the proxy.
+
+    Both IPv4 and IPv6 are programmed. IPv6 gets the same default-deny and the same
+    ipset allowlist; the agent's own IPv6 DNS is simply dropped (v6 default-deny), since
+    the proxy resolves AAAA over its v4 upstream and pins the v6 address — the agent
+    reaches v6 hosts without ever needing v6 DNS itself. Leaving ip6tables unset would
+    make the whole allowlist bypassable over IPv6.
 
     Fails closed: if ipset or the proxy cannot start, `set -e` aborts before the
     permissive rules are added, leaving default DROP in force.
     """
     dns_cfg = json.dumps(config.to_dns_config(), separators=(",", ":"))
     uid = config.proxy_uid
+    port = config.dns_port
+    v4, v6 = config.ipset_v4, config.ipset_v6
+    timeout = config.pin_timeout_seconds
 
     lines = [
         "#!/bin/sh",
         "set -e",
         "",
-        "# Default-deny first: DROP is set before the flush so re-application never",
-        "# leaves the namespace briefly unpoliced.",
+        "# Default-deny both families first; DROP is set before the flush so",
+        "# re-application (warm-pool reuse) never leaves the namespace briefly unpoliced.",
         "iptables -P OUTPUT DROP",
+        "ip6tables -P OUTPUT DROP",
         "iptables -F OUTPUT",
+        "ip6tables -F OUTPUT",
         "iptables -t nat -F OUTPUT",
+        "ip6tables -t nat -F OUTPUT",
         "",
-        "# Address sets the DNS proxy pins allowed answers into. `-exist` keeps this",
-        "# idempotent across pool reuse; flush so a recycled sidecar cannot inherit the",
-        "# previous run's addresses.",
-        f"ipset create {config.ipset_v4} hash:ip family inet timeout "
-        f"{config.pin_timeout_seconds} -exist",
-        f"ipset create {config.ipset_v6} hash:ip family inet6 timeout "
-        f"{config.pin_timeout_seconds} -exist",
-        f"ipset flush {config.ipset_v4}",
-        f"ipset flush {config.ipset_v6}",
+        "# REDIRECT sends the agent's DNS to the loopback proxy; the kernel treats a",
+        "# locally-generated packet routed into 127.0.0.0/8 as a martian unless",
+        "# route_localnet is on for the namespace. Best-effort: some hosts forbid the",
+        "# write, in which case REDIRECT may still work depending on kernel/version.",
+        "echo 1 > /proc/sys/net/ipv4/conf/all/route_localnet 2>/dev/null || true",
+        "",
+        "# (ip,port) sets, not plain ip: the proxy pins one entry per allowed port, so a",
+        "# domain restricted to :443 does not become every-port-open once its ip is known.",
+        "# `-exist` + flush keeps a recycled sidecar from inheriting the previous run.",
+        f"ipset create {v4} hash:ip,port family inet timeout {timeout} -exist",
+        f"ipset create {v6} hash:ip,port family inet6 timeout {timeout} -exist",
+        f"ipset flush {v4}",
+        f"ipset flush {v6}",
         "",
         "mkdir -p /etc/squadx",
         f"cat > {config.config_path} <<'SQUADX_POLICY_EOF'",
         dns_cfg,
         "SQUADX_POLICY_EOF",
         "",
-        "# Restart the proxy so a recycled sidecar serves this run's policy, not the",
-        "# previous one's.",
+        "# Loopback + established must be allowed before anything else: the readiness",
+        "# probe below reaches the proxy over loopback, and so do the proxy's replies.",
+        "iptables -A OUTPUT -o lo -j ACCEPT",
+        "ip6tables -A OUTPUT -o lo -j ACCEPT",
+        "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT",
+        "ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT",
+        "",
+    ]
+
+    # Explicit IP denies (cloud metadata) BEFORE any allow: a DROP must win even if an
+    # allowed name ever resolved into a denied address.
+    deny_rules = config.ip_deny_rules()
+    if deny_rules:
+        lines.append("# Explicit IP denies (cloud metadata) — placed ahead of every allow.")
+        lines += deny_rules
+        lines.append("")
+
+    lines += [
+        "# Only the proxy may reach upstream DNS; the agent may only reach the proxy",
+        "# (redirect below). Same chain governs both, so uid is what separates them.",
+        f"iptables -A OUTPUT -m owner --uid-owner {uid} -p udp --dport 53 -j ACCEPT",
+        f"iptables -A OUTPUT -m owner --uid-owner {uid} -p tcp --dport 53 -j ACCEPT",
+        f"ip6tables -A OUTPUT -m owner --uid-owner {uid} -p udp --dport 53 -j ACCEPT",
+        f"ip6tables -A OUTPUT -m owner --uid-owner {uid} -p tcp --dport 53 -j ACCEPT",
+        "",
+        "# DNS-over-TLS would bypass the proxy; drop it on both families. DoH rides :443",
+        "# and is instead gated by its provider needing to be on the allowlist at all.",
+        "iptables -A OUTPUT -p tcp --dport 853 -j DROP",
+        "iptables -A OUTPUT -p udp --dport 853 -j DROP",
+        "ip6tables -A OUTPUT -p tcp --dport 853 -j DROP",
+        "ip6tables -A OUTPUT -p udp --dport 853 -j DROP",
+        "",
+        "# Start the proxy, then wait for it to actually listen (TCP probe — reliable,",
+        "# unlike a UDP one) before pointing the agent's resolver at it.",
         "pkill -f egress-dns-proxy.py 2>/dev/null || true",
         f"/usr/local/bin/egress-dns-proxy.py --config {config.config_path} \\",
-        f"  --port {config.dns_port} --ipset-v4 {config.ipset_v4} \\",
-        f"  --ipset-v6 {config.ipset_v6} --pin-timeout {config.pin_timeout_seconds} \\",
-        "  >/var/log/egress-dns-proxy.log 2>&1 &",
+        f"  --port {port} --ipset-v4 {v4} --ipset-v6 {v6} \\",
+        f"  --pin-timeout {timeout} >/var/log/egress-dns-proxy.log 2>&1 &",
         "",
-        "# Wait for the listener: installing the redirect first would point the agent's",
-        "# resolver at a closed port and turn a policy failure into a confusing outage.",
-        "for i in $(seq 1 50); do",
-        f"  nc -z -u -w1 127.0.0.1 {config.dns_port} 2>/dev/null && break",
+        "for _ in $(seq 1 50); do",
+        f"  nc -z -w1 127.0.0.1 {port} 2>/dev/null && break",
         "  sleep 0.1",
         "done",
         "",
-        "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT",
-        "iptables -A OUTPUT -o lo -j ACCEPT",
-        "",
-        "# Only the proxy may talk to upstream DNS. Same chain governs both processes,",
-        "# so uid is what separates them.",
-        f"iptables -A OUTPUT -m owner --uid-owner {uid} -p udp --dport 53 -j ACCEPT",
-        f"iptables -A OUTPUT -m owner --uid-owner {uid} -p tcp --dport 53 -j ACCEPT",
-        "",
-        "# Everyone else's DNS is redirected into the proxy.",
+        "# Redirect the agent's DNS (v4) into the proxy. v6 DNS from the agent is dropped",
+        "# by the v6 default-deny; the proxy resolves AAAA over v4 and pins the address.",
         f"iptables -t nat -A OUTPUT -p udp --dport 53 -m owner ! --uid-owner {uid} "
-        f"-j REDIRECT --to-ports {config.dns_port}",
+        f"-j REDIRECT --to-ports {port}",
         f"iptables -t nat -A OUTPUT -p tcp --dport 53 -m owner ! --uid-owner {uid} "
-        f"-j REDIRECT --to-ports {config.dns_port}",
-        "",
-        "# Encrypted DNS would bypass the proxy entirely. DoT has a dedicated port and",
-        "# is dropped here; DoH rides ordinary :443 and is instead handled by the fact",
-        "# that a DoH provider has to be on the allowlist to be reachable at all.",
-        "iptables -A OUTPUT -p tcp --dport 853 -j DROP",
-        "iptables -A OUTPUT -p udp --dport 853 -j DROP",
+        f"-j REDIRECT --to-ports {port}",
         "",
     ]
 
     if config.policy.default_action == EgressAction.DENY:
         lines += [
-            "# The allowlist proper: reachable addresses are exactly those the proxy",
-            "# just resolved from an allowed name.",
-            f"iptables -A OUTPUT -m set --match-set {config.ipset_v4} dst -j ACCEPT",
-            f"iptables -A OUTPUT -m set --match-set {config.ipset_v6} dst -j ACCEPT",
+            "# The allowlist proper: reachable (ip,port) pairs are exactly those the",
+            "# proxy just pinned from an allowed name. `dst,dst` matches dest ip + port.",
+            f"iptables -A OUTPUT -m set --match-set {v4} dst,dst -j ACCEPT",
+            f"ip6tables -A OUTPUT -m set --match-set {v6} dst,dst -j ACCEPT",
             "",
         ]
 
-    lines += config.ip_rules()
-    lines.append("")
+    allow_rules = config.ip_allow_rules()
+    if allow_rules:
+        lines += allow_rules
+        lines.append("")
 
     if config.policy.default_action == EgressAction.ALLOW:
         # Debugging only: the DENY rules above still stand, this just lifts the floor.
         lines.append("iptables -P OUTPUT ACCEPT")
+        lines.append("ip6tables -P OUTPUT ACCEPT")
 
     return "\n".join(lines) + "\n"

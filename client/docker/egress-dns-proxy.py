@@ -102,13 +102,31 @@ def is_restricted_addr(addr: str) -> bool:
     return any(ip in net for net in _RESTRICTED_NETS)
 
 
+# Ports an allow entry gets when it names no ports of its own. Matches the old
+# dig-based path, which defaulted domain rules to http/https.
+_DEFAULT_PORTS = (80, 443)
+
+
 class Policy:
-    """Domain allow/deny decisions. Deny wins, and the default is deny."""
+    """Domain allow/deny decisions. Deny wins, and the default is deny.
+
+    Each allow entry carries the ports it permits, so the pinned ipset can restrict an
+    address to those ports rather than opening every port on it. Entries may be
+    ``{"pattern": str, "ports": [int]}`` (current) or a bare string (tolerated for
+    back-compat, taking the default ports).
+    """
 
     def __init__(self, config: dict):
         self.default_allow = str(config.get("defaultAction", "deny")).lower() == "allow"
-        self.allow = [d.lower().rstrip(".") for d in config.get("allowDomains", [])]
         self.deny = [d.lower().rstrip(".") for d in config.get("denyDomains", [])]
+        self.allow: list[tuple[str, tuple[int, ...]]] = []
+        for entry in config.get("allowDomains", []):
+            if isinstance(entry, str):
+                self.allow.append((entry.lower().rstrip("."), _DEFAULT_PORTS))
+            else:
+                pattern = str(entry.get("pattern", "")).lower().rstrip(".")
+                ports = tuple(int(p) for p in (entry.get("ports") or _DEFAULT_PORTS))
+                self.allow.append((pattern, ports))
 
     @staticmethod
     def _matches(name: str, pattern: str) -> bool:
@@ -130,9 +148,23 @@ class Policy:
         name = name.lower().rstrip(".")
         if any(self._matches(name, p) for p in self.deny):
             return False
-        if any(self._matches(name, p) for p in self.allow):
+        if any(self._matches(name, p) for p, _ in self.allow):
             return True
         return self.default_allow
+
+    def ports_for(self, name: str) -> set[int]:
+        """Ports to pin for an allowed name: the union across every matching allow
+        entry. Under a default-allow policy a name matching no entry still gets the
+        conventional web ports so pinning yields a usable set.
+        """
+        name = name.lower().rstrip(".")
+        ports: set[int] = set()
+        for pattern, plist in self.allow:
+            if self._matches(name, pattern):
+                ports.update(plist)
+        if not ports and self.default_allow:
+            ports.update(_DEFAULT_PORTS)
+        return ports
 
 
 class IpSetPinner:
@@ -149,25 +181,35 @@ class IpSetPinner:
         self._timeout = timeout
         self._lock = threading.Lock()
 
-    def pin(self, addr: str) -> bool:
+    def pin(self, addr: str, ports) -> bool:
+        """Pin one ``ip,tcp:port`` entry per allowed port into the matching set.
+
+        The sets are ``hash:ip,port``, so the address is only reachable on the ports the
+        allow rule named — a domain restricted to :443 does not open every port on its
+        address. Returns True only if every entry was added.
+        """
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
             return False
         target = self._set_v6 if ip.version == 6 else self._set_v4
+        ok = True
         with self._lock:
-            proc = subprocess.run(  # noqa: S603 - fixed argv, addr is a parsed IP
-                ["ipset", "add", target, str(ip), "timeout", str(self._timeout), "-exist"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-        if proc.returncode != 0:
-            logger.error(
-                "pin_failed addr=%s set=%s err=%s", ip, target, proc.stderr.strip()[:200]
-            )
-            return False
-        return True
+            for port in ports:
+                proc = subprocess.run(  # noqa: S603 - fixed argv, ip parsed, port int
+                    ["ipset", "add", target, f"{ip},tcp:{int(port)}",
+                     "timeout", str(self._timeout), "-exist"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if proc.returncode != 0:
+                    logger.error(
+                        "pin_failed addr=%s port=%s set=%s err=%s",
+                        ip, port, target, proc.stderr.strip()[:200],
+                    )
+                    ok = False
+        return ok
 
 
 class Resolver:
@@ -227,6 +269,11 @@ class Resolver:
         except Exception:  # noqa: BLE001 - upstream is not fully trusted either
             logger.warning("malformed_answer name=%s not_pinned", qname)
             return
+        ports = self._policy.ports_for(qname)
+        if not ports:
+            # Allowed to resolve but no ports to open (e.g. a deny-default policy where
+            # the name matched only via default_allow=False). Nothing to pin.
+            return
         for rr in parsed.rr:
             if QTYPE.get(rr.rtype, "") not in _PINNED_QTYPES:
                 continue
@@ -240,8 +287,8 @@ class Resolver:
                     addr,
                 )
                 continue
-            if self._pinner.pin(addr):
-                logger.info("pinned name=%s addr=%s", qname.rstrip("."), addr)
+            if self._pinner.pin(addr, ports):
+                logger.info("pinned name=%s addr=%s ports=%s", qname.rstrip("."), addr, sorted(ports))
 
 
 class _UDPHandler(socketserver.BaseRequestHandler):

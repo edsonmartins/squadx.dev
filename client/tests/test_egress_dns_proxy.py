@@ -145,7 +145,11 @@ class TestResolverBehaviour:
             reply = resolver.handle(self._query("api.anthropic.com"))
 
         assert reply == upstream
-        pinner.pin.assert_called_once_with("160.79.104.10")
+        # Pinned with the ports the allow rule permits (default http/https here).
+        pinner.pin.assert_called_once()
+        addr_arg, ports_arg = pinner.pin.call_args.args
+        assert addr_arg == "160.79.104.10"
+        assert set(ports_arg) == {80, 443}
 
     def test_allowed_name_resolving_to_metadata_is_not_pinned(self):
         """DNS rebinding: the name passes the allowlist, the address must not pass."""
@@ -175,27 +179,60 @@ class TestResolverBehaviour:
 
 
 class TestPinnerUsesIpset:
-    def test_pin_adds_to_the_v4_set_with_a_timeout(self):
+    def test_pin_adds_ip_port_entries_with_a_timeout(self):
         pinner = proxy.IpSetPinner("squadx_allow4", "squadx_allow6", 3600)
         with patch.object(proxy.subprocess, "run") as run:
             run.return_value = MagicMock(returncode=0, stderr="")
-            assert pinner.pin("8.8.8.8") is True
+            assert pinner.pin("8.8.8.8", [443]) is True
         argv = run.call_args.args[0]
-        assert argv[:4] == ["ipset", "add", "squadx_allow4", "8.8.8.8"]
+        # hash:ip,port entry, not a bare ip — this is what restores per-port enforcement.
+        assert argv[:4] == ["ipset", "add", "squadx_allow4", "8.8.8.8,tcp:443"]
         assert "timeout" in argv and "3600" in argv
+
+    def test_pin_adds_one_entry_per_port(self):
+        pinner = proxy.IpSetPinner("squadx_allow4", "squadx_allow6", 60)
+        with patch.object(proxy.subprocess, "run") as run:
+            run.return_value = MagicMock(returncode=0, stderr="")
+            pinner.pin("1.2.3.4", [80, 443, 22])
+        entries = [call.args[0][3] for call in run.call_args_list]
+        assert entries == ["1.2.3.4,tcp:80", "1.2.3.4,tcp:443", "1.2.3.4,tcp:22"]
 
     def test_v6_addresses_go_to_the_v6_set(self):
         pinner = proxy.IpSetPinner("squadx_allow4", "squadx_allow6", 60)
         with patch.object(proxy.subprocess, "run") as run:
             run.return_value = MagicMock(returncode=0, stderr="")
-            pinner.pin("2606:4700::1111")
+            pinner.pin("2606:4700::1111", [443])
         assert run.call_args.args[0][2] == "squadx_allow6"
+        assert run.call_args.args[0][3] == "2606:4700::1111,tcp:443"
 
     def test_ipset_failure_is_reported_not_swallowed(self):
         pinner = proxy.IpSetPinner("squadx_allow4", "squadx_allow6", 60)
         with patch.object(proxy.subprocess, "run") as run:
             run.return_value = MagicMock(returncode=1, stderr="set not found")
-            assert pinner.pin("8.8.8.8") is False
+            assert pinner.pin("8.8.8.8", [443]) is False
+
+
+class TestPolicyPorts:
+    def test_ports_come_from_the_matching_allow_entry(self):
+        policy = proxy.Policy(
+            {"defaultAction": "deny",
+             "allowDomains": [{"pattern": "github.com", "ports": [80, 443, 22]}],
+             "denyDomains": []}
+        )
+        assert policy.ports_for("github.com") == {80, 443, 22}
+        assert policy.ports_for("codeload.github.com") == {80, 443, 22}
+
+    def test_bare_string_entry_takes_default_ports(self):
+        policy = proxy.Policy(
+            {"defaultAction": "deny", "allowDomains": ["api.anthropic.com"], "denyDomains": []}
+        )
+        assert policy.ports_for("api.anthropic.com") == {80, 443}
+
+    def test_denied_name_has_no_ports(self):
+        policy = proxy.Policy(
+            {"defaultAction": "deny", "allowDomains": [], "denyDomains": ["x.example"]}
+        )
+        assert policy.ports_for("x.example") == set()
 
 
 def test_policy_config_from_sidecar_config_is_consumable_by_the_proxy():

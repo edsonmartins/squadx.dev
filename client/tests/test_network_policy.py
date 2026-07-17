@@ -132,19 +132,27 @@ class TestIsIpOrCidr:
 class TestEgressSidecarConfig:
     """Test EgressSidecarConfig iptables rules and DNS config generation."""
 
-    def test_ip_rules_block_deny_ips(self):
+    def test_ip_deny_rules_block_deny_ips(self):
         policy = NetworkPolicy(
             default_action=EgressAction.ALLOW,
             rules=[EgressRule(EgressAction.DENY, "169.254.169.254")],
         )
-        rules = EgressSidecarConfig(policy=policy).ip_rules()
+        rules = EgressSidecarConfig(policy=policy).ip_deny_rules()
         assert any("169.254.169.254" in r and "DROP" in r for r in rules)
 
-    def test_to_dns_config_separates_allow_deny_domains(self):
+    def test_ip_allow_rules_are_per_port(self):
+        policy = NetworkPolicy(
+            default_action=EgressAction.DENY,
+            rules=[EgressRule(EgressAction.ALLOW, "10.0.0.5", [443])],
+        )
+        rules = EgressSidecarConfig(policy=policy).ip_allow_rules()
+        assert rules == ["iptables -A OUTPUT -d 10.0.0.5 -p tcp --dport 443 -j ACCEPT"]
+
+    def test_to_dns_config_carries_allow_ports_and_separates_deny(self):
         policy = NetworkPolicy(
             default_action=EgressAction.DENY,
             rules=[
-                EgressRule(EgressAction.ALLOW, "pypi.org"),
+                EgressRule(EgressAction.ALLOW, "pypi.org", [443]),
                 EgressRule(EgressAction.DENY, "evil.com"),
                 EgressRule(EgressAction.DENY, "10.0.0.1"),  # IP, not domain
             ],
@@ -152,10 +160,11 @@ class TestEgressSidecarConfig:
         config = EgressSidecarConfig(policy=policy)
         dns = config.to_dns_config()
         assert dns["defaultAction"] == "deny"
-        assert "pypi.org" in dns["allowDomains"]
+        # Allow entries carry their ports so the proxy can pin (ip, port), not bare ip.
+        assert {"pattern": "pypi.org", "ports": [443]} in dns["allowDomains"]
         assert "evil.com" in dns["denyDomains"]
         # IPs are enforced by iptables directly; they are not names to resolve.
-        assert "10.0.0.1" not in dns["allowDomains"]
+        assert all(e["pattern"] != "10.0.0.1" for e in dns["allowDomains"])
         assert "10.0.0.1" not in dns["denyDomains"]
         assert dns["listenPort"] == 15353
 
@@ -180,21 +189,51 @@ class TestGenerateSidecarSetupScript:
         assert "-m owner --uid-owner 0 -p udp --dport 53 -j ACCEPT" in script
         assert "-m owner ! --uid-owner 0" in script
 
-    def test_udp_53_is_not_simply_open(self):
+    def test_no_dns_accept_is_unscoped_by_uid(self):
         """The regression this whole layer exists for: a blanket DNS ACCEPT made the
-        allowlist decorative, since queries themselves carry data out."""
-        assert "-p udp --dport 53 -j ACCEPT" not in self._script().replace(
-            "-m owner --uid-owner 0 -p udp --dport 53 -j ACCEPT", ""
-        )
+        allowlist decorative, since queries themselves carry data out. Every :53 ACCEPT
+        must be uid-scoped to the proxy, on both families."""
+        for line in self._script().splitlines():
+            if "--dport 53 -j ACCEPT" in line:
+                assert "--uid-owner 0" in line, line
 
-    def test_encrypted_dns_is_dropped(self):
+    def test_encrypted_dns_is_dropped_on_both_families(self):
         script = self._script()
-        assert "--dport 853 -j DROP" in script
+        assert "iptables -A OUTPUT -p tcp --dport 853 -j DROP" in script
+        assert "ip6tables -A OUTPUT -p tcp --dport 853 -j DROP" in script
 
-    def test_allowlist_is_the_ipset_the_proxy_pins_into(self):
+    def test_allowlist_is_the_ip_port_set_on_both_families(self):
         script = self._script()
-        assert "-m set --match-set squadx_allow4 dst -j ACCEPT" in script
-        assert "-m set --match-set squadx_allow6 dst -j ACCEPT" in script
+        # dst,dst matches (dest ip, dest port): the per-port restriction is preserved.
+        assert "iptables -A OUTPUT -m set --match-set squadx_allow4 dst,dst -j ACCEPT" in script
+        # v6 set must be referenced from ip6tables, not iptables (family mismatch aborts).
+        assert "ip6tables -A OUTPUT -m set --match-set squadx_allow6 dst,dst -j ACCEPT" in script
+        assert "iptables -A OUTPUT -m set --match-set squadx_allow6" not in script
+
+    def test_ipv6_is_default_denied(self):
+        """Without an ip6tables default-deny the whole allowlist is bypassable over v6."""
+        script = self._script()
+        assert "ip6tables -P OUTPUT DROP" in script
+        assert "ip6tables -F OUTPUT" in script
+
+    def test_loopback_is_allowed_before_the_readiness_probe(self):
+        """The probe reaches the proxy over loopback; if lo ACCEPT came after it, the
+        probe could never succeed and every start would stall ~50s."""
+        script = self._script()
+        assert script.index("-o lo -j ACCEPT") < script.index("nc -z")
+
+    def test_readiness_probe_uses_tcp_not_udp(self):
+        # A UDP probe cannot distinguish a listening proxy from a silently dropped packet.
+        script = self._script()
+        assert "nc -z -w1 127.0.0.1 15353" in script
+        assert "nc -z -u" not in script
+
+    def test_route_localnet_is_enabled_for_the_redirect(self):
+        assert "route_localnet" in self._script()
+
+    def test_metadata_deny_precedes_the_allowlist(self):
+        script = self._script()
+        assert script.index("-d 169.254.169.254 -j DROP") < script.index("--match-set squadx_allow4")
 
     def test_no_dig_resolution_remains(self):
         """One-shot resolution went stale the moment a CDN rotated addresses."""
@@ -202,7 +241,7 @@ class TestGenerateSidecarSetupScript:
 
     def test_proxy_starts_before_dns_is_redirected_at_it(self):
         script = self._script()
-        assert script.index("egress-dns-proxy.py --config") < script.index("REDIRECT")
+        assert script.index("egress-dns-proxy.py --config") < script.index("-j REDIRECT")
 
     def test_default_drop_precedes_the_flush(self):
         script = self._script()

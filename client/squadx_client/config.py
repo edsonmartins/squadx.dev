@@ -1,5 +1,7 @@
 """Configuration management for SquadX Client."""
 
+from typing import Any
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -184,7 +186,7 @@ class Settings(BaseSettings):
         Returns list of ICE server configs including STUN and TURN servers.
         TURN is essential for NAT traversal in production environments.
         """
-        servers = [
+        servers: list[dict[str, Any]] = [
             # Google's free STUN servers
             {"urls": ["stun:stun.l.google.com:19302"]},
             {"urls": ["stun:stun1.l.google.com:19302"]},

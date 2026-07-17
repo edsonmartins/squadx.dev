@@ -75,9 +75,9 @@ class TaskWaiter:
             check_agent_health: callable() -> list of dead agent IDs
         """
         start_time = time.time()
-        completed = set()
-        failed = set()
-        dead_agents = set()
+        completed: set[str] = set()
+        failed: set[str] = set()
+        dead_agents: set[str] = set()
         pending = set(task_ids)
 
         while not self._interrupted:

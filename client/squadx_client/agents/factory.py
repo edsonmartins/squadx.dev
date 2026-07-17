@@ -1,5 +1,6 @@
 """Agent factory for creating specialist agents."""
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
 from squadx_client.agents.base import BaseAgent
@@ -286,7 +287,7 @@ def create_agent(
             brainsentry_session_id=brainsentry_session_id,
         )
 
-    agents = {
+    agents: dict[str, Callable[..., BaseAgent]] = {
         "frontend": FrontendAgent,
         "backend": BackendAgent,
         "fullstack": FullstackAgent,

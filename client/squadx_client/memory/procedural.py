@@ -25,7 +25,7 @@ class ProceduralMemoryManager:
         query = self._build_query(prompt, scope)
         results = await self.client.search_memories(
             query,
-            limit=limit or getattr(settings, "brainsentry_procedural_limit", 5),
+            limit=int(limit or getattr(settings, "brainsentry_procedural_limit", 5) or 5),
         )
         procedures = [item for item in results if self._is_procedural(item) and self._matches_scope(item, scope)]
         if not procedures:

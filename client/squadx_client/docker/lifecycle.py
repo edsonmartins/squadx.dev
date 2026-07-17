@@ -108,7 +108,7 @@ class SandboxLifecycleManager:
         """Register callback for state changes. callback(sandbox_id, old_state, new_state)"""
         self._on_state_change_callback = callback
 
-    def register(self, sandbox_id: str, image: str = "", ttl_seconds: int | None = None, metadata: dict = None) -> SandboxInfo:
+    def register(self, sandbox_id: str, image: str = "", ttl_seconds: int | None = None, metadata: dict | None = None) -> SandboxInfo:
         """Register a new sandbox with optional TTL."""
         ttl = min(ttl_seconds or self._default_ttl, self._max_ttl)
         now = datetime.now(UTC)
@@ -244,7 +244,7 @@ class SandboxLifecycleManager:
 
     def get_stats(self) -> dict:
         """Get summary statistics."""
-        states = {}
+        states: dict[str, int] = {}
         for info in self._sandboxes.values():
             states[info.state.value] = states.get(info.state.value, 0) + 1
 

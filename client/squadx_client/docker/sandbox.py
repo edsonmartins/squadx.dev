@@ -113,7 +113,7 @@ class AgentSandbox:
         secure default. Never returns None and never raises: an unknown name degrades
         to the standing default rather than to no enforcement at all.
         """
-        configured = name or getattr(settings, "network_policy", "agent-default")
+        configured: str = name or getattr(settings, "network_policy", None) or "agent-default"
         try:
             return get_predefined_policy(configured)
         except ValueError:
@@ -291,16 +291,21 @@ class AgentSandbox:
                     f"them). Set SQUADX_EGRESS_SIDECAR=true. See RFC-0006 / ADR-0008."
                 )
 
+            # Both the warm-pool and cold-start paths above set container_id (and
+            # return early on failure), so it is guaranteed non-None here.
+            assert self.container_id is not None
+            container_id = self.container_id
+
             # Initialize enhanced file operations and metrics collector
             if self.manager.client:
-                self.file_ops = SandboxFileOps(self.manager.client, self.container_id)
+                self.file_ops = SandboxFileOps(self.manager.client, container_id)
                 self.metrics_collector = ContainerMetricsCollector(self.manager.client)
 
             # Get VNC port if enabled. With the sidecar the port is published on the
             # sidecar (the agent has no own network stack), so query it there.
             if enable_vnc:
                 await asyncio.sleep(2)  # Wait for VNC to be ready
-                vnc_host_container = self.sidecar_id or self.container_id
+                vnc_host_container = self.sidecar_id or container_id
                 self.vnc_port = await self.manager.get_vnc_port(vnc_host_container)
                 logger.info(f"VNC available on port: {self.vnc_port}")
 
@@ -312,7 +317,7 @@ class AgentSandbox:
                 # published ports under RFC-0006 and would silently yield None.
                 if self.enable_live_streaming and self.vnc_port:
                     self.live_join_code = await self.manager.start_live_stream(
-                        container_id=self.container_id,
+                        container_id=container_id,
                         task_id=self.task_id,
                         vnc_port=self.vnc_port,
                     )
@@ -355,6 +360,8 @@ class AgentSandbox:
             policy=self._network_policy,
         )
         script = generate_sidecar_setup_script(config)
+        # Only called after the caller has verified the sidecar exists.
+        assert self.sidecar_id is not None
         ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
         if ok:
             return True
@@ -543,11 +550,12 @@ class AgentSandbox:
         chunks: list[str] = []
         exit_code = 0
         error: str | None = None
+        container_id = self.container_id  # narrowed non-None by the guard above
 
         async def _run() -> None:
             nonlocal exit_code, error
             async for kind, payload in self.manager.exec_command_stream(
-                self.container_id,
+                container_id,
                 command,
                 workdir=workdir,
                 environment=self._exec_env or None,

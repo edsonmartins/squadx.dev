@@ -295,7 +295,7 @@ class VNCStreamer:
             if self.config.resize_width and self.config.resize_height:
                 target = (self.config.resize_width, self.config.resize_height)
                 if (img.width, img.height) != target:
-                    img = img.resize(target, Image.LANCZOS)
+                    img = img.resize(target, Image.Resampling.LANCZOS)
 
             # Encode as JPEG
             buf = io.BytesIO()
@@ -315,6 +315,8 @@ class VNCStreamer:
             A VNCFrame if a framebuffer update was received, else None.
         """
         client = self._vnc_client
+        if client is None:
+            return None
         reader = client._reader
 
         if reader is None:

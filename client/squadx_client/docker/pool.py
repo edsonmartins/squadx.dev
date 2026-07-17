@@ -261,10 +261,12 @@ class WarmContainerPool:
         Order is the RFC-0006 invariant: the agent must never be runnable before its
         egress policy is in place.
         """
+        client = self._manager.client
+        assert client is not None, "Docker manager must be connected before starting agents"
         if pooled.sidecar_id:
             # A recycled unit's sidecar was left running, but a restart (or a daemon
             # crash) can leave it stopped — the agent cannot join a dead netns.
-            sidecar = self._manager.client.containers.get(pooled.sidecar_id)
+            sidecar = client.containers.get(pooled.sidecar_id)
             sidecar.reload()
             if sidecar.status != "running":
                 sidecar.start()
@@ -276,7 +278,7 @@ class WarmContainerPool:
                     f"egress policy rejected for pooled unit {pooled.container_id}"
                 )
 
-        container = self._manager.client.containers.get(pooled.container_id)
+        container = client.containers.get(pooled.container_id)
         container.start()
 
     async def release(self, pooled: PooledContainer) -> None:

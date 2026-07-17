@@ -69,7 +69,8 @@ class LiveSessionManager:
         self._peers: dict[str, dict[str, PeerConnection]] = {}  # session_id -> peer_id -> peer
         self._on_peer_join: Callable[[str, PeerConnection], None] | None = None
         self._on_peer_leave: Callable[[str, str], None] | None = None
-        self._on_signal: Callable[[str, str, dict], None] | None = None
+        # Handlers may be sync or async (coroutine-returning); return value is ignored.
+        self._on_signal: Callable[[str, str, dict], Any] | None = None
 
     def on_peer_join(self, callback: Callable[[str, PeerConnection], None]):
         """Register callback for when a peer joins."""
@@ -79,7 +80,7 @@ class LiveSessionManager:
         """Register callback for when a peer leaves."""
         self._on_peer_leave = callback
 
-    def on_signal(self, callback: Callable[[str, str, dict], None]):
+    def on_signal(self, callback: Callable[[str, str, dict], Any]):
         """Register callback for WebRTC signals (offer, answer, ice-candidate)."""
         self._on_signal = callback
 
@@ -321,8 +322,8 @@ class LiveSessionManager:
             signal_type = payload.get("type")
             sender_id = payload.get("sender_id")
 
-            # Ignore our own messages
-            if sender_id == "host":
+            # Ignore our own messages / malformed payloads without a sender
+            if not sender_id or sender_id == "host":
                 return
 
             # Check if message is targeted to us (or broadcast)

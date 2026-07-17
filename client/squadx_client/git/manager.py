@@ -219,10 +219,10 @@ class GitManager:
             return {"modified": [], "added": [], "deleted": [], "untracked": []}
 
         try:
-            status = {
-                "modified": [item.a_path for item in self.repo.index.diff(None)],
-                "added": [item.a_path for item in self.repo.index.diff("HEAD") if item.change_type == "A"],
-                "deleted": [item.a_path for item in self.repo.index.diff("HEAD") if item.change_type == "D"],
+            status: dict[str, list[str]] = {
+                "modified": [item.a_path for item in self.repo.index.diff(None) if item.a_path],
+                "added": [item.a_path for item in self.repo.index.diff("HEAD") if item.change_type == "A" and item.a_path],
+                "deleted": [item.a_path for item in self.repo.index.diff("HEAD") if item.change_type == "D" and item.a_path],
                 "untracked": list(self.repo.untracked_files),
             }
             return status

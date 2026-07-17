@@ -3,7 +3,9 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
+
+from realtime.types import RealtimeChannelOptions
 
 from squadx_client.config import settings
 from supabase import AsyncClient, AsyncClientOptions, create_async_client
@@ -28,8 +30,8 @@ class SupabaseClient:
         url: str | None = None,
         anon_key: str | None = None,
     ):
-        self.url = url or getattr(settings, "supabase_url", None)
-        self.anon_key = anon_key or getattr(settings, "supabase_anon_key", None)
+        self.url: str = url or getattr(settings, "supabase_url", None) or ""
+        self.anon_key: str = anon_key or getattr(settings, "supabase_anon_key", None) or ""
 
         if not self.url or not self.anon_key:
             raise ValueError(
@@ -85,7 +87,7 @@ class SupabaseClient:
 
         if result.data:
             logger.info(f"Created live session for task {task_id}: {result.data}")
-            return result.data
+            return cast(dict[str, Any], result.data)
         raise Exception(f"Failed to create session: {result}")
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
@@ -98,7 +100,7 @@ class SupabaseClient:
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        return cast("dict[str, Any] | None", result.data) if result else None
 
     async def get_session_by_code(self, join_code: str) -> dict[str, Any] | None:
         """Get session by join code."""
@@ -110,7 +112,7 @@ class SupabaseClient:
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        return cast("dict[str, Any] | None", result.data) if result else None
 
     async def get_session_by_task(self, task_id: int) -> dict[str, Any] | None:
         """Get active session for a task."""
@@ -123,7 +125,7 @@ class SupabaseClient:
             .maybe_single()
             .execute()
         )
-        return result.data if result else None
+        return cast("dict[str, Any] | None", result.data) if result else None
 
     async def update_session_status(
         self,
@@ -138,7 +140,7 @@ class SupabaseClient:
             .eq("id", session_id)
             .execute()
         )
-        return result.data[0] if result.data else {}
+        return cast(dict[str, Any], result.data[0]) if result.data else {}
 
     async def end_session(self, session_id: str) -> bool:
         """End a live session."""
@@ -170,7 +172,7 @@ class SupabaseClient:
             })
             .execute()
         )
-        return result.data[0] if result.data else {}
+        return cast(dict[str, Any], result.data[0]) if result.data else {}
 
     async def remove_participant(self, participant_id: str) -> bool:
         """Remove a participant from the session."""
@@ -194,7 +196,7 @@ class SupabaseClient:
             .is_("left_at", "null")
             .execute()
         )
-        return result.data or []
+        return cast("list[dict[str, Any]]", result.data or [])
 
     # Realtime signaling methods
 
@@ -223,15 +225,18 @@ class SupabaseClient:
 
         # Create channel with broadcast config matching frontend
         client = await self.get_client()
-        channel = client.channel(
-            channel_name,
+        # Partial config accepted at runtime; the stub's TypedDict marks some keys
+        # required, so cast rather than fill unused fields.
+        channel_opts = cast(
+            RealtimeChannelOptions,
             {
                 "config": {
                     "broadcast": {"self": False},
                     "presence": {"key": "host"},
                 }
-            }
+            },
         )
+        channel = client.channel(channel_name, channel_opts)
 
         def handle_broadcast(broadcast):
             """Handle webrtc-signal broadcast from frontend viewers.

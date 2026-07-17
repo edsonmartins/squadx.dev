@@ -12,9 +12,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from aiortc import RTCIceCandidate, RTCPeerConnection, RTCSessionDescription
+from aiortc import (
+    RTCConfiguration,
+    RTCIceServer,
+    RTCPeerConnection,
+    RTCSessionDescription,
+)
 from aiortc.contrib.media import MediaRelay
 from aiortc.mediastreams import VideoStreamTrack
+from aiortc.sdp import candidate_from_sdp
 from av import VideoFrame
 
 from squadx_client.config import settings
@@ -135,6 +141,8 @@ class PeerConnectionInfo:
     data_channel: Any | None = None
     state: str = "new"
     created_at: float = field(default_factory=time.time)
+    # Whether this peer currently holds interactive control of the session.
+    has_control: bool = False
 
 
 class WebRTCBridge:
@@ -195,6 +203,16 @@ class WebRTCBridge:
 
         logger.info(f"WebRTC bridge stopped for session {self.session_id}")
 
+    def _rtc_configuration(self) -> RTCConfiguration:
+        """Build an aiortc RTCConfiguration from the ICE server dicts.
+
+        aiortc requires RTCConfiguration/RTCIceServer objects; passing a raw
+        dict raises AttributeError inside createOffer/createAnswer.
+        """
+        return RTCConfiguration(
+            iceServers=[RTCIceServer(**server) for server in self.ice_servers]
+        )
+
     async def create_offer(self, peer_id: str) -> str:
         """Create an SDP offer for a new peer.
 
@@ -204,9 +222,7 @@ class WebRTCBridge:
         Returns:
             SDP offer string
         """
-        pc = RTCPeerConnection(
-            configuration={"iceServers": self.ice_servers}
-        )
+        pc = RTCPeerConnection(configuration=self._rtc_configuration())
 
         # Add video track
         if self._video_track:
@@ -268,9 +284,7 @@ class WebRTCBridge:
         Returns:
             SDP answer string
         """
-        pc = RTCPeerConnection(
-            configuration={"iceServers": self.ice_servers}
-        )
+        pc = RTCPeerConnection(configuration=self._rtc_configuration())
 
         # Add video track
         if self._video_track:
@@ -321,11 +335,15 @@ class WebRTCBridge:
             return
 
         try:
-            ice_candidate = RTCIceCandidate(
-                sdpMid=candidate.get("sdpMid"),
-                sdpMLineIndex=candidate.get("sdpMLineIndex"),
-                candidate=candidate.get("candidate"),
-            )
+            # aiortc's RTCIceCandidate does not accept a raw SDP "candidate"
+            # string; parse it with candidate_from_sdp (strip the "candidate:"
+            # prefix) and attach the SDP m-line identifiers.
+            sdp = str(candidate.get("candidate", ""))
+            if sdp.startswith("candidate:"):
+                sdp = sdp[len("candidate:"):]
+            ice_candidate = candidate_from_sdp(sdp)
+            ice_candidate.sdpMid = candidate.get("sdpMid")
+            ice_candidate.sdpMLineIndex = candidate.get("sdpMLineIndex")
             await peer_info.pc.addIceCandidate(ice_candidate)
         except Exception as e:
             logger.error(f"Error adding ICE candidate: {e}")
@@ -511,12 +529,12 @@ class WebRTCBridge:
                         pass
 
         # Grant control to the requesting peer
-        peer_info = self._peers.get(peer_id)
-        if peer_info:
-            peer_info.has_control = True
-            if peer_info.data_channel:
+        target = self._peers.get(peer_id)
+        if target:
+            target.has_control = True
+            if target.data_channel:
                 try:
-                    peer_info.data_channel.send(json.dumps({
+                    target.data_channel.send(json.dumps({
                         "type": "control-granted",
                         "timestamp": time.time(),
                     }))

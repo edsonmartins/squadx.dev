@@ -12,6 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class CheckpointManager:
         # same second for the same execution don't collide (and overwrite).
         checkpoint_id = f"ckpt-{int(time.time())}-{execution_id[:8]}-{uuid.uuid4().hex[:6]}"
 
-        snapshot = {
+        snapshot: dict[str, Any] = {
             "metadata": {
                 "checkpointId": checkpoint_id,
                 "executionId": execution_id,

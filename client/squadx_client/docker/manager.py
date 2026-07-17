@@ -14,6 +14,7 @@ import docker
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
+    from squadx_client.docker.pool import WarmContainerPool
     from squadx_client.streaming.webrtc_bridge import WebRTCBridge
 
 logger = logging.getLogger(__name__)
@@ -62,11 +63,16 @@ class DockerManager:
         # Live streaming tracking
         self._live_streams: dict[str, LiveStreamInfo] = {}  # container_id -> LiveStreamInfo
         self._live_enabled = bool(settings.supabase_url and settings.supabase_anon_key)
+        # Optionally attached warm container pool (set by the daemon at startup).
+        self.warm_pool: WarmContainerPool | None = None
 
     async def connect(self) -> bool:
         """Connect to Docker daemon."""
         try:
-            self.client = docker.from_env()
+            # docker-py ships no stubs and the local squadx_client.docker package
+            # confuses mypy's resolution of the top-level `docker` module here;
+            # `docker.from_env` is valid at runtime.
+            self.client = docker.from_env()  # type: ignore[attr-defined]
             # Test connection
             self.client.ping()
             logger.info("Connected to Docker daemon")

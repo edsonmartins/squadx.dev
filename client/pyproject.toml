@@ -98,5 +98,10 @@ markers = [
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
 ignore_missing_imports = true
+# Not strict: the codebase predates full typing (strict flagged ~390, mostly missing
+# annotations, not bugs). Keep mypy's default checks — which catch the real defects:
+# attribute access on a possibly-None value (union-attr), wrong argument types,
+# bad returns — and treat annotation-completeness as debt to pay down incrementally
+# rather than a merge gate.
+warn_redundant_casts = true

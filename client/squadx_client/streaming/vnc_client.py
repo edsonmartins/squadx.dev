@@ -265,10 +265,11 @@ class VNCClient:
                 asyncio.open_connection(self.host, self.port),
                 timeout=10.0,
             )
+            assert self._reader is not None and self._writer is not None
 
             # Protocol version exchange
             server_version = await self._reader.readline()
-            logger.debug(f"Server version: {server_version}")
+            logger.debug(f"Server version: {server_version!r}")
 
             self._writer.write(self.RFB_VERSION)
             await self._writer.drain()
@@ -310,6 +311,7 @@ class VNCClient:
 
     async def _security_handshake(self) -> bool:
         """Perform security handshake."""
+        assert self._reader is not None and self._writer is not None
         # Read security types
         num_types = struct.unpack("!B", await self._reader.readexactly(1))[0]
 
@@ -457,6 +459,7 @@ class VNCClient:
             0, 0,  # x, y
             self.width, self.height,
         )
+        assert self._writer is not None
         self._writer.write(msg)
         await self._writer.drain()
 
@@ -464,6 +467,7 @@ class VNCClient:
         """Handle framebuffer update message."""
         import time
 
+        assert self._reader is not None and self._framebuffer is not None
         # Read number of rectangles
         _ = await self._reader.readexactly(1)  # padding
         num_rects = struct.unpack("!H", await self._reader.readexactly(2))[0]
@@ -513,6 +517,7 @@ class VNCClient:
         data: bytes,
     ):
         """Update region of framebuffer with new pixel data."""
+        assert self._framebuffer is not None
         bytes_per_pixel = self.pixel_format.bits_per_pixel // 8
 
         for row in range(h):
@@ -529,6 +534,7 @@ class VNCClient:
         w: int, h: int,
     ):
         """Copy rectangle from one region to another."""
+        assert self._framebuffer is not None
         bytes_per_pixel = self.pixel_format.bits_per_pixel // 8
 
         # Copy row by row (handle overlapping regions)
@@ -560,6 +566,7 @@ class VNCClient:
         """
         if not self._connected:
             raise RuntimeError("Not connected to VNC server")
+        assert self._reader is not None
 
         interval = 1.0 / fps
 

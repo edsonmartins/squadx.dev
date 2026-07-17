@@ -146,6 +146,7 @@ class ExternalCliAgent(BaseAgent):
         timeout = float(
             context.get("cli_timeout")
             or getattr(settings, "external_cli_timeout_seconds", 1800)
+            or 1800
         )
 
         self.logger.info("external_cli_start", title=task_title, timeout=timeout)
@@ -198,6 +199,8 @@ class ExternalCliAgent(BaseAgent):
 
     async def _collect_changed_files(self) -> list[str]:
         """Derive the list of changed files from git working-tree status."""
+        if self.sandbox is None:
+            return []
         try:
             # core.quotepath=false keeps non-ASCII paths unquoted; we still strip
             # the quotes git adds for paths containing spaces/special chars.

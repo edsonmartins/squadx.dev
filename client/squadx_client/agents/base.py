@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from squadx_client.llm.router import get_coding_llm
 from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
@@ -134,14 +134,18 @@ Complete this task by using the available tools. After completing the task, prov
             total_input_tokens += input_tok
             total_output_tokens += output_tok
 
+            # tool_calls only exists on AIMessage; read defensively so mocks and
+            # non-AI messages don't blow up.
+            tool_calls = getattr(response, "tool_calls", None) or []
+
             # Check if there are tool calls
-            if not response.tool_calls:
+            if not tool_calls:
                 # No more tool calls, agent is done
                 self.logger.info("tool_loop_complete", iterations=iteration + 1, tool_calls=total_tool_calls)
                 break
 
             # Execute each tool call
-            for tool_call in response.tool_calls:
+            for tool_call in tool_calls:
                 tool_name = tool_call["name"]
                 tool_args = tool_call["args"]
                 total_tool_calls += 1
@@ -170,7 +174,7 @@ Complete this task by using the available tools. After completing the task, prov
         final_output = ""
         for msg in reversed(messages):
             if isinstance(msg, AIMessage) and msg.content:
-                final_output = msg.content
+                final_output = self._as_text(msg.content)
                 break
 
         self.logger.info(
@@ -270,7 +274,7 @@ Format your response as:
             ]
         )
 
-        output = response.content
+        output = self._as_text(response.content)
         files_modified = self._extract_files(output)
 
         input_tokens, output_tokens = self._extract_token_usage(response)
@@ -323,6 +327,19 @@ Format your response as:
                     context_str += f"\n- {st.title}: {st.result}"
         return context_str
 
+    @staticmethod
+    def _as_text(content: str | list[str | dict[Any, Any]]) -> str:
+        """Coerce LangChain message content (str or content-block list) to text."""
+        if isinstance(content, str):
+            return content
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+        return "".join(parts)
+
     def _extract_files(self, output: str) -> list[str]:
         """Extract file paths from the output."""
         files = []
@@ -343,7 +360,7 @@ Format your response as:
         return files
 
     @staticmethod
-    def _extract_token_usage(response: AIMessage) -> tuple[int, int]:
+    def _extract_token_usage(response: BaseMessage) -> tuple[int, int]:
         """Extract token usage from an LLM response.
 
         Checks multiple metadata locations used by different LangChain providers:

@@ -137,6 +137,8 @@ class StompClient:
 
     async def _stomp_connect(self) -> None:
         """Send STOMP CONNECT frame and wait for CONNECTED response."""
+        # _stomp_connect is only called from connect() right after ws_connect().
+        assert self._ws is not None
         headers = {
             "accept-version": self.STOMP_VERSION,
             "heart-beat": f"{self.HEARTBEAT_SEND},{self.HEARTBEAT_RECEIVE}",

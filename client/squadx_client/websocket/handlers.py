@@ -40,6 +40,9 @@ class WebSocketHandler:
             data: Message payload from STOMP message body
         """
         message_type = data.get("type")
+        if not message_type:
+            logger.warning("message_missing_type", data_keys=list(data.keys()))
+            return
 
         handler = self.handlers.get(message_type)
         if handler:

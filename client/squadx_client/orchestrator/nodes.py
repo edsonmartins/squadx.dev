@@ -5,7 +5,7 @@ import os
 import tempfile
 import time
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -28,6 +28,19 @@ from squadx_client.orchestrator.state import (
 )
 
 logger = structlog.get_logger()
+
+
+def _content_str(content: str | list[str | dict[Any, Any]]) -> str:
+    """Coerce a LangChain message content (str or content-block list) to text."""
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            parts.append(str(block.get("text", "")))
+    return "".join(parts)
 
 
 async def _intercept_prompt(prompt: str, state: OrchestratorState) -> str:
@@ -191,13 +204,14 @@ Respond in JSON format:
         ]
     )
 
-    await _record_prompt_interaction(state, task_prompt, response.content, "analyze_task")
+    response_text = _content_str(response.content)
+    await _record_prompt_interaction(state, task_prompt, response_text, "analyze_task")
 
     # Parse the analysis
     try:
-        analysis = json.loads(response.content)
+        analysis = json.loads(response_text)
     except json.JSONDecodeError:
-        analysis = {"analysis": response.content, "approach": "General approach", "complexity": "medium"}
+        analysis = {"analysis": response_text, "approach": "General approach", "complexity": "medium"}
 
     complexity = _map_complexity(analysis.get("complexity"))
 
@@ -269,11 +283,12 @@ Create an execution plan."""
         ]
     )
 
-    await _record_prompt_interaction(state, plan_prompt, response.content, "create_plan")
+    response_text = _content_str(response.content)
+    await _record_prompt_interaction(state, plan_prompt, response_text, "create_plan")
 
     plan_complexity: str | None = None
     try:
-        plan_data = json.loads(response.content)
+        plan_data = json.loads(response_text)
         if plan_data.get("complexity"):
             plan_complexity = _map_complexity(plan_data.get("complexity"))
         subtasks = [
@@ -289,7 +304,7 @@ Create an execution plan."""
         ]
 
         plan = TaskPlan(
-            analysis=state.messages[-1].content if state.messages else "",
+            analysis=_content_str(state.messages[-1].content) if state.messages else "",
             approach="Multi-agent execution",
             subtasks=subtasks,
             execution_order=plan_data.get("execution_order", [st.id for st in subtasks]),
@@ -354,7 +369,7 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
 
     try:
         # Get workspace path from settings or use temp directory
-        workspace_path = getattr(settings, "workspace_path", None)
+        workspace_path: str = getattr(settings, "workspace_path", None) or ""
         if not workspace_path:
             workspace_path = os.path.join(tempfile.gettempdir(), f"squadx-task-{state.task_id}")
             os.makedirs(workspace_path, exist_ok=True)
@@ -597,14 +612,15 @@ so re-derive findings from scratch rather than just confirming old ones are gone
         ]
     )
 
-    await _record_prompt_interaction(state, summary_content, response.content, "review_results")
+    response_text = _content_str(response.content)
+    await _record_prompt_interaction(state, summary_content, response_text, "review_results")
 
     findings: list[dict[str, Any]] = []
-    summary_text = response.content
+    summary_text = response_text
     try:
-        parsed = json.loads(response.content)
+        parsed = json.loads(response_text)
         findings = [f for f in parsed.get("findings", []) if isinstance(f, dict)]
-        summary_text = parsed.get("summary", response.content)
+        summary_text = parsed.get("summary", response_text)
     except (json.JSONDecodeError, AttributeError):
         # Couldn't parse a structured verdict — treat any failed subtask as a blocker so the
         # arbiter still gates, but don't fabricate findings for completed work.
@@ -633,7 +649,9 @@ def _blockers(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [f for f in findings if str(f.get("severity", "")).lower() in ("blocker", "major")]
 
 
-def _pick_fix_agent(state: OrchestratorState, blockers: list[dict[str, Any]]) -> str:
+def _pick_fix_agent(
+    state: OrchestratorState, blockers: list[dict[str, Any]]
+) -> Literal["frontend", "backend", "fullstack", "devops", "qa"]:
     """Route a fix subtask to the specialist whose work the blockers touch."""
     valid = {"frontend", "backend", "fullstack", "devops", "qa"}
     if state.plan:
@@ -702,6 +720,8 @@ async def arbiter(state: OrchestratorState) -> dict[str, Any]:
 
     if verdict == "continue":
         # Inject a single fix subtask that owns the open blockers and route back to execute.
+        # arbiter only runs after create_plan, which always sets state.plan (try + except).
+        assert state.plan is not None
         plan = state.plan.model_copy(deep=True)
         fix_id = str(uuid.uuid4())
         blocker_desc = "\n".join(

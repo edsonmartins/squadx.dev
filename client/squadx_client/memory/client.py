@@ -48,7 +48,7 @@ class BrainSentryClient:
     async def _request_with_retry(self, method: str, url: str, **kwargs):
         """Make HTTP request with retry on transient errors."""
         client = await self._get_client()
-        last_error = None
+        last_error: Exception | None = None
         for attempt in range(3):
             try:
                 if method == "post":
@@ -67,7 +67,9 @@ class BrainSentryClient:
                     import asyncio
                     await asyncio.sleep(0.5 * (attempt + 1))
                     logger.debug("retrying_request", url=url, attempt=attempt + 1)
-        raise last_error
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("request failed without capturing an error")
 
     async def intercept_prompt(
         self,

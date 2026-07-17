@@ -183,3 +183,41 @@ class TestSignalHandling:
         session_manager._handle_signal_message(session.id, session.join_code, msg)
 
         callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_signal_callback_actually_runs(self, session_manager):
+        """Regression: an async on_signal handler (WebRTCBridge._handle_signal is
+        async) was called from the sync dispatch without being scheduled, so the
+        coroutine was dropped un-awaited and WebRTC signalling never ran."""
+        import asyncio
+
+        session = await session_manager.create_session(task_id=42)
+        ran = asyncio.Event()
+        received: list = []
+
+        async def async_handler(session_id, signal_type, data):
+            received.append((signal_type, data["sender_id"]))
+            ran.set()
+
+        session_manager.on_signal(async_handler)
+
+        msg = MagicMock(spec=RealtimeMessage)
+        msg.payload = {"type": "offer", "sender_id": "viewer-1", "sdp": "..."}
+        session_manager._handle_signal_message(session.id, session.join_code, msg)
+
+        # The dispatch scheduled the coroutine on the loop; let it run.
+        await asyncio.wait_for(ran.wait(), timeout=1)
+        assert received == [("offer", "viewer-1")]
+
+    @pytest.mark.asyncio
+    async def test_sync_signal_callback_still_called_directly(self, session_manager):
+        """A synchronous handler is unaffected — dispatched and run inline."""
+        session = await session_manager.create_session(task_id=42)
+        callback = MagicMock()
+        session_manager.on_signal(callback)
+
+        msg = MagicMock(spec=RealtimeMessage)
+        msg.payload = {"type": "offer", "sender_id": "viewer-2", "sdp": "..."}
+        session_manager._handle_signal_message(session.id, session.join_code, msg)
+
+        callback.assert_called_once()

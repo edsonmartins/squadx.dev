@@ -1,5 +1,6 @@
 """Live session manager for coordinating VNC→WebRTC streaming."""
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -83,6 +84,32 @@ class LiveSessionManager:
     def on_signal(self, callback: Callable[[str, str, dict], Any]):
         """Register callback for WebRTC signals (offer, answer, ice-candidate)."""
         self._on_signal = callback
+
+    @staticmethod
+    def _dispatch(callback: Callable[..., Any], *args: Any) -> None:
+        """Invoke a session callback, driving it to run if it is a coroutine.
+
+        The signal handlers registered here (e.g. WebRTCBridge._handle_signal) are
+        ``async def``, but this dispatch happens from a synchronous Supabase-realtime
+        callback. Calling the coroutine without scheduling it left it un-awaited and
+        silently dropped, so WebRTC signalling never ran. Schedule it on the running
+        loop; if there is somehow no loop in this thread, run it to completion rather
+        than drop it. Synchronous callbacks (return not awaitable) are unaffected.
+        """
+        result = callback(*args)
+        # `async def` handlers return a coroutine; anything else (a sync callback's
+        # return) needs no scheduling. iscoroutine (not the broader isawaitable) so the
+        # value is a Coroutine, which is what create_task/run require.
+        if not asyncio.iscoroutine(result):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            loop.create_task(result)
+        else:
+            asyncio.run(result)
 
     async def create_session(
         self,
@@ -350,7 +377,7 @@ class LiveSessionManager:
                     session.viewer_count = len(self._peers[session_id])
 
                 if self._on_peer_join:
-                    self._on_peer_join(session_id, peer)
+                    self._dispatch(self._on_peer_join, session_id, peer)
 
             elif signal_type == "leave":
                 # Viewer leaving
@@ -362,7 +389,7 @@ class LiveSessionManager:
                         session.viewer_count = len(self._peers[session_id])
 
                 if self._on_peer_leave:
-                    self._on_peer_leave(session_id, sender_id)
+                    self._dispatch(self._on_peer_leave, session_id, sender_id)
 
             elif signal_type in ("offer", "answer", "ice-candidate"):
                 # WebRTC signaling - pass flat payload to handler
@@ -376,7 +403,7 @@ class LiveSessionManager:
                     if "candidate" in payload:
                         signal_data["candidate"] = payload["candidate"]
 
-                    self._on_signal(session_id, signal_type, signal_data)
+                    self._dispatch(self._on_signal, session_id, signal_type, signal_data)
 
         except Exception as e:
             logger.error(f"Error handling signal message: {e}")

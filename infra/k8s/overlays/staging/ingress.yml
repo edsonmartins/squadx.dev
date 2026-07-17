@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: squadx-ingress
+  labels:
+    app.kubernetes.io/name: squadx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # letsencrypt-staging issues untrusted certs but does not hit the ACME rate
+    # limits — the right issuer for a homologation host. Swap to letsencrypt-prod
+    # only if this host must serve browser-trusted TLS.
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/websocket-services: "squadx-backend"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - staging.squadx.dev
+        - api.staging.squadx.dev
+      secretName: squadx-staging-tls
+  rules:
+    - host: staging.squadx.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: squadx-frontend
+                port:
+                  number: 3000
+    - host: api.staging.squadx.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: squadx-backend
+                port:
+                  number: 8080

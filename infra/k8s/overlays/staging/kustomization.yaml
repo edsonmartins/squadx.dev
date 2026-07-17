@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging overlay — isolated from production: its own namespace (squadx-staging),
+# its own hosts (staging.squadx.dev), and letsencrypt-staging. The app secrets are
+# created in-cluster by the deploy-staging CI job from GitHub Actions secrets, never
+# from a committed file — see .github/workflows/ci.yml and secrets.example.yml.
+namespace: squadx-staging
+
+resources:
+  - namespace.yml
+  - ../../base
+  - ingress.yml
+
+# Override only the host-facing config keys; the rest is inherited from base.
+patches:
+  - path: configmap-staging.yml
+    target:
+      kind: ConfigMap
+      name: squadx-config

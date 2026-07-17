@@ -386,11 +386,20 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
         use_sandbox = getattr(settings, "enable_sandbox", True)
 
         if use_sandbox:
+            # Per-squad egress policy from the backend (RFC-0006). None when absent or
+            # unrecognised — AgentSandbox then uses the daemon default, never no policy.
+            from squadx_client.docker.network_policy import policy_name_from_backend
+
+            network_policy = policy_name_from_backend(
+                (state.task or {}).get("sandbox_egress_policy")
+            )
+
             # Create sandbox for this subtask
             sandbox = AgentSandbox(
                 task_id=state.task_id,
                 agent_type=subtask.agent_type,
                 workspace_path=subtask_work_path,
+                network_policy=network_policy,
             )
 
             # Start the sandbox

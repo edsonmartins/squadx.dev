@@ -78,3 +78,66 @@ describe('SquadModal', () => {
     expect(screen.queryByText('Create Squad')).not.toBeInTheDocument()
   })
 })
+
+describe('SquadModal — sandbox egress policy (RFC-0006)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('defaults a new squad to the deny-by-default policy', async () => {
+    const { squadsApi } = await import('@/lib/api')
+    renderWithProviders(<SquadModal {...defaultProps} />)
+
+    await userEvent.type(screen.getByLabelText('Name *'), 'Backend')
+    await userEvent.click(screen.getByRole('button', { name: 'Create Squad' }))
+
+    await vi.waitFor(() =>
+      expect(squadsApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sandbox_egress_policy: 'AGENT_DEFAULT' })
+      )
+    )
+  })
+
+  it('shows the policy an existing squad is running under', () => {
+    renderWithProviders(
+      <SquadModal
+        {...defaultProps}
+        squad={{
+          id: 1,
+          name: 'Backend',
+          is_active: true,
+          organization_id: 1,
+          organization_name: 'Org',
+          agents_count: 0,
+          active_agents_count: 0,
+          created_at: '',
+          sandbox_egress_policy: 'DENY_ALL',
+        } as never}
+      />
+    )
+
+    expect(screen.getByLabelText('Network access')).toHaveTextContent('No network')
+  })
+
+  it('falls back to the default when the backend predates the field', () => {
+    // An installed client can talk to an older backend; the control must show the
+    // policy actually in force rather than render empty.
+    renderWithProviders(
+      <SquadModal
+        {...defaultProps}
+        squad={{
+          id: 1,
+          name: 'Backend',
+          is_active: true,
+          organization_id: 1,
+          organization_name: 'Org',
+          agents_count: 0,
+          active_agents_count: 0,
+          created_at: '',
+        } as never}
+      />
+    )
+
+    expect(screen.getByLabelText('Network access')).toHaveTextContent('Default (recommended)')
+  })
+})

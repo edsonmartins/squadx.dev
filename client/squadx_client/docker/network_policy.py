@@ -109,6 +109,36 @@ POLICY_AGENT_DEFAULT = NetworkPolicy(
     ],
 )
 
+# Contract with the backend's SandboxEgressPolicy enum (dispatched as
+# `sandbox_egress_policy` on the task payload). Kept as an explicit map rather than a
+# lowercase/underscore transform so that renaming a preset here cannot silently change
+# what an existing backend's value means.
+_BACKEND_POLICY_NAMES = {
+    "AGENT_DEFAULT": "agent-default",
+    "DENY_ALL": "deny-all",
+    "FULL": "full",
+}
+
+
+def policy_name_from_backend(value: Optional[str]) -> Optional[str]:
+    """Map a backend SandboxEgressPolicy enum name to a local preset name.
+
+    Returns None when the value is absent or unrecognised, so the caller falls back to
+    its own default rather than to no policy. Enum drift must downgrade, not crash and
+    not open up: an installed daemon outlives any given backend, so a value this
+    version has never heard of is expected, not exceptional.
+    """
+    if not value:
+        return None
+    name = _BACKEND_POLICY_NAMES.get(str(value).strip().upper())
+    if name is None:
+        logger.warning(
+            "unknown_backend_egress_policy value=%r — falling back to the daemon default",
+            value,
+        )
+    return name
+
+
 def get_predefined_policy(name: str) -> NetworkPolicy:
     """Get a predefined network policy by name.
 

@@ -14,6 +14,7 @@ from squadx_client.docker.network_policy import (
     _is_ip_or_cidr,
     generate_sidecar_setup_script,
     get_predefined_policy,
+    policy_name_from_backend,
 )
 
 
@@ -217,3 +218,32 @@ class TestGenerateSidecarSetupScript:
         assert "/etc/squadx/egress-policy.json" in script
         assert '"api.anthropic.com"' in script
         assert '"defaultAction":"deny"' in script
+
+
+class TestBackendPolicyContract:
+    """The backend dispatches `sandbox_egress_policy`; this maps it onto a preset.
+
+    Installed daemons outlive any given backend, so an unknown or missing value must
+    downgrade to the local default — never crash, and never mean "no policy".
+    """
+
+    def test_known_enum_names_map_to_presets(self):
+        assert policy_name_from_backend("AGENT_DEFAULT") == "agent-default"
+        assert policy_name_from_backend("DENY_ALL") == "deny-all"
+        assert policy_name_from_backend("FULL") == "full"
+
+    def test_mapped_names_are_all_resolvable_presets(self):
+        """Guards the two sides drifting apart: every mapping must name a real preset."""
+        for enum_name in ("AGENT_DEFAULT", "DENY_ALL", "FULL"):
+            assert get_predefined_policy(policy_name_from_backend(enum_name)) is not None
+
+    def test_absent_value_defers_to_the_daemon_default(self):
+        assert policy_name_from_backend(None) is None
+        assert policy_name_from_backend("") is None
+
+    def test_unknown_value_downgrades_rather_than_raising(self):
+        """A backend newer than this daemon will send names it has never heard of."""
+        assert policy_name_from_backend("SOME_FUTURE_POLICY") is None
+
+    def test_value_is_normalised(self):
+        assert policy_name_from_backend("  agent_default  ") == "agent-default"

@@ -395,10 +395,18 @@ class SquadXDaemon:
             exec_env, allow=("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY")
         )
 
+        # Per-squad egress policy from the backend (RFC-0006). None when this backend
+        # does not send it or sends a value we do not know — AgentSandbox then falls
+        # back to the daemon's own default rather than to no policy.
+        from squadx_client.docker.network_policy import policy_name_from_backend
+
+        network_policy = policy_name_from_backend(task_data.get("sandbox_egress_policy"))
+
         sandbox = AgentSandbox(
             task_id=task_id,
             agent_type="external_cli",
             workspace_path=workspace_path,
+            network_policy=network_policy,
         )
         started = await sandbox.start(
             image=settings.agent_image,

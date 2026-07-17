@@ -38,11 +38,16 @@ public class SquadService {
 
         validateUserAccess(org.getId(), currentUser.getId());
 
-        Squad squad = Squad.builder()
+        Squad.SquadBuilder builder = Squad.builder()
                 .name(request.getName())
                 .description(request.getDescription())
-                .organization(org)
-                .build();
+                .organization(org);
+        // Null means "unspecified", which must land on the entity's default rather than
+        // overwrite it with null — a squad is never created without an egress policy.
+        if (request.getSandboxEgressPolicy() != null) {
+            builder.sandboxEgressPolicy(request.getSandboxEgressPolicy());
+        }
+        Squad squad = builder.build();
 
         squad = squadRepository.save(squad);
 
@@ -89,6 +94,9 @@ public class SquadService {
         }
         if (request.getLeaderAgentId() != null) {
             applyLeader(squad, request.getLeaderAgentId());
+        }
+        if (request.getSandboxEgressPolicy() != null) {
+            squad.setSandboxEgressPolicy(request.getSandboxEgressPolicy());
         }
 
         squad = squadRepository.save(squad);
@@ -149,6 +157,8 @@ public class SquadService {
                 .projectsCount(squad.getProjects() != null ? squad.getProjects().size() : 0)
                 .leaderAgentId(squad.getLeaderAgent() != null ? squad.getLeaderAgent().getId() : null)
                 .leaderAgentName(squad.getLeaderAgent() != null ? squad.getLeaderAgent().getName() : null)
+                .sandboxEgressPolicy(squad.getSandboxEgressPolicy() != null
+                        ? squad.getSandboxEgressPolicy().name() : null)
                 .agents(squad.getAgents() != null ? squad.getAgents().stream()
                         .map(agent -> SquadResponse.AgentSummary.builder()
                                 .id(agent.getId())

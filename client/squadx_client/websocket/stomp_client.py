@@ -5,14 +5,15 @@ import json
 import random
 import string
 import uuid
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from squadx_client.websocket.messages import StompCommand, StompFrame, MessageType
+from squadx_client.websocket.messages import StompCommand, StompFrame
 
 logger = structlog.get_logger()
 
@@ -388,7 +389,7 @@ class StompClient:
                     logger.error("websocket_error", error=str(msg.data))
                     break
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Timeout is fine, just continue
                 continue
             except asyncio.CancelledError:

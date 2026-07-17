@@ -9,9 +9,9 @@ RFB Protocol Reference: https://datatracker.ietf.org/doc/html/rfc6143
 import asyncio
 import logging
 import struct
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import AsyncGenerator, Callable, Optional
 
 from PIL import Image
 
@@ -227,14 +227,14 @@ class VNCClient:
         self,
         host: str = "localhost",
         port: int = 5900,
-        password: Optional[str] = None,
+        password: str | None = None,
     ):
         self.host = host
         self.port = port
         self.password = password
 
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
         self._connected = False
 
         self.width = 0
@@ -242,7 +242,7 @@ class VNCClient:
         self.name = ""
         self.pixel_format = PixelFormat()
 
-        self._framebuffer: Optional[bytearray] = None
+        self._framebuffer: bytearray | None = None
         self._frame_callbacks: list[Callable[[VNCFrame], None]] = []
 
     @property
@@ -301,7 +301,7 @@ class VNCClient:
 
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Connection timeout to {self.host}:{self.port}")
             return False
         except Exception as e:
@@ -460,7 +460,7 @@ class VNCClient:
         self._writer.write(msg)
         await self._writer.drain()
 
-    async def _handle_framebuffer_update(self) -> Optional[VNCFrame]:
+    async def _handle_framebuffer_update(self) -> VNCFrame | None:
         """Handle framebuffer update message."""
         import time
 
@@ -514,7 +514,6 @@ class VNCClient:
     ):
         """Update region of framebuffer with new pixel data."""
         bytes_per_pixel = self.pixel_format.bits_per_pixel // 8
-        row_stride = self.width * bytes_per_pixel
 
         for row in range(h):
             src_offset = row * w * bytes_per_pixel
@@ -609,7 +608,7 @@ class VNCClient:
                 # Rate limiting
                 await asyncio.sleep(interval)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No update, request again
                 await self.request_update(incremental=True)
 

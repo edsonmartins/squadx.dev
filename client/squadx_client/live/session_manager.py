@@ -1,14 +1,14 @@
 """Live session manager for coordinating VNC→WebRTC streaming."""
 
-import asyncio
 import logging
-from typing import Any, Callable, Optional
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from squadx_client.live.supabase_client import (
-    SupabaseClient,
     RealtimeMessage,
+    SupabaseClient,
     get_supabase_client,
 )
 
@@ -35,10 +35,10 @@ class LiveSession:
     join_code: str
     mode: str  # 'p2p' or 'sfu'
     state: SessionState = SessionState.CREATED
-    vnc_host: Optional[str] = None
-    vnc_port: Optional[int] = None
+    vnc_host: str | None = None
+    vnc_port: int | None = None
     viewer_count: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -62,14 +62,14 @@ class LiveSessionManager:
 
     def __init__(
         self,
-        supabase_client: Optional[SupabaseClient] = None,
+        supabase_client: SupabaseClient | None = None,
     ):
         self._client = supabase_client or get_supabase_client()
         self._sessions: dict[str, LiveSession] = {}
         self._peers: dict[str, dict[str, PeerConnection]] = {}  # session_id -> peer_id -> peer
-        self._on_peer_join: Optional[Callable[[str, PeerConnection], None]] = None
-        self._on_peer_leave: Optional[Callable[[str, str], None]] = None
-        self._on_signal: Optional[Callable[[str, str, dict], None]] = None
+        self._on_peer_join: Callable[[str, PeerConnection], None] | None = None
+        self._on_peer_leave: Callable[[str, str], None] | None = None
+        self._on_signal: Callable[[str, str, dict], None] | None = None
 
     def on_peer_join(self, callback: Callable[[str, PeerConnection], None]):
         """Register callback for when a peer joins."""
@@ -216,11 +216,11 @@ class LiveSessionManager:
             logger.error(f"Failed to end session: {e}")
             return False
 
-    def get_session(self, session_id: str) -> Optional[LiveSession]:
+    def get_session(self, session_id: str) -> LiveSession | None:
         """Get a session by ID."""
         return self._sessions.get(session_id)
 
-    def get_session_by_task(self, task_id: int) -> Optional[LiveSession]:
+    def get_session_by_task(self, task_id: int) -> LiveSession | None:
         """Get active session for a task."""
         for session in self._sessions.values():
             if session.task_id == task_id and session.state != SessionState.ENDED:
@@ -390,7 +390,7 @@ class LiveSessionManager:
 
 
 # Global instance (lazy initialization)
-_session_manager: Optional[LiveSessionManager] = None
+_session_manager: LiveSessionManager | None = None
 
 
 def get_session_manager() -> LiveSessionManager:

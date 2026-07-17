@@ -4,13 +4,13 @@ import asyncio
 import io
 import logging
 import tarfile
-from typing import Optional, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Optional
+
+from docker.errors import APIError, DockerException, ImageNotFound, NotFound
+from docker.models.containers import Container
 
 import docker
-from docker.models.containers import Container
-from docker.errors import DockerException, ImageNotFound, NotFound, APIError
-
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
@@ -24,14 +24,14 @@ class ContainerConfig:
     """Configuration for an agent container."""
 
     image: str = "squadx/agent:latest"
-    name: Optional[str] = None
+    name: str | None = None
     memory_limit: str = "2g"
     cpu_limit: float = 2.0
     workspace_path: str = "/workspace"
     environment: dict = field(default_factory=dict)
     ports: dict = field(default_factory=dict)
     volumes: dict = field(default_factory=dict)
-    network: Optional[str] = None
+    network: str | None = None
     enable_vnc: bool = True
     vnc_port: int = 5900
     resolution: str = "1280x720x24"
@@ -56,7 +56,7 @@ class DockerManager:
     """Manages Docker containers for SquadX agents."""
 
     def __init__(self):
-        self.client: Optional[docker.DockerClient] = None
+        self.client: docker.DockerClient | None = None
         self.containers: dict[str, Container] = {}
         self._lock = asyncio.Lock()
         # Live streaming tracking
@@ -120,8 +120,8 @@ class DockerManager:
         config: ContainerConfig,
         task_id: int,
         agent_type: str,
-        netns_container: Optional[str] = None,
-    ) -> Optional[str]:
+        netns_container: str | None = None,
+    ) -> str | None:
         """Create a new container for an agent.
 
         When ``netns_container`` is set (RFC-0006 egress sidecar), the agent shares that
@@ -181,8 +181,8 @@ class DockerManager:
                 # Apply security hardening if enabled
                 if config.enable_hardening:
                     from squadx_client.docker.hardening import (
-                        hardening_manager,
                         SecurityLevel,
+                        hardening_manager,
                     )
 
                     level = SecurityLevel(config.security_level)
@@ -251,8 +251,8 @@ class DockerManager:
         self,
         task_id: int,
         agent_type: str,
-        published_ports: Optional[dict] = None,
-    ) -> Optional[str]:
+        published_ports: dict | None = None,
+    ) -> str | None:
         """Create and start the RFC-0006 egress sidecar; return its container id.
 
         The sidecar owns the network namespace the agent will join, holds NET_ADMIN to
@@ -341,7 +341,7 @@ class DockerManager:
             logger.error(f"Failed to remove container {container_id}: {e}")
             return False
 
-    async def get_container_status(self, container_id: str) -> Optional[str]:
+    async def get_container_status(self, container_id: str) -> str | None:
         """Get container status."""
         if not self.client:
             return None
@@ -361,7 +361,7 @@ class DockerManager:
         container_id: str,
         tail: int = 100,
         follow: bool = False,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Get container logs."""
         if not self.client:
             return None
@@ -380,8 +380,8 @@ class DockerManager:
         self,
         container_id: str,
         command: list[str],
-        workdir: Optional[str] = None,
-        environment: Optional[dict] = None,
+        workdir: str | None = None,
+        environment: dict | None = None,
     ) -> tuple[int, str]:
         """Execute a command in a container.
 
@@ -417,8 +417,8 @@ class DockerManager:
         self,
         container_id: str,
         command: list[str],
-        workdir: Optional[str] = None,
-        environment: Optional[dict] = None,
+        workdir: str | None = None,
+        environment: dict | None = None,
     ):
         """Execute a command, streaming output incrementally.
 
@@ -526,7 +526,7 @@ class DockerManager:
             logger.error(f"apply_network_setup_unexpected_error: {e}")
             return False, str(e)
 
-    async def get_vnc_port(self, container_id: str) -> Optional[int]:
+    async def get_vnc_port(self, container_id: str) -> int | None:
         """Get the mapped VNC port for a container."""
         if not self.client:
             return None
@@ -584,8 +584,8 @@ class DockerManager:
         container_id: str,
         task_id: int,
         fps: int = 30,
-        vnc_port: Optional[int] = None,
-    ) -> Optional[str]:
+        vnc_port: int | None = None,
+    ) -> str | None:
         """Start live streaming for a container.
 
         Args:
@@ -672,7 +672,7 @@ class DockerManager:
             logger.error(f"Error stopping live stream: {e}")
             return False
 
-    async def get_live_stream_info(self, container_id: str) -> Optional[LiveStreamInfo]:
+    async def get_live_stream_info(self, container_id: str) -> LiveStreamInfo | None:
         """Get live stream information for a container.
 
         Args:
@@ -688,7 +688,7 @@ class DockerManager:
         container_id: str,
         task_id: int,
         enable_live: bool = True,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Start a container and optionally enable live streaming.
 
         Args:

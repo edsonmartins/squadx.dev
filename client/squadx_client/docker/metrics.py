@@ -6,8 +6,8 @@ Inspired by OpenSandbox's /metrics endpoint.
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class ContainerMetricsCollector:
         self._client = docker_client
         self._previous_cpu: dict[str, dict] = {}
 
-    def collect(self, container_id: str) -> Optional[ContainerMetrics]:
+    def collect(self, container_id: str) -> ContainerMetrics | None:
         """Collect a single metrics snapshot for a container."""
         try:
             container = self._client.containers.get(container_id)

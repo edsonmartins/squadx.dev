@@ -1,10 +1,10 @@
 """Base agent class for all specialist agents."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from squadx_client.llm.router import get_coding_llm
 from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
@@ -423,7 +423,7 @@ Format your response as:
             scope=scope,
             steps=[
                 f"Execute task '{task_title}' with agent type {self.agent_type}",
-                f"Apply implementation based on current task context and completed subtasks",
+                "Apply implementation based on current task context and completed subtasks",
                 "Validate output and persist execution learnings",
             ],
             files_modified=files_modified,

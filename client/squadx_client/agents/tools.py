@@ -1,8 +1,8 @@
 """LangChain tools for agent sandbox execution."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from squadx_client.docker.sandbox import AgentSandbox

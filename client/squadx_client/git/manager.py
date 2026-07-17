@@ -1,10 +1,9 @@
 """Git operations manager."""
 
-import os
 from pathlib import Path
 
 import structlog
-from git import Repo, InvalidGitRepositoryError
+from git import InvalidGitRepositoryError, Repo
 
 from squadx_client.config import settings
 

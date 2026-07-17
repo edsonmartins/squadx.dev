@@ -5,11 +5,10 @@ agent is cap-drop ALL and shares the sidecar's netns, so it can neither program 
 undo these rules. Domain allowlisting is done by a DNS proxy that is the only resolver
 the agent can reach — see ``generate_sidecar_setup_script`` and docker/egress-dns-proxy.py.
 """
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
 import json
 import logging
+from dataclasses import dataclass, field
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +120,7 @@ _BACKEND_POLICY_NAMES = {
 }
 
 
-def policy_name_from_backend(value: Optional[str]) -> Optional[str]:
+def policy_name_from_backend(value: str | None) -> str | None:
     """Map a backend SandboxEgressPolicy enum name to a local preset name.
 
     Returns None when the value is absent or unrecognised, so the caller falls back to

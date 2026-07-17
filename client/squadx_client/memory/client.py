@@ -1,7 +1,7 @@
 """BrainSentry REST API client for agent memory operations."""
 
-import structlog
 import httpx
+import structlog
 
 from squadx_client.config import settings
 

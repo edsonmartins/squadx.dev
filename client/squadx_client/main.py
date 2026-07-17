@@ -4,7 +4,6 @@ import asyncio
 import os
 import signal
 import sys
-from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -132,7 +131,7 @@ def stop():
         console.print(f"[green]Sent SIGTERM to daemon (PID {pid})[/green]")
     except PermissionError:
         console.print(f"[red]Permission denied: cannot stop daemon (PID {pid})[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ProcessLookupError:
         console.print(f"[yellow]Daemon already stopped (PID {pid})[/yellow]")
         try:

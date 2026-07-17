@@ -4,11 +4,10 @@ Inspired by OpenSandbox's lifecycle state machine.
 """
 import asyncio
 import logging
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Callable, Optional
 from threading import Lock
 
 logger = logging.getLogger(__name__)
@@ -41,15 +40,15 @@ VALID_TRANSITIONS = {
 class SandboxInfo:
     """Tracks sandbox metadata and lifecycle state."""
     sandbox_id: str
-    container_id: Optional[str] = None
+    container_id: str | None = None
     state: SandboxState = SandboxState.PENDING
     image: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: Optional[datetime] = None
-    stopped_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    last_activity: Optional[datetime] = None
-    error_message: Optional[str] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime | None = None
+    stopped_at: datetime | None = None
+    expires_at: datetime | None = None
+    last_activity: datetime | None = None
+    error_message: str | None = None
     metadata: dict = field(default_factory=dict)
 
     @property
@@ -64,14 +63,14 @@ class SandboxInfo:
     def uptime_seconds(self) -> float:
         if self.started_at is None:
             return 0.0
-        end = self.stopped_at or datetime.now(timezone.utc)
+        end = self.stopped_at or datetime.now(UTC)
         return (end - self.started_at).total_seconds()
 
     @property
     def is_expired(self) -> bool:
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) >= self.expires_at
+        return datetime.now(UTC) >= self.expires_at
 
     def to_dict(self) -> dict:
         return {
@@ -98,8 +97,8 @@ class SandboxLifecycleManager:
         self._lock = Lock()
         self._default_ttl = default_ttl_seconds
         self._max_ttl = max_ttl_seconds
-        self._on_expire_callback: Optional[Callable] = None
-        self._on_state_change_callback: Optional[Callable] = None
+        self._on_expire_callback: Callable | None = None
+        self._on_state_change_callback: Callable | None = None
 
     def on_expire(self, callback: Callable):
         """Register callback for sandbox expiration. callback(sandbox_id)"""
@@ -109,16 +108,16 @@ class SandboxLifecycleManager:
         """Register callback for state changes. callback(sandbox_id, old_state, new_state)"""
         self._on_state_change_callback = callback
 
-    def register(self, sandbox_id: str, image: str = "", ttl_seconds: Optional[int] = None, metadata: dict = None) -> SandboxInfo:
+    def register(self, sandbox_id: str, image: str = "", ttl_seconds: int | None = None, metadata: dict = None) -> SandboxInfo:
         """Register a new sandbox with optional TTL."""
         ttl = min(ttl_seconds or self._default_ttl, self._max_ttl)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         info = SandboxInfo(
             sandbox_id=sandbox_id,
             image=image,
             created_at=now,
-            expires_at=datetime.fromtimestamp(now.timestamp() + ttl, tz=timezone.utc),
+            expires_at=datetime.fromtimestamp(now.timestamp() + ttl, tz=UTC),
             metadata=metadata or {},
         )
 
@@ -128,7 +127,7 @@ class SandboxLifecycleManager:
         logger.info(f"Sandbox {sandbox_id} registered, TTL={ttl}s")
         return info
 
-    def transition(self, sandbox_id: str, new_state: SandboxState, error: Optional[str] = None) -> bool:
+    def transition(self, sandbox_id: str, new_state: SandboxState, error: str | None = None) -> bool:
         """Transition sandbox to a new state. Returns False if transition is invalid."""
         with self._lock:
             info = self._sandboxes.get(sandbox_id)
@@ -145,7 +144,7 @@ class SandboxLifecycleManager:
 
             old_state = info.state
             info.state = new_state
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             if new_state == SandboxState.RUNNING:
                 info.started_at = info.started_at or now
@@ -166,7 +165,7 @@ class SandboxLifecycleManager:
 
         return True
 
-    def renew(self, sandbox_id: str, additional_seconds: Optional[int] = None) -> Optional[datetime]:
+    def renew(self, sandbox_id: str, additional_seconds: int | None = None) -> datetime | None:
         """Extend sandbox TTL. Returns new expiration time."""
         with self._lock:
             info = self._sandboxes.get(sandbox_id)
@@ -174,8 +173,8 @@ class SandboxLifecycleManager:
                 return None
 
             extra = min(additional_seconds or self._default_ttl, self._max_ttl)
-            now = datetime.now(timezone.utc)
-            info.expires_at = datetime.fromtimestamp(now.timestamp() + extra, tz=timezone.utc)
+            now = datetime.now(UTC)
+            info.expires_at = datetime.fromtimestamp(now.timestamp() + extra, tz=UTC)
             info.last_activity = now
 
         logger.info(f"Sandbox {sandbox_id} renewed, new TTL={extra}s")
@@ -186,9 +185,9 @@ class SandboxLifecycleManager:
         with self._lock:
             info = self._sandboxes.get(sandbox_id)
             if info and info.is_active:
-                info.last_activity = datetime.now(timezone.utc)
+                info.last_activity = datetime.now(UTC)
 
-    def get(self, sandbox_id: str) -> Optional[SandboxInfo]:
+    def get(self, sandbox_id: str) -> SandboxInfo | None:
         """Get sandbox info."""
         return self._sandboxes.get(sandbox_id)
 
@@ -222,7 +221,7 @@ class SandboxLifecycleManager:
                 for sid in expired:
                     info = self._sandboxes.get(sid)
                     if info and info.is_active:
-                        now = datetime.now(timezone.utc)
+                        now = datetime.now(UTC)
                         info.state = SandboxState.EXPIRED
                         info.stopped_at = now
                         logger.warning(f"Sandbox {sid} expired, triggering cleanup")

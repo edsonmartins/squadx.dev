@@ -1,14 +1,12 @@
 """Supabase client for live streaming signaling and session management."""
 
-import asyncio
-import json
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
-
-from supabase import create_async_client, AsyncClient, AsyncClientOptions
+from typing import Any
 
 from squadx_client.config import settings
+from supabase import AsyncClient, AsyncClientOptions, create_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +25,8 @@ class SupabaseClient:
 
     def __init__(
         self,
-        url: Optional[str] = None,
-        anon_key: Optional[str] = None,
+        url: str | None = None,
+        anon_key: str | None = None,
     ):
         self.url = url or getattr(settings, "supabase_url", None)
         self.anon_key = anon_key or getattr(settings, "supabase_anon_key", None)
@@ -39,7 +37,7 @@ class SupabaseClient:
                 "Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables."
             )
 
-        self._client: Optional[AsyncClient] = None
+        self._client: AsyncClient | None = None
         self._channels: dict[str, Any] = {}
         self._message_callbacks: dict[str, list[Callable[[RealtimeMessage], None]]] = {}
 
@@ -59,7 +57,7 @@ class SupabaseClient:
     async def create_session(
         self,
         task_id: int,
-        host_user_id: Optional[str] = None,
+        host_user_id: str | None = None,
         mode: str = "p2p",
         max_viewers: int = 25,
     ) -> dict[str, Any]:
@@ -90,7 +88,7 @@ class SupabaseClient:
             return result.data
         raise Exception(f"Failed to create session: {result}")
 
-    async def get_session(self, session_id: str) -> Optional[dict[str, Any]]:
+    async def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Get session by ID."""
         client = await self.get_client()
         result = await (
@@ -102,7 +100,7 @@ class SupabaseClient:
         )
         return result.data if result else None
 
-    async def get_session_by_code(self, join_code: str) -> Optional[dict[str, Any]]:
+    async def get_session_by_code(self, join_code: str) -> dict[str, Any] | None:
         """Get session by join code."""
         client = await self.get_client()
         result = await (
@@ -114,7 +112,7 @@ class SupabaseClient:
         )
         return result.data if result else None
 
-    async def get_session_by_task(self, task_id: int) -> Optional[dict[str, Any]]:
+    async def get_session_by_task(self, task_id: int) -> dict[str, Any] | None:
         """Get active session for a task."""
         client = await self.get_client()
         result = await (
@@ -155,7 +153,7 @@ class SupabaseClient:
     async def add_participant(
         self,
         session_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         display_name: str = "Viewer",
         role: str = "viewer",
     ) -> dict[str, Any]:
@@ -311,7 +309,7 @@ class SupabaseClient:
         signal_type: str,
         data: dict[str, Any],
         sender_id: str = "host",
-        target_id: Optional[str] = None,
+        target_id: str | None = None,
     ) -> bool:
         """Send a WebRTC signaling message.
 
@@ -370,7 +368,7 @@ class SupabaseClient:
         self,
         join_code: str,
         sdp: str,
-        target_id: Optional[str] = None,
+        target_id: str | None = None,
     ) -> bool:
         """Send WebRTC offer."""
         return await self.send_signal(
@@ -400,7 +398,7 @@ class SupabaseClient:
         self,
         join_code: str,
         candidate: dict[str, Any],
-        target_id: Optional[str] = None,
+        target_id: str | None = None,
     ) -> bool:
         """Send ICE candidate."""
         return await self.send_signal(
@@ -425,7 +423,7 @@ class SupabaseClient:
 
 
 # Global instance (lazy initialization)
-_supabase_client: Optional[SupabaseClient] = None
+_supabase_client: SupabaseClient | None = None
 
 
 def get_supabase_client() -> SupabaseClient:

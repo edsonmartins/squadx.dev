@@ -1,6 +1,6 @@
 """WebSocket message handlers for STOMP communication."""
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -199,6 +199,7 @@ class ExecutionLogHandler:
     async def _store_log(self, level: str, message: str, agent: str, timestamp: str) -> None:
         """Append execution log to local file."""
         import os
+
         from squadx_client.config import settings
 
         log_dir = os.path.join(settings.expanded_data_dir, "logs")

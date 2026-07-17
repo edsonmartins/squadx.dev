@@ -1,11 +1,10 @@
 """SquadX Daemon - Background service for task execution."""
 
 import asyncio
-import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 import structlog
@@ -16,10 +15,9 @@ from squadx_client.docker.manager import docker_manager
 from squadx_client.memory import BrainSentryClient
 from squadx_client.messaging.run_event import default_run_event_metadata
 from squadx_client.orchestrator.graph import create_orchestrator
-from squadx_client.websocket import StompClientManager, MessageType
-from squadx_client.websocket.handlers import TaskMessageHandler
-from squadx_client.streaming import StreamManager, VNCStreamer, StreamConfig
 from squadx_client.streaming.vnc_streamer import stream_manager
+from squadx_client.websocket import MessageType, StompClientManager
+from squadx_client.websocket.handlers import TaskMessageHandler
 
 logger = structlog.get_logger()
 
@@ -596,7 +594,7 @@ class SquadXDaemon:
         self,
         session_id: str,
         status: str,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Send live view status update.
 

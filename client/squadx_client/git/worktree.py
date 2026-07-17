@@ -7,8 +7,6 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +16,7 @@ class WorktreeInfo:
     path: str
     branch: str
     agent_name: str
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
     @property
     def exists(self) -> bool:
@@ -33,7 +31,7 @@ class WorktreeManager:
         self._worktrees_dir = os.path.join(repo_path, ".worktrees")
         self._registry: dict[str, WorktreeInfo] = {}
 
-    def create(self, agent_name: str, task_id: Optional[str] = None, base_branch: str = "main") -> WorktreeInfo:
+    def create(self, agent_name: str, task_id: str | None = None, base_branch: str = "main") -> WorktreeInfo:
         branch = f"squadx/{task_id or 'default'}/{agent_name}"
         worktree_path = os.path.join(self._worktrees_dir, agent_name)
 
@@ -60,7 +58,7 @@ class WorktreeManager:
         logger.info(f"Created worktree for {agent_name} at {worktree_path} (branch: {branch})")
         return info
 
-    def checkpoint(self, agent_name: str, message: Optional[str] = None) -> bool:
+    def checkpoint(self, agent_name: str, message: str | None = None) -> bool:
         info = self._registry.get(agent_name)
         if info is None or not info.exists:
             return False
@@ -124,5 +122,5 @@ class WorktreeManager:
     def list_worktrees(self) -> list[WorktreeInfo]:
         return list(self._registry.values())
 
-    def get(self, agent_name: str) -> Optional[WorktreeInfo]:
+    def get(self, agent_name: str) -> WorktreeInfo | None:
         return self._registry.get(agent_name)

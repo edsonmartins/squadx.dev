@@ -8,9 +8,10 @@ import asyncio
 import io
 import logging
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Callable, Any
+from typing import Any
 
 from PIL import Image
 
@@ -42,8 +43,8 @@ class StreamConfig:
     vnc_password: str = ""
     quality: int = 80  # JPEG quality 1-100
     fps: int = 10  # Frames per second
-    resize_width: Optional[int] = 1280
-    resize_height: Optional[int] = 720
+    resize_width: int | None = 1280
+    resize_height: int | None = 720
 
 
 @dataclass
@@ -70,7 +71,7 @@ class VNCStreamer:
         self,
         session_id: str,
         task_id: int,
-        config: Optional[StreamConfig] = None,
+        config: StreamConfig | None = None,
     ):
         self.session_id = session_id
         self.task_id = task_id
@@ -82,14 +83,14 @@ class VNCStreamer:
             config=self.config,
         )
 
-        self._vnc_client: Optional[VNCClient] = None
-        self._stream_task: Optional[asyncio.Task] = None
+        self._vnc_client: VNCClient | None = None
+        self._stream_task: asyncio.Task | None = None
         self._running = False
 
         # Callbacks
-        self._on_frame: Optional[Callable[[bytes], Any]] = None
-        self._on_status_change: Optional[Callable[[StreamStatus], Any]] = None
-        self._on_error: Optional[Callable[[Exception], Any]] = None
+        self._on_frame: Callable[[bytes], Any] | None = None
+        self._on_status_change: Callable[[StreamStatus], Any] | None = None
+        self._on_error: Callable[[Exception], Any] | None = None
 
     def on_frame(self, callback: Callable[[bytes], Any]):
         """Register callback for frame data (JPEG bytes)."""
@@ -203,7 +204,7 @@ class VNCStreamer:
             )
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("VNC connection timeout")
             return False
         except ConnectionRefusedError:
@@ -256,7 +257,7 @@ class VNCStreamer:
                     self._on_error(e)
                 await asyncio.sleep(1)  # Brief pause before retry
 
-    async def _capture_frame(self) -> Optional[bytes]:
+    async def _capture_frame(self) -> bytes | None:
         """Capture a frame from the VNC server.
 
         Reads pending server messages (framebuffer updates, bell, cut-text),
@@ -305,7 +306,7 @@ class VNCStreamer:
             logger.error(f"Frame capture error: {e}")
             return None
 
-    async def _read_vnc_update(self) -> Optional[VNCFrame]:
+    async def _read_vnc_update(self) -> VNCFrame | None:
         """Read a single server message, processing framebuffer updates.
 
         Uses a short timeout so the stream loop is never blocked for long.
@@ -319,7 +320,7 @@ class VNCStreamer:
         if reader is None:
             return None
 
-        frame: Optional[VNCFrame] = None
+        frame: VNCFrame | None = None
         frame_interval = 1.0 / self.config.fps
 
         try:
@@ -353,7 +354,7 @@ class VNCStreamer:
             else:
                 logger.warning(f"Unknown VNC message type: {msg_type}")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # No message within the timeout window -- that's fine.
             pass
 
@@ -495,7 +496,7 @@ class StreamManager:
         for session_id in list(self.sessions.keys()):
             await self.stop_session(session_id)
 
-    def get_session(self, session_id: str) -> Optional[VNCStreamer]:
+    def get_session(self, session_id: str) -> VNCStreamer | None:
         """Get a streaming session by ID."""
         return self.sessions.get(session_id)
 

@@ -185,14 +185,34 @@ def _is_ip_or_cidr(target: str) -> bool:
 
 def generate_network_setup_script(policy: NetworkPolicy) -> str:
     """Generate a shell script that sets up network filtering inside the container.
-    Uses iptables + a simple domain-based approach without requiring a sidecar."""
+    Uses iptables + a simple domain-based approach without requiring a sidecar.
+
+    The script is **idempotent**: it drops the policy to DROP and flushes OUTPUT before
+    appending its rules, so re-applying it replaces the previous policy rather than
+    stacking on top of it. That is what makes a recycled warm-pool sidecar safe — it
+    must carry the new run's rules, never the previous run's leftovers.
+
+    Note the ordering: the default policy is set to DROP *before* the flush, so the
+    window between wiping the old rules and installing the new ones is closed, not
+    open. On the ALLOW-default path (debugging only) the metadata DROPs are re-added
+    explicitly, since there is no default-deny to cover them.
+    """
 
     if policy.default_action == EgressAction.ALLOW:
         # Allow all, just block specific targets
-        lines = ["#!/bin/sh", "set -e", ""]
+        lines = [
+            "#!/bin/sh",
+            "set -e",
+            "",
+            "# Replace any previous policy rather than appending to it (pool reuse).",
+            "iptables -P OUTPUT DROP",
+            "iptables -F OUTPUT",
+            "",
+        ]
         for rule in policy.rules:
             if rule.action == EgressAction.DENY and _is_ip_or_cidr(rule.target):
                 lines.append(f"iptables -A OUTPUT -d {rule.target} -j DROP")
+        lines.append("iptables -P OUTPUT ACCEPT")
         return "\n".join(lines) + "\n"
 
     # Default deny: resolve allowed domains and create allow rules
@@ -200,8 +220,10 @@ def generate_network_setup_script(policy: NetworkPolicy) -> str:
         "#!/bin/sh",
         "set -e",
         "",
-        "# Default: drop all outbound except established connections",
+        "# Default-deny. DROP is set before the flush so re-application never opens",
+        "# a window with no policy at all.",
         "iptables -P OUTPUT DROP",
+        "iptables -F OUTPUT",
         "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT",
         "iptables -A OUTPUT -o lo -j ACCEPT",  # Allow loopback
         "iptables -A OUTPUT -p udp --dport 53 -j ACCEPT",  # Allow DNS

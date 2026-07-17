@@ -7,6 +7,7 @@ from squadx_client.docker.network_policy import (
     EgressRule,
     EgressSidecarConfig,
     NetworkPolicy,
+    POLICY_AGENT_DEFAULT,
     POLICY_FULL_ACCESS,
     POLICY_NONE,
     POLICY_PACKAGE_MANAGERS,
@@ -144,8 +145,20 @@ class TestGenerateNetworkSetupScript:
         script = generate_network_setup_script(POLICY_FULL_ACCESS)
         assert "169.254.169.254" in script
         assert "-j DROP" in script
-        # Should NOT set default OUTPUT to DROP
-        assert "iptables -P OUTPUT DROP" not in script
+        # The default policy must end up ACCEPT. The script transiently sets DROP to
+        # close the window while it flushes the previous policy (pool reuse), so assert
+        # the resulting state rather than the absence of the word DROP.
+        assert script.rstrip().endswith("iptables -P OUTPUT ACCEPT")
+
+    def test_script_replaces_rather_than_appends_previous_policy(self):
+        """A recycled sidecar must not inherit the previous run's rules."""
+        for policy in (POLICY_FULL_ACCESS, POLICY_AGENT_DEFAULT):
+            script = generate_network_setup_script(policy)
+            assert "iptables -F OUTPUT" in script
+            # Flush must never run while the default is permissive.
+            flush_at = script.index("iptables -F OUTPUT")
+            drop_at = script.index("iptables -P OUTPUT DROP")
+            assert drop_at < flush_at
 
     def test_deny_default_with_domain_rules_uses_dig(self):
         policy = NetworkPolicy(

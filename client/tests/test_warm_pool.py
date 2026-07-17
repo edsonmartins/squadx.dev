@@ -48,13 +48,13 @@ def _mock_container(manager, container_id: str, *, status_after_stop: str = "cre
     return container
 
 
-def _patched_pool(*, target_size=2, min_ready=1, create_ids=None):
+def _patched_pool(*, target_size=2, min_ready=1, create_ids=None, egress_enabled=False):
     """Construct a pool with the docker manager and create_container stubbed."""
     manager = _make_manager()
     create_ids = create_ids or ["c-1", "c-2", "c-3"]
     counter = {"i": 0}
 
-    async def fake_create(config, task_id, agent_type):
+    async def fake_create(config, task_id, agent_type, netns_container=None):
         if counter["i"] >= len(create_ids):
             return None
         cid = create_ids[counter["i"]]
@@ -62,6 +62,15 @@ def _patched_pool(*, target_size=2, min_ready=1, create_ids=None):
         return cid
 
     manager.create_container = AsyncMock(side_effect=fake_create)
+    # One sidecar per pooled unit, named after the agent it will own.
+    sidecar_counter = {"i": 0}
+
+    async def fake_sidecar(task_id, agent_type, published_ports=None):
+        sidecar_counter["i"] += 1
+        return f"sc-{sidecar_counter['i']}"
+
+    manager.create_egress_sidecar = AsyncMock(side_effect=fake_sidecar)
+    manager.remove_container = AsyncMock(return_value=True)
 
     pool = WarmContainerPool(
         manager=manager,
@@ -70,8 +79,101 @@ def _patched_pool(*, target_size=2, min_ready=1, create_ids=None):
         min_ready=min_ready,
         workspace_mount="/var/squadx/workspaces",
         refill_interval_seconds=0.05,
+        egress_enabled=egress_enabled,
     )
     return pool, manager
+
+
+class TestWarmPoolComposesWithEgressSidecar:
+    """RFC-0006 + warm pool. These were mutually exclusive: the sidecar must own the
+    netns at agent-create time, which the pool now satisfies by pre-creating the pair.
+    """
+
+    @pytest.mark.asyncio
+    async def test_pooled_unit_is_an_agent_joined_to_its_own_sidecar(self):
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=True)
+        _mock_container(manager, "c-1")
+
+        await pool.initialize()
+
+        manager.create_egress_sidecar.assert_awaited()
+        # The agent is created into the sidecar's netns, not a bridge.
+        assert manager.create_container.await_args.kwargs["netns_container"] == "sc-1"
+        pooled = pool._available.get_nowait()
+        assert pooled.sidecar_id == "sc-1"
+
+    @pytest.mark.asyncio
+    async def test_policy_hook_runs_before_the_agent_starts(self):
+        """The invariant: an agent must never be startable without its policy."""
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=True)
+        agent = _mock_container(manager, "c-1")
+        sidecar = _mock_container(manager, "sc-1", status_after_stop="running")
+        sidecar.status = "running"
+        await pool.initialize()
+
+        order = []
+        agent.start = MagicMock(side_effect=lambda: order.append("agent_start"))
+
+        async def hook(pooled):
+            order.append(f"policy:{pooled.sidecar_id}")
+            return True
+
+        await pool.acquire(task_id=1, agent_type="backend", before_start=hook)
+
+        assert order == ["policy:sc-1", "agent_start"]
+
+    @pytest.mark.asyncio
+    async def test_rejected_policy_fails_closed_and_discards_the_unit(self):
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=True)
+        agent = _mock_container(manager, "c-1")
+        sidecar = _mock_container(manager, "sc-1")
+        sidecar.status = "running"
+        await pool.initialize()
+
+        async def reject(_pooled):
+            return False
+
+        with pytest.raises(RuntimeError):
+            await pool.acquire(task_id=1, agent_type="backend", before_start=reject)
+
+        # The agent never ran, and the unit is not recycled back into the pool.
+        agent.start.assert_not_called()
+        assert pool._available.qsize() == 0
+
+    @pytest.mark.asyncio
+    async def test_removing_a_unit_removes_its_sidecar_too(self):
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=True)
+        _mock_container(manager, "c-1")
+        await pool.initialize()
+        pooled = pool._available.get_nowait()
+
+        await pool._safe_remove(pooled)
+
+        manager.remove_container.assert_awaited_with("sc-1", force=True)
+
+    @pytest.mark.asyncio
+    async def test_dead_sidecar_is_restarted_before_the_agent_joins(self):
+        """A recycled unit's sidecar can be found stopped; the agent cannot join a
+        dead netns, so acquire must revive it rather than start a netns-less agent."""
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=True)
+        _mock_container(manager, "c-1")
+        sidecar = _mock_container(manager, "sc-1")
+        sidecar.status = "exited"
+        await pool.initialize()
+
+        await pool.acquire(task_id=1, agent_type="backend")
+
+        sidecar.start.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_sidecar_created_when_egress_is_off(self):
+        pool, manager = _patched_pool(min_ready=1, egress_enabled=False)
+        _mock_container(manager, "c-1")
+
+        await pool.initialize()
+
+        manager.create_egress_sidecar.assert_not_awaited()
+        assert pool._available.get_nowait().sidecar_id is None
 
 
 class TestWarmContainerPoolInit:

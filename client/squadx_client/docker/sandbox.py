@@ -181,15 +181,19 @@ class AgentSandbox:
 
             warm_pool = getattr(self.manager, "warm_pool", None)
             used_pool = False
-            # The egress sidecar must own the netns at agent-create time, which pre-created
-            # warm-pool agents can't provide — so the pool fast-path is bypassed when egress
-            # enforcement is on (RFC-0006).
-            if warm_pool is not None and warm_pool.is_enabled and not sidecar_enabled:
+            # The egress sidecar must own the netns at agent-create time. The pool
+            # satisfies that by pre-creating the agent already joined to a sidecar, so
+            # both compose: the policy is applied via the pre-start hook below, while
+            # the agent is still `created` and cannot execute anything (RFC-0006).
+            if warm_pool is not None and warm_pool.is_enabled:
                 try:
                     pooled = await warm_pool.acquire(
-                        task_id=self.task_id, agent_type=self.agent_type
+                        task_id=self.task_id,
+                        agent_type=self.agent_type,
+                        before_start=self._apply_pooled_policy if sidecar_enabled else None,
                     )
                     self.container_id = pooled.container_id
+                    self.sidecar_id = pooled.sidecar_id
                     self._pooled_container = pooled
                     used_pool = True
                     logger.info(
@@ -198,6 +202,15 @@ class AgentSandbox:
                         f"use_count={pooled.use_count}"
                     )
                 except Exception as e:  # noqa: BLE001 - cold fallback is below
+                    if sidecar_enabled and not getattr(settings, "egress_fail_open", False):
+                        # Falling back to a cold, unfiltered sandbox would defeat the
+                        # whole point of the policy the pool just refused to apply.
+                        logger.error(
+                            f"warm_pool_acquire_failed_fail_closed task={self.task_id} "
+                            f"error={e}"
+                        )
+                        self._set_status(SandboxStatus.ERROR)
+                        return False
                     logger.warning(
                         f"warm_pool_acquire_failed_falling_back task={self.task_id} "
                         f"error={e}"
@@ -294,6 +307,22 @@ class AgentSandbox:
             logger.error(f"Failed to start sandbox: {e}")
             self._set_status(SandboxStatus.ERROR)
             return False
+
+    async def _apply_pooled_policy(self, pooled) -> bool:
+        """Pre-start hook for a pooled agent+sidecar pair.
+
+        Runs while the agent is still `created`, so a rejection here means the agent
+        never executed a single instruction with the wrong policy. The generated script
+        flushes before applying, which is what makes a recycled sidecar safe to reuse.
+        """
+        self.sidecar_id = pooled.sidecar_id
+        if not self.sidecar_id:
+            logger.error(
+                f"pooled_unit_without_sidecar_fail_closed task={self.task_id} "
+                f"container_id={pooled.container_id[:12]}"
+            )
+            return False
+        return await self._apply_sidecar_policy()
 
     async def _apply_sidecar_policy(self) -> bool:
         """Apply the egress policy on the sidecar. Returns False only when it could not

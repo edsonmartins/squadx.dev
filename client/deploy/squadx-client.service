@@ -1,0 +1,42 @@
+# SquadX client daemon — systemd unit for a dedicated Docker host.
+#
+# The daemon creates hardened Docker sandboxes (and the egress firewall sidecar)
+# via the host's Docker daemon, so it runs as a native process on a host with
+# Docker installed — NOT as a Kubernetes pod. See client/deploy/README.md.
+#
+# Install:
+#   sudo cp squadx-client.service /etc/systemd/system/
+#   sudo cp squadx-client.env.example /etc/squadx/squadx-client.env   # then edit
+#   sudo systemctl daemon-reload && sudo systemctl enable --now squadx-client
+#
+# The service user must be able to talk to the Docker socket (member of the
+# `docker` group). That group grants root-equivalent control of the host Docker —
+# run this host as a dedicated sandbox runner, not alongside other workloads.
+
+[Unit]
+Description=SquadX client daemon (agent sandbox runner)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=squadx
+Group=docker
+# Path to the virtualenv the client package was installed into (pip install -e ".[dev]"
+# or a wheel). Adjust APP_DIR to your install location.
+Environment=APP_DIR=/opt/squadx-client
+EnvironmentFile=/etc/squadx/squadx-client.env
+ExecStart=/opt/squadx-client/.venv/bin/squadx-client start --foreground
+Restart=always
+RestartSec=5
+# The daemon handles SIGTERM (graceful drain + sandbox teardown); give it room.
+TimeoutStopSec=60
+# Basic hardening for the daemon process itself (the sandboxes are hardened
+# separately at container-create). NoNewPrivileges is deliberately NOT set: the
+# daemon needs the docker group to reach the socket.
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

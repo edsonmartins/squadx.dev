@@ -260,4 +260,5 @@ jobs:
         run: |
           kubectl set image deployment/backend backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }} -n squadx
           kubectl set image deployment/frontend frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }} -n squadx
-          kubectl set image deployment/client client=ghcr.io/${{ github.repository }}/client:${{ github.sha }} -n squadx
+          # The client daemon is not an in-cluster Deployment — it runs on a dedicated
+          # Docker host (client/deploy/README.md), so there is nothing to set here.

@@ -1,3 +1,9 @@
+{{- /*
+  The client daemon runs on a dedicated Docker host, not in-cluster — it needs the
+  host Docker daemon to create sandboxes. Gated off by default; see
+  client/deploy/README.md. Enable only with an in-cluster docker topology reworked in.
+*/ -}}
+{{- if .Values.client.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,3 +32,4 @@ spec:
             - secretRef:
                 name: {{ include "squadx.fullname" . }}-secrets
       restartPolicy: Always
+{{- end }}

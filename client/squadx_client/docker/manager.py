@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 import docker
 from docker.models.containers import Container
-from docker.errors import DockerException, NotFound, APIError
+from docker.errors import DockerException, ImageNotFound, NotFound, APIError
 
 from squadx_client.config import settings
 
@@ -195,9 +195,21 @@ class DockerManager:
                     # Merge security kwargs
                     container_kwargs.update(security_config.to_docker_kwargs())
 
-                    # Override network if VNC is enabled (needs port binding)
+                    # VNC needs a network stack to publish a port on, so `network=none`
+                    # cannot stand. Under RFC-0006 the sidecar provides that stack (and
+                    # filters it) — the netns block below overrides this. Falling back to
+                    # a plain bridge means the agent gets UNFILTERED egress, which is the
+                    # opposite of what network_disabled asked for, so it is never silent.
                     if config.enable_vnc and security_config.network_disabled:
                         container_kwargs["network_mode"] = "bridge"
+                        if not netns_container:
+                            logger.error(
+                                f"egress_open_bridge task={task_id} agent={agent_type} — "
+                                f"VNC requires a network stack and no egress sidecar owns "
+                                f"one, so `network=none` was downgraded to `bridge`: this "
+                                f"agent has UNRESTRICTED egress. Enable the sidecar "
+                                f"(SQUADX_EGRESS_SIDECAR=true) or disable VNC. See RFC-0006."
+                            )
 
                     logger.info(
                         f"Security hardening enabled: level={level.value}, "
@@ -272,6 +284,16 @@ class DockerManager:
                 self.containers[container.id] = container
                 logger.info(f"egress_sidecar_started task={task_id} id={container.short_id}")
                 return container.id
+            except ImageNotFound:
+                # Egress enforcement is on by default, so a missing image fails every
+                # run. Name the fix instead of surfacing a bare Docker 404.
+                logger.error(
+                    f"egress_sidecar_image_missing task={task_id} "
+                    f"image={settings.egress_sidecar_image} — the egress firewall cannot "
+                    f"start, so runs fail closed. Build it with `make build-egress-proxy`, "
+                    f"or set SQUADX_EGRESS_SIDECAR=false to run WITHOUT egress filtering."
+                )
+                return None
             except APIError as e:
                 logger.error(f"egress_sidecar_create_failed task={task_id}: {e}")
                 return None

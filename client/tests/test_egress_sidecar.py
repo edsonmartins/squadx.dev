@@ -215,13 +215,75 @@ async def test_start_live_stream_resolves_port_itself_when_not_given():
 @pytest.mark.integration
 @pytest.mark.skipif(
     os.environ.get("SQUADX_DOCKER_IT") != "1",
-    reason="requires a Linux Docker host; set SQUADX_DOCKER_IT=1 to run",
+    reason="requires a Docker host + `make build-egress-proxy`; set SQUADX_DOCKER_IT=1 to run",
 )
 @pytest.mark.asyncio
 async def test_integration_agent_egress_is_filtered_by_sidecar():
-    # Executable spec for the real path (RFC-0006 §7):
-    #   - curl https://api.anthropic.com  -> succeeds (allowlisted)
-    #   - curl https://evil.example       -> fails (default-deny)
-    #   - curl http://169.254.169.254     -> fails (metadata blocked)
-    #   - iptables -F inside the agent     -> fails (no NET_ADMIN)
-    pytest.skip("integration body runs only on a provisioned Docker host")
+    """Executable spec for the real path (RFC-0006 §7).
+
+    Everything above this line is mocks: they prove we *ask* Docker for the right
+    topology, not that packets actually drop. This is the only test that proves the
+    firewall works, so it asserts the four claims the design rests on:
+
+      - an allowlisted host is reachable
+      - a non-allowlisted host is not (default-deny)
+      - cloud metadata is not (SSRF -> credentials)
+      - the agent cannot undo any of it (no NET_ADMIN)
+
+    Run: make build-egress-proxy && SQUADX_DOCKER_IT=1 pytest -m integration client/tests
+    """
+    from squadx_client.docker.manager import DockerManager
+    from squadx_client.docker.sandbox import AgentSandbox
+
+    manager = DockerManager()
+    assert await manager.connect(), "Docker daemon unreachable"
+
+    sandbox = AgentSandbox(
+        task_id=99_999,
+        agent_type="backend",
+        workspace_path="/tmp",
+        manager=manager,
+        enable_live_streaming=False,
+        network_policy="agent-default",
+    )
+    with patch("squadx_client.docker.sandbox.settings") as s:
+        s.egress_sidecar_enabled = True
+        s.egress_fail_open = False
+        s.network_policy = "agent-default"
+        s.agent_image = os.environ.get("SQUADX_AGENT_IMAGE", "squadx/agent:latest")
+        assert await sandbox.start(enable_vnc=False), "sandbox failed to start"
+
+    try:
+        # Allowlisted: reachable. -sS surfaces the error if this regresses.
+        allowed = await sandbox.execute(
+            ["curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+             "--max-time", "20", "https://api.anthropic.com"],
+            timeout=30,
+        )
+        assert allowed.exit_code == 0, f"allowlisted host unreachable: {allowed.output}"
+
+        # Not allowlisted: must fail. curl exits non-zero on connect failure/timeout.
+        denied = await sandbox.execute(
+            ["curl", "-sS", "--max-time", "10", "https://example.com"], timeout=30
+        )
+        assert denied.exit_code != 0, "default-deny did not block a non-allowlisted host"
+
+        # Cloud metadata: must fail even though it is link-local, not egress proper.
+        metadata = await sandbox.execute(
+            ["curl", "-sS", "--max-time", "5", "http://169.254.169.254/latest/meta-data/"],
+            timeout=20,
+        )
+        assert metadata.exit_code != 0, "cloud metadata endpoint was reachable"
+
+        # The agent must not be able to take the firewall down. cap-drop ALL means
+        # NET_ADMIN cannot be regained, so this is expected to fail.
+        tamper = await sandbox.execute(["iptables", "-F", "OUTPUT"], timeout=20)
+        assert tamper.exit_code != 0, "agent was able to flush the egress rules"
+
+        # And the policy must still hold afterwards.
+        still_denied = await sandbox.execute(
+            ["curl", "-sS", "--max-time", "10", "https://example.com"], timeout=30
+        )
+        assert still_denied.exit_code != 0, "egress opened up after tamper attempt"
+    finally:
+        await sandbox.cleanup()

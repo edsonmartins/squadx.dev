@@ -86,8 +86,11 @@ class Settings(BaseSettings):
     # Network policy (ADR-0008 / RFC-0006): agent-default | deny-all | full | (deprecated) none, package-managers
     network_policy: str = Field(default="agent-default", alias="SQUADX_NETWORK_POLICY")
     # RFC-0006 Phase 1: enforce egress via a privileged sidecar sharing the agent netns.
-    # Default off (opt-in rollout); when on, a run whose policy cannot be applied fails closed.
-    egress_sidecar_enabled: bool = Field(default=False, alias="SQUADX_EGRESS_SIDECAR")
+    # ON by default: it is the only place egress can actually be enforced (the agent is
+    # cap-drop ALL, so in-agent iptables cannot work), and with it off an agent running
+    # untrusted model output has unrestricted network access. A run whose policy cannot
+    # be applied fails closed. Requires the squadx/egress-proxy image — `make build-egress-proxy`.
+    egress_sidecar_enabled: bool = Field(default=True, alias="SQUADX_EGRESS_SIDECAR")
     egress_sidecar_image: str = Field(default="squadx/egress-proxy:latest", alias="SQUADX_EGRESS_PROXY_IMAGE")
     egress_fail_open: bool = Field(default=False, alias="SQUADX_EGRESS_FAIL_OPEN")  # never true in prod
     # ADR-0008 Phase 0: block cloud metadata egress (169.254.169.254 / ECS creds) host-side,

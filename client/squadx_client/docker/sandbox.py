@@ -69,13 +69,11 @@ class AgentSandbox:
             f"Sandbox for task {task_id} using runtime: {self.runtime.value}"
         )
 
-        # Network policy
-        self._network_policy: Optional[NetworkPolicy] = None
-        if network_policy:
-            try:
-                self._network_policy = get_predefined_policy(network_policy)
-            except ValueError:
-                logger.warning(f"Unknown network policy '{network_policy}', using none")
+        # Network policy. Always resolves to a real policy: an unset argument falls back
+        # to settings, never to None. Leaving it optional is what let both production
+        # call sites silently run with no policy at all for the parameter's whole life —
+        # a default that has to be passed to take effect is not a default.
+        self._network_policy: NetworkPolicy = self._resolve_policy(network_policy)
 
         # Per-exec environment (provider API keys). Deliberately NOT container-create
         # env: create-time env is baked into the container for its whole life (visible
@@ -102,6 +100,22 @@ class AgentSandbox:
 
         self._output_callback: Optional[Callable[[str], Any]] = None
         self._status_callback: Optional[Callable[[SandboxStatus], Any]] = None
+
+    @staticmethod
+    def _resolve_policy(name: Optional[str]) -> NetworkPolicy:
+        """Resolve a policy name to a policy, falling back to settings then to the
+        secure default. Never returns None and never raises: an unknown name degrades
+        to the standing default rather than to no enforcement at all.
+        """
+        configured = name or getattr(settings, "network_policy", "agent-default")
+        try:
+            return get_predefined_policy(configured)
+        except ValueError:
+            logger.warning(
+                f"unknown_network_policy name={configured!r} — falling back to "
+                f"'agent-default' (default-deny + allowlist)"
+            )
+            return get_predefined_policy("agent-default")
 
     def on_output(self, callback: Callable[[str], Any]):
         """Register a callback for output."""
@@ -257,19 +271,19 @@ class AgentSandbox:
                     self._set_status(SandboxStatus.ERROR)
                     return False
 
-            # Legacy in-agent network policy (non-sidecar path). Best-effort: kept up on
-            # failure. The sidecar path already applied its policy fail-closed, above.
-            if self._network_policy and not sidecar_enabled:
-                script = generate_network_setup_script(self._network_policy)
-                ok, log = await self.manager.apply_network_setup(
-                    self.container_id, script
+            # Without the sidecar there is nowhere to enforce egress: the agent is
+            # cap-drop ALL (no NET_ADMIN, and it cannot be regained via exec) and its
+            # /tmp is noexec, so the in-agent iptables path cannot work by construction
+            # — see egress_guard's module docstring. Say so loudly rather than run a
+            # best-effort apply that always fails and reads like enforcement.
+            if not sidecar_enabled:
+                logger.error(
+                    f"egress_unenforced task={self.task_id} "
+                    f"policy={self._network_policy.default_action.value} — the egress "
+                    f"sidecar is disabled, so the agent has UNRESTRICTED network access "
+                    f"(only host-side cloud-metadata rules apply, where the host supports "
+                    f"them). Set SQUADX_EGRESS_SIDECAR=true. See RFC-0006 / ADR-0008."
                 )
-                if not ok:
-                    logger.warning(
-                        f"network_policy_apply_failed task={self.task_id} "
-                        f"policy={self._network_policy.default_action.value} "
-                        f"log={log[:500]}"
-                    )
 
             # Initialize enhanced file operations and metrics collector
             if self.manager.client:

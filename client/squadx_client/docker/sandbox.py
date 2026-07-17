@@ -77,6 +77,14 @@ class AgentSandbox:
             except ValueError:
                 logger.warning(f"Unknown network policy '{network_policy}', using none")
 
+        # Per-exec environment (provider API keys). Deliberately NOT container-create
+        # env: create-time env is baked into the container for its whole life (visible
+        # in `docker inspect` and /proc/1/environ) and is fixed at create time, which
+        # is precisely why pre-created warm-pool containers cannot carry credentials.
+        # Injecting at exec keeps secrets out of the container's metadata and lets a
+        # pooled container serve any run.
+        self._exec_env: dict[str, str] = {}
+
         self.container_id: Optional[str] = None
         # RFC-0006: id of the egress sidecar whose netns the agent joins (when enabled).
         self.sidecar_id: Optional[str] = None
@@ -119,13 +127,21 @@ class AgentSandbox:
         cpu_limit: float = 2.0,
         enable_vnc: bool = True,
         environment: Optional[dict] = None,
+        exec_env: Optional[dict] = None,
     ) -> bool:
-        """Start the sandbox container."""
+        """Start the sandbox container.
+
+        ``environment`` is baked into the container at create time — use it only for
+        non-secret, per-container context. ``exec_env`` carries secrets (provider API
+        keys) and is applied per ``execute``/``execute_streaming`` call instead, so it
+        never lands in container metadata and works on pooled containers.
+        """
         if self.status not in (SandboxStatus.CREATED, SandboxStatus.STOPPED, SandboxStatus.ERROR):
             logger.warning(f"Cannot start sandbox in status: {self.status}")
             return False
 
         self._set_status(SandboxStatus.STARTING)
+        self._exec_env = dict(exec_env or {})
 
         try:
             # Ensure Docker connection
@@ -410,6 +426,7 @@ class AgentSandbox:
                     self.container_id,
                     command,
                     workdir=workdir,
+                    environment=self._exec_env or None,
                 ),
                 timeout=timeout,
             )
@@ -477,7 +494,10 @@ class AgentSandbox:
         async def _run() -> None:
             nonlocal exit_code, error
             async for kind, payload in self.manager.exec_command_stream(
-                self.container_id, command, workdir=workdir
+                self.container_id,
+                command,
+                workdir=workdir,
+                environment=self._exec_env or None,
             ):
                 if kind in ("stdout", "stderr"):
                     chunks.append(payload)

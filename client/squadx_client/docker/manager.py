@@ -359,8 +359,16 @@ class DockerManager:
         container_id: str,
         command: list[str],
         workdir: Optional[str] = None,
+        environment: Optional[dict] = None,
     ) -> tuple[int, str]:
-        """Execute a command in a container."""
+        """Execute a command in a container.
+
+        ``environment`` is scoped to this exec only. Prefer it over container-create
+        env for secrets: create-time env is baked into the container, readable via
+        ``docker inspect`` and ``/proc/1/environ`` for the container's whole life, and
+        cannot be varied per run (which is what makes pre-created warm-pool containers
+        unable to carry per-run credentials).
+        """
         if not self.client:
             return -1, "Docker client not connected"
 
@@ -370,6 +378,7 @@ class DockerManager:
                 command,
                 workdir=workdir,
                 demux=True,
+                environment=environment or None,
             )
 
             stdout = result.output[0].decode("utf-8") if result.output[0] else ""
@@ -387,6 +396,7 @@ class DockerManager:
         container_id: str,
         command: list[str],
         workdir: Optional[str] = None,
+        environment: Optional[dict] = None,
     ):
         """Execute a command, streaming output incrementally.
 
@@ -394,6 +404,8 @@ class DockerManager:
         arrives, then a final ("exit", exit_code) tuple. The blocking Docker
         iteration runs in a worker thread; chunks are marshalled back to the
         event loop via a queue so callbacks run safely on the main loop.
+
+        ``environment`` is scoped to this exec only — see ``exec_command``.
         """
         if not self.client:
             yield ("error", "Docker client not connected")
@@ -407,7 +419,9 @@ class DockerManager:
         def _worker():
             try:
                 api = self.client.api
-                exec_id = api.exec_create(container_id, command, workdir=workdir)["Id"]
+                exec_id = api.exec_create(
+                    container_id, command, workdir=workdir, environment=environment or None
+                )["Id"]
                 stream = api.exec_start(exec_id, stream=True, demux=True)
                 for stdout_chunk, stderr_chunk in stream:
                     if stdout_chunk:

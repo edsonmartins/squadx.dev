@@ -68,6 +68,10 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    # Runs inside the egress-proxy image, not the daemon — a dev dep only so the
+    # proxy's allowlist and anti-rebinding logic can be tested here rather than
+    # only in a built container. Keep in sync with docker/egress-proxy.Dockerfile.
+    "dnslib==0.9.25",
 ]
 
 [project.scripts]

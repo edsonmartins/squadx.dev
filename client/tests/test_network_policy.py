@@ -12,7 +12,7 @@ from squadx_client.docker.network_policy import (
     POLICY_NONE,
     POLICY_PACKAGE_MANAGERS,
     _is_ip_or_cidr,
-    generate_network_setup_script,
+    generate_sidecar_setup_script,
     get_predefined_policy,
 )
 
@@ -128,67 +128,15 @@ class TestIsIpOrCidr:
         assert _is_ip_or_cidr("*.github.com") is False
 
 
-class TestGenerateNetworkSetupScript:
-    """Test generate_network_setup_script for allow-default and deny-default."""
-
-    def test_deny_default_sets_output_drop(self):
-        script = generate_network_setup_script(POLICY_NONE)
-        assert "iptables -P OUTPUT DROP" in script
-        assert "#!/bin/sh" in script
-
-    def test_deny_default_allows_loopback_and_dns(self):
-        script = generate_network_setup_script(POLICY_NONE)
-        assert "-o lo -j ACCEPT" in script
-        assert "--dport 53 -j ACCEPT" in script
-
-    def test_allow_default_blocks_ip_targets(self):
-        script = generate_network_setup_script(POLICY_FULL_ACCESS)
-        assert "169.254.169.254" in script
-        assert "-j DROP" in script
-        # The default policy must end up ACCEPT. The script transiently sets DROP to
-        # close the window while it flushes the previous policy (pool reuse), so assert
-        # the resulting state rather than the absence of the word DROP.
-        assert script.rstrip().endswith("iptables -P OUTPUT ACCEPT")
-
-    def test_script_replaces_rather_than_appends_previous_policy(self):
-        """A recycled sidecar must not inherit the previous run's rules."""
-        for policy in (POLICY_FULL_ACCESS, POLICY_AGENT_DEFAULT):
-            script = generate_network_setup_script(policy)
-            assert "iptables -F OUTPUT" in script
-            # Flush must never run while the default is permissive.
-            flush_at = script.index("iptables -F OUTPUT")
-            drop_at = script.index("iptables -P OUTPUT DROP")
-            assert drop_at < flush_at
-
-    def test_deny_default_with_domain_rules_uses_dig(self):
-        policy = NetworkPolicy(
-            default_action=EgressAction.DENY,
-            rules=[EgressRule(EgressAction.ALLOW, "*.pypi.org", [443])],
-        )
-        script = generate_network_setup_script(policy)
-        assert "dig +short" in script
-        assert "--dport 443 -j ACCEPT" in script
-
-
 class TestEgressSidecarConfig:
     """Test EgressSidecarConfig iptables rules and DNS config generation."""
 
-    def test_to_iptables_rules_redirects_dns(self):
-        config = EgressSidecarConfig()
-        rules = config.to_iptables_rules()
-        # Must redirect UDP and TCP port 53 to local proxy
-        assert any("--dport 53" in r and "-p udp" in r for r in rules)
-        assert any("--dport 53" in r and "-p tcp" in r for r in rules)
-        # Must block DNS-over-TLS
-        assert any("--dport 853" in r and "DROP" in r for r in rules)
-
-    def test_to_iptables_rules_blocks_deny_ips(self):
+    def test_ip_rules_block_deny_ips(self):
         policy = NetworkPolicy(
             default_action=EgressAction.ALLOW,
             rules=[EgressRule(EgressAction.DENY, "169.254.169.254")],
         )
-        config = EgressSidecarConfig(policy=policy)
-        rules = config.to_iptables_rules()
+        rules = EgressSidecarConfig(policy=policy).ip_rules()
         assert any("169.254.169.254" in r and "DROP" in r for r in rules)
 
     def test_to_dns_config_separates_allow_deny_domains(self):
@@ -205,8 +153,67 @@ class TestEgressSidecarConfig:
         assert dns["defaultAction"] == "deny"
         assert "pypi.org" in dns["allowDomains"]
         assert "evil.com" in dns["denyDomains"]
-        # IPs should not appear in domain lists
+        # IPs are enforced by iptables directly; they are not names to resolve.
         assert "10.0.0.1" not in dns["allowDomains"]
         assert "10.0.0.1" not in dns["denyDomains"]
         assert dns["listenPort"] == 15353
-        assert dns["upstreamDNS"] == "8.8.8.8:53"
+
+
+class TestGenerateSidecarSetupScript:
+    """The DNS-proxy topology (RFC-0006 §3 layer 2)."""
+
+    def _script(self, policy=None):
+        return generate_sidecar_setup_script(
+            EgressSidecarConfig(policy=policy or POLICY_AGENT_DEFAULT)
+        )
+
+    def test_agent_dns_is_redirected_into_the_proxy(self):
+        script = self._script()
+        assert "REDIRECT --to-ports 15353" in script
+        # Both transports, or the agent just asks over TCP.
+        assert script.count("REDIRECT --to-ports 15353") == 2
+
+    def test_only_the_proxy_may_reach_upstream_dns(self):
+        """The netns is shared, so uid is the only thing separating the two."""
+        script = self._script()
+        assert "-m owner --uid-owner 0 -p udp --dport 53 -j ACCEPT" in script
+        assert "-m owner ! --uid-owner 0" in script
+
+    def test_udp_53_is_not_simply_open(self):
+        """The regression this whole layer exists for: a blanket DNS ACCEPT made the
+        allowlist decorative, since queries themselves carry data out."""
+        assert "-p udp --dport 53 -j ACCEPT" not in self._script().replace(
+            "-m owner --uid-owner 0 -p udp --dport 53 -j ACCEPT", ""
+        )
+
+    def test_encrypted_dns_is_dropped(self):
+        script = self._script()
+        assert "--dport 853 -j DROP" in script
+
+    def test_allowlist_is_the_ipset_the_proxy_pins_into(self):
+        script = self._script()
+        assert "-m set --match-set squadx_allow4 dst -j ACCEPT" in script
+        assert "-m set --match-set squadx_allow6 dst -j ACCEPT" in script
+
+    def test_no_dig_resolution_remains(self):
+        """One-shot resolution went stale the moment a CDN rotated addresses."""
+        assert "dig +short" not in self._script()
+
+    def test_proxy_starts_before_dns_is_redirected_at_it(self):
+        script = self._script()
+        assert script.index("egress-dns-proxy.py --config") < script.index("REDIRECT")
+
+    def test_default_drop_precedes_the_flush(self):
+        script = self._script()
+        assert script.index("iptables -P OUTPUT DROP") < script.index("iptables -F OUTPUT")
+
+    def test_recycled_sidecar_inherits_no_addresses_or_policy(self):
+        script = self._script()
+        assert "ipset flush squadx_allow4" in script
+        assert "pkill -f egress-dns-proxy.py" in script
+
+    def test_policy_json_is_embedded_for_the_proxy(self):
+        script = self._script()
+        assert "/etc/squadx/egress-policy.json" in script
+        assert '"api.anthropic.com"' in script
+        assert '"defaultAction":"deny"' in script

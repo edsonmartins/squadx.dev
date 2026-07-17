@@ -12,7 +12,12 @@ from .manager import DockerManager, ContainerConfig, docker_manager
 from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
 from .file_ops import SandboxFileOps
 from .metrics import ContainerMetricsCollector, ContainerMetrics
-from .network_policy import NetworkPolicy, generate_network_setup_script, get_predefined_policy
+from .network_policy import (
+    EgressSidecarConfig,
+    NetworkPolicy,
+    generate_sidecar_setup_script,
+    get_predefined_policy,
+)
 
 if TYPE_CHECKING:
     from .pool import PooledContainer
@@ -341,10 +346,14 @@ class AgentSandbox:
     async def _apply_sidecar_policy(self) -> bool:
         """Apply the egress policy on the sidecar. Returns False only when it could not
         be applied AND fail-open is off (caller then aborts the run)."""
-        policy = self._network_policy or get_predefined_policy(
-            getattr(settings, "network_policy", "agent-default")
+        # The sidecar runs the DNS-proxy topology (RFC-0006 §3 layer 2), not the legacy
+        # one-shot `dig` allowlist: only names on the allowlist resolve at all, and the
+        # addresses they resolve to are pinned as they are handed out.
+        config = EgressSidecarConfig(
+            image=getattr(settings, "egress_sidecar_image", "squadx/egress-proxy:latest"),
+            policy=self._network_policy,
         )
-        script = generate_network_setup_script(policy)
+        script = generate_sidecar_setup_script(config)
         ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
         if ok:
             return True

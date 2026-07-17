@@ -67,6 +67,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and Push Agent Sandbox Image (base)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/docker/agent.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/agent:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository }}/agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Agent Sandbox Image (live-view)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/docker/agent.Dockerfile
+          target: live-view
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/agent:${{ steps.version.outputs.VERSION }}-live
+            ghcr.io/${{ github.repository }}/agent:live
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Egress Proxy Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client/docker
+          file: ./client/docker/egress-proxy.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/egress-proxy:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository }}/egress-proxy:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

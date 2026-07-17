@@ -100,6 +100,16 @@ build-backend: ## Build backend only
 build-frontend: ## Build frontend only
 	cd frontend && pnpm build
 
+build-agent: ## Build the agent sandbox image (base :latest + live-view :live)
+	cd client && docker build -f docker/agent.Dockerfile -t squadx/agent:latest .
+	cd client && docker build -f docker/agent.Dockerfile --target live-view -t squadx/agent:live .
+
+build-egress-proxy: ## Build the egress firewall sidecar image (RFC-0006)
+	cd client/docker && docker build -f egress-proxy.Dockerfile -t squadx/egress-proxy:latest .
+
+build-sandbox-images: build-agent build-egress-proxy ## Build the images the daemon runs (agent + egress sidecar)
+	@echo "Built squadx/agent:latest, squadx/agent:live, squadx/egress-proxy:latest"
+
 # Clean
 clean: ## Clean build artifacts
 	cd backend && ./mvnw clean

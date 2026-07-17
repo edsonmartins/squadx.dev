@@ -104,9 +104,8 @@ build-agent: ## Build the agent sandbox image (base :latest + live-view :live)
 	cd client && docker build -f docker/agent.Dockerfile -t squadx/agent:latest .
 	cd client && docker build -f docker/agent.Dockerfile --target live-view -t squadx/agent:live .
 
-build-egress-proxy: ## Build the egress firewall sidecar image (RFC-0006)
-	cd client/docker && docker build -f egress-proxy.Dockerfile -t squadx/egress-proxy:latest .
-
+# build-egress-proxy is provided by the egress firewall change (RFC-0006), which
+# lands first; this aggregate depends on it.
 build-sandbox-images: build-agent build-egress-proxy ## Build the images the daemon runs (agent + egress sidecar)
 	@echo "Built squadx/agent:latest, squadx/agent:live, squadx/egress-proxy:latest"
 

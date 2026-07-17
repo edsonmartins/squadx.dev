@@ -8,7 +8,10 @@ describe('cn', () => {
   })
 
   it('handles conditional classes', () => {
-    const result = cn('base', false && 'hidden', 'visible')
+    // `show` is a variable, not a literal, so cn() still receives a falsy value but
+    // eslint's no-constant-binary-expression does not flag a constant `&&` LHS.
+    const show = false
+    const result = cn('base', show && 'hidden', 'visible')
     expect(result).toBe('base visible')
   })
 

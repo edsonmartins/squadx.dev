@@ -6,7 +6,7 @@ covered by the docker-marked integration test below (skipped by default).
 """
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from docker.errors import NotFound
@@ -17,7 +17,9 @@ from squadx_client.docker.egress_sidecar import (
     build_sidecar_kwargs,
     sidecar_name,
 )
+from squadx_client.docker.hardening import SandboxRuntime
 from squadx_client.docker.manager import ContainerConfig, DockerManager
+from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.docker.network_policy import (
     POLICY_AGENT_DEFAULT,
     EgressAction,
@@ -134,6 +136,78 @@ async def test_create_container_without_netns_publishes_vnc(connected_manager):
     kwargs = connected_manager.client.containers.create.call_args.kwargs
     assert "5900/tcp" in kwargs["ports"]
     assert "container:" not in str(kwargs.get("network_mode", ""))
+
+
+# ── live-view under a shared netns (RFC-0006 §6) ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_live_stream_uses_the_port_published_on_the_sidecar():
+    """Under RFC-0006 the agent has no published ports — the sidecar owns the netns
+    and publishes VNC. The stream must be started against the sidecar's port while
+    still being keyed by the agent container (what stop/cleanup tear down).
+
+    Regression: passing only the agent's container_id made the manager re-resolve the
+    port against a container with none, silently disabling live view whenever egress
+    enforcement was on.
+    """
+    manager = MagicMock()
+    manager.client = MagicMock()
+    manager.connect = AsyncMock(return_value=True)
+    manager.create_egress_sidecar = AsyncMock(return_value="sc-1")
+    manager.create_container = AsyncMock(return_value="agent-1")
+    manager.start_container = AsyncMock(return_value=True)
+    manager.apply_network_setup = AsyncMock(return_value=(True, ""))
+    manager.start_live_stream = AsyncMock(return_value="JOIN42")
+    # The port is published on the sidecar; the agent container has none.
+    manager.get_vnc_port = AsyncMock(
+        side_effect=lambda cid: 49999 if cid == "sc-1" else None
+    )
+    manager.warm_pool = None
+
+    with patch("squadx_client.docker.sandbox.settings") as s:
+        s.egress_sidecar_enabled = True
+        s.egress_fail_open = False
+        s.network_policy = "agent-default"
+
+        sandbox = AgentSandbox(
+            task_id=42,
+            agent_type="backend",
+            workspace_path="/tmp/ws",
+            manager=manager,
+            enable_live_streaming=True,
+            runtime=SandboxRuntime.DOCKER,
+        )
+        with patch("squadx_client.docker.sandbox.asyncio.sleep", new=AsyncMock()):
+            started = await sandbox.start(enable_vnc=True)
+
+    assert started is True
+    assert sandbox.sidecar_id == "sc-1"
+    assert sandbox.vnc_port == 49999
+    manager.start_live_stream.assert_awaited_once()
+    kwargs = manager.start_live_stream.await_args.kwargs
+    assert kwargs["vnc_port"] == 49999          # the sidecar's port, not None
+    assert kwargs["container_id"] == "agent-1"  # still keyed by the agent
+    assert sandbox.live_join_code == "JOIN42"
+
+
+@pytest.mark.asyncio
+async def test_start_live_stream_resolves_port_itself_when_not_given():
+    """Non-sidecar path is unchanged: the manager still resolves the agent's port."""
+    with patch("squadx_client.docker.manager.settings") as mock_settings:
+        mock_settings.supabase_url = "https://x.supabase.co"
+        mock_settings.supabase_anon_key = "anon"
+        mgr = DockerManager()
+    mgr.client = MagicMock()
+    mgr.get_vnc_port = AsyncMock(return_value=32768)
+
+    with patch(
+        "squadx_client.streaming.webrtc_bridge.create_live_stream",
+        new=AsyncMock(return_value=(MagicMock(session_id="s1"), "JOIN01")),
+    ):
+        join = await mgr.start_live_stream(container_id="agent-9", task_id=1)
+
+    assert join == "JOIN01"
+    mgr.get_vnc_port.assert_awaited_once_with("agent-9")
 
 
 # ── integration (real Docker on Linux) — skipped unless explicitly enabled ────────

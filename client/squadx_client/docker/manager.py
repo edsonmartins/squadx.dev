@@ -548,13 +548,19 @@ class DockerManager:
         container_id: str,
         task_id: int,
         fps: int = 30,
+        vnc_port: Optional[int] = None,
     ) -> Optional[str]:
         """Start live streaming for a container.
 
         Args:
-            container_id: The container ID
+            container_id: The agent container ID (identifies the stream)
             task_id: The task ID for the session
             fps: Frames per second for the stream
+            vnc_port: Published host port for the agent's VNC. Pass it when the port
+                does not live on ``container_id`` itself — under RFC-0006 the agent
+                shares the egress sidecar's netns and the sidecar publishes the port,
+                so resolving it here would look at the wrong container and find None.
+                Omitted (non-sidecar path): resolved from ``container_id``.
 
         Returns:
             The join code for the live session, or None if failed
@@ -568,7 +574,8 @@ class DockerManager:
             return self._live_streams[container_id].join_code
 
         # Get VNC port
-        vnc_port = await self.get_vnc_port(container_id)
+        if vnc_port is None:
+            vnc_port = await self.get_vnc_port(container_id)
         if not vnc_port:
             logger.error(f"Cannot start live stream: VNC port not available for {container_id}")
             return None

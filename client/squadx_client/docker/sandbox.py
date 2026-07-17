@@ -255,11 +255,17 @@ class AgentSandbox:
                 self.vnc_port = await self.manager.get_vnc_port(vnc_host_container)
                 logger.info(f"VNC available on port: {self.vnc_port}")
 
-                # Start live streaming if enabled
+                # Start live streaming if enabled. The stream is keyed by the agent
+                # container (that is what stop/cleanup tear down), but the port was
+                # resolved above from whichever container actually publishes it —
+                # the sidecar, when it owns the netns. Pass it explicitly rather than
+                # letting the manager re-resolve it against the agent, which has no
+                # published ports under RFC-0006 and would silently yield None.
                 if self.enable_live_streaming and self.vnc_port:
                     self.live_join_code = await self.manager.start_live_stream(
                         container_id=self.container_id,
                         task_id=self.task_id,
+                        vnc_port=self.vnc_port,
                     )
                     if self.live_join_code:
                         logger.info(f"Live streaming available: {self.live_join_code}")

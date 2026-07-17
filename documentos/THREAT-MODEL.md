@@ -52,11 +52,26 @@ Ordenados por severidade. Cada um é candidato a issue/fix; alguns são **regres
    **Design:** `docs/adr/ADR-0008-egress-enforcement-nivel-de-rede.md`. **Fase 0 IMPLEMENTADA
    (2026-07):** bloqueio host-side do metadata (`DOCKER-USER` DROP p/ 169.254.169.254 + 169.254.170.2)
    via `egress_guard.py`, default on (`SQUADX_BLOCK_CLOUD_METADATA`), aplicado em `DockerManager.connect`;
-   degrada com log ERROR se o host não puder aplicar (sem privilégio/iptables/daemon remoto). **Resta:**
-   Fase 1 (allowlist default-deny via sidecar — `docs/rfc/RFC-0006-egress-firewall-sidecar.md`,
-   **implementada atrás de flag** `SQUADX_EGRESS_SIDECAR` default off: `egress_sidecar.py` + wiring,
-   `POLICY_AGENT_DEFAULT`, fail-closed; pendente imagem do proxy + verificação em host Linux)
-   + Fase 2 (gVisor). Verificação de efeito real exige host Linux com iptables (dev/Mac faz no-op ruidoso).
+   degrada com log ERROR se o host não puder aplicar (sem privilégio/iptables/daemon remoto).
+
+   **[CORRIGIDO — 2026-07-17]** Fase 1 completa e **ligada por default**
+   (`SQUADX_EGRESS_SIDECAR` default **on**), realizando RFC-0006 incluindo a camada 2:
+   - as duas causas acima estão fechadas — `AgentSandbox` agora **sempre resolve** uma policy
+     (não passar mais nada não desliga o enforcement) e o rebaixamento `network=none → bridge` só
+     ocorre sem sidecar, com log ERROR explícito;
+   - o allowlist de domínio deixou de ser `dig` one-shot: um **dns-proxy** no sidecar é o único
+     resolver que o agente alcança (UDP 53 redirecionado; DoT dropado), nomes fora do allowlist não
+     resolvem — o que fecha a exfiltração **via a própria query DNS**, que o desenho anterior deixava
+     aberta — e as respostas permitidas são fixadas num ipset (CDN com IP rotativo deixa de quebrar);
+   - anti-rebinding: nome permitido que resolve para range restrito (incl. `::ffff:169.254.169.254`)
+     não é fixado — portado do agentOS (`documentos/LEARNINGS-agentOS.md`);
+   - policy é **por squad**, vinda do backend (migration V36), não mais um env var por daemon;
+   - compõe com o warm pool (pares agente+sidecar pré-criados) — antes eram mutuamente exclusivos.
+
+   **Resta:** (a) **verificação ponta-a-ponta em host real — não executada**; o teste `integration`
+   existe e afirma as quatro alegações, mas não rodou (sem daemon Docker no ambiente de dev). Até
+   rodar, trate o enforcement como **não comprovado**. Requer `xt_set` no kernel (sem ele: aborta
+   fail-closed). (b) telemetria de egress negado p/ calibrar allowlist. (c) Fase 2 (gVisor).
 
 2. **[ALTO → CORRIGIDO parcial] Live-view `/supabase/**` sem escopo de org.** Era: qualquer usuário
    autenticado de qualquer org enumerava (`/supabase/sessions/active`), criava ou encerrava sessões de

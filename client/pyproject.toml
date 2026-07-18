@@ -66,8 +66,12 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
+    # Pinned so CI is reproducible: an unbounded `>=` pulled whatever ruff/mypy were
+    # newest at build time, and a newer release adding rules would turn the lint/type
+    # gate red without a code change. Bump deliberately (and re-run locally) rather
+    # than drift. These are the versions the pipeline last passed on.
+    "ruff==0.15.22",
+    "mypy==2.3.0",
     # Runs inside the egress-proxy image, not the daemon — a dev dep only so the
     # proxy's allowlist and anti-rebinding logic can be tested here rather than
     # only in a built container. Keep in sync with docker/egress-proxy.Dockerfile.

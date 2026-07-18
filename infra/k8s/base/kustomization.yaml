@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace-neutral base. The environment is chosen by an overlay under
+# ../overlays/{staging,prod}, which sets the namespace, the ingress hosts/issuer,
+# and (staging) the environment-specific config. Secrets are NOT here — they are
+# created in-cluster from CI (see .github/workflows/ci.yml), never committed.
+#
+# The client daemon is deliberately absent: it runs on a dedicated Docker host,
+# not in-cluster (see client/deploy/README.md).
+
+resources:
+  - configmap.yml
+  - backend-deployment.yml
+  - frontend-deployment.yml
+  - redis-deployment.yml
+  - postgres-statefulset.yml

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production overlay. The base config already carries prod values (squadx.dev
+# hosts, letsencrypt-prod), so this only pins the namespace and adds the prod
+# namespace + ingress. Secrets are created in-cluster, not here.
+namespace: squadx
+
+resources:
+  - namespace.yml
+  - ../../base
+  - ingress.yml

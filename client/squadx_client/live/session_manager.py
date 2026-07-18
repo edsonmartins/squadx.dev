@@ -2,13 +2,14 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from squadx_client.live.supabase_client import (
-    SupabaseClient,
     RealtimeMessage,
+    SupabaseClient,
     get_supabase_client,
 )
 
@@ -35,10 +36,10 @@ class LiveSession:
     join_code: str
     mode: str  # 'p2p' or 'sfu'
     state: SessionState = SessionState.CREATED
-    vnc_host: Optional[str] = None
-    vnc_port: Optional[int] = None
+    vnc_host: str | None = None
+    vnc_port: int | None = None
     viewer_count: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -62,24 +63,41 @@ class LiveSessionManager:
 
     def __init__(
         self,
-        supabase_client: Optional[SupabaseClient] = None,
+        supabase_client: SupabaseClient | None = None,
     ):
         self._client = supabase_client or get_supabase_client()
         self._sessions: dict[str, LiveSession] = {}
         self._peers: dict[str, dict[str, PeerConnection]] = {}  # session_id -> peer_id -> peer
-        self._on_peer_join: Optional[Callable[[str, PeerConnection], None]] = None
-        self._on_peer_leave: Optional[Callable[[str, str], None]] = None
-        self._on_signal: Optional[Callable[[str, str, dict], None]] = None
+        # Callbacks may be sync or async (webrtc_bridge registers coroutines);
+        # `_dispatch` schedules the coroutine when one is returned.
+        self._on_peer_join: Callable[[str, PeerConnection], Any] | None = None
+        self._on_peer_leave: Callable[[str, str], Any] | None = None
+        self._on_signal: Callable[[str, str, dict], Any] | None = None
 
-    def on_peer_join(self, callback: Callable[[str, PeerConnection], None]):
+    @staticmethod
+    def _dispatch(callback: Callable[..., Any], *args: Any) -> None:
+        """Call a callback that may be sync or async, scheduling coroutines."""
+        result = callback(*args)
+        if not asyncio.iscoroutine(result):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            loop.create_task(result)
+        else:
+            asyncio.run(result)
+
+    def on_peer_join(self, callback: Callable[[str, PeerConnection], Any]):
         """Register callback for when a peer joins."""
         self._on_peer_join = callback
 
-    def on_peer_leave(self, callback: Callable[[str, str], None]):
+    def on_peer_leave(self, callback: Callable[[str, str], Any]):
         """Register callback for when a peer leaves."""
         self._on_peer_leave = callback
 
-    def on_signal(self, callback: Callable[[str, str, dict], None]):
+    def on_signal(self, callback: Callable[[str, str, dict], Any]):
         """Register callback for WebRTC signals (offer, answer, ice-candidate)."""
         self._on_signal = callback
 
@@ -216,11 +234,11 @@ class LiveSessionManager:
             logger.error(f"Failed to end session: {e}")
             return False
 
-    def get_session(self, session_id: str) -> Optional[LiveSession]:
+    def get_session(self, session_id: str) -> LiveSession | None:
         """Get a session by ID."""
         return self._sessions.get(session_id)
 
-    def get_session_by_task(self, task_id: int) -> Optional[LiveSession]:
+    def get_session_by_task(self, task_id: int) -> LiveSession | None:
         """Get active session for a task."""
         for session in self._sessions.values():
             if session.task_id == task_id and session.state != SessionState.ENDED:
@@ -321,8 +339,8 @@ class LiveSessionManager:
             signal_type = payload.get("type")
             sender_id = payload.get("sender_id")
 
-            # Ignore our own messages
-            if sender_id == "host":
+            # Ignore our own messages / malformed payloads without a sender
+            if not isinstance(sender_id, str) or sender_id == "host":
                 return
 
             # Check if message is targeted to us (or broadcast)
@@ -349,7 +367,7 @@ class LiveSessionManager:
                     session.viewer_count = len(self._peers[session_id])
 
                 if self._on_peer_join:
-                    self._on_peer_join(session_id, peer)
+                    self._dispatch(self._on_peer_join, session_id, peer)
 
             elif signal_type == "leave":
                 # Viewer leaving
@@ -361,7 +379,7 @@ class LiveSessionManager:
                         session.viewer_count = len(self._peers[session_id])
 
                 if self._on_peer_leave:
-                    self._on_peer_leave(session_id, sender_id)
+                    self._dispatch(self._on_peer_leave, session_id, sender_id)
 
             elif signal_type in ("offer", "answer", "ice-candidate"):
                 # WebRTC signaling - pass flat payload to handler
@@ -375,7 +393,9 @@ class LiveSessionManager:
                     if "candidate" in payload:
                         signal_data["candidate"] = payload["candidate"]
 
-                    self._on_signal(session_id, signal_type, signal_data)
+                    self._dispatch(
+                        self._on_signal, session_id, signal_type, signal_data
+                    )
 
         except Exception as e:
             logger.error(f"Error handling signal message: {e}")
@@ -390,7 +410,7 @@ class LiveSessionManager:
 
 
 # Global instance (lazy initialization)
-_session_manager: Optional[LiveSessionManager] = None
+_session_manager: LiveSessionManager | None = None
 
 
 def get_session_manager() -> LiveSessionManager:

@@ -1,7 +1,6 @@
 """Agent mailbox for inter-agent communication via SquadX API."""
 import logging
-from typing import Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ class AgentMailboxMessage:
     content: str
     to_agent_id: int = 0
     to_agent_name: str = ""
-    execution_id: Optional[int] = None
+    execution_id: int | None = None
     is_read: bool = False
     created_at: str = ""
 
@@ -33,7 +32,7 @@ class AgentMailbox:
         to_agent_id: int,
         content: str,
         message_type: str = "TASK_UPDATE",
-        execution_id: Optional[int] = None,
+        execution_id: int | None = None,
     ) -> bool:
         try:
             await self._api.post(

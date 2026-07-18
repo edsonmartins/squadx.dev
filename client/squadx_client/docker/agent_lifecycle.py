@@ -5,9 +5,9 @@ Inspired by ClawTeam's lifecycle management.
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ class AgentStatus:
     agent_name: str
     state: AgentState = AgentState.STARTING
     last_heartbeat: float = field(default_factory=time.time)
-    current_task_id: Optional[str] = None
-    idle_since: Optional[float] = None
-    error_message: Optional[str] = None
+    current_task_id: str | None = None
+    idle_since: float | None = None
+    error_message: str | None = None
 
     @property
     def seconds_since_heartbeat(self) -> float:
@@ -59,8 +59,8 @@ class AgentLifecycleProtocol:
         self._agents: dict[str, AgentStatus] = {}
         self._heartbeat_interval = heartbeat_interval
         self._dead_threshold = dead_threshold
-        self._on_agent_dead: Optional[Callable] = None
-        self._on_agent_idle: Optional[Callable] = None
+        self._on_agent_dead: Callable | None = None
+        self._on_agent_idle: Callable | None = None
 
     def on_agent_dead(self, callback: Callable):
         self._on_agent_dead = callback
@@ -77,7 +77,7 @@ class AgentLifecycleProtocol:
         if agent_id in self._agents:
             self._agents[agent_id].last_heartbeat = time.time()
 
-    def transition(self, agent_id: str, new_state: AgentState, task_id: Optional[str] = None):
+    def transition(self, agent_id: str, new_state: AgentState, task_id: str | None = None):
         status = self._agents.get(agent_id)
         if status is None:
             return
@@ -108,7 +108,7 @@ class AgentLifecycleProtocol:
                         logger.error(f"Dead agent callback error: {e}")
         return dead
 
-    def get_status(self, agent_id: str) -> Optional[AgentStatus]:
+    def get_status(self, agent_id: str) -> AgentStatus | None:
         return self._agents.get(agent_id)
 
     def get_all_statuses(self) -> list[AgentStatus]:

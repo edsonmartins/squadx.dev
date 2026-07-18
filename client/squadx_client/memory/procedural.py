@@ -23,16 +23,19 @@ class ProceduralMemoryManager:
             return ""
 
         query = self._build_query(prompt, scope)
+        resolved_limit: int = limit or int(
+            getattr(settings, "brainsentry_procedural_limit", 5)
+        )
         results = await self.client.search_memories(
             query,
-            limit=limit or getattr(settings, "brainsentry_procedural_limit", 5),
+            limit=resolved_limit,
         )
         procedures = [item for item in results if self._is_procedural(item) and self._matches_scope(item, scope)]
         if not procedures:
             return ""
 
         lines = ["<procedural_memory>", "Relevant procedures from prior executions:"]
-        for item in procedures[: limit or getattr(settings, "brainsentry_procedural_limit", 5)]:
+        for item in procedures[:resolved_limit]:
             summary = item.get("summary") or item.get("content") or ""
             summary_text = str(summary).strip()
             if summary_text:

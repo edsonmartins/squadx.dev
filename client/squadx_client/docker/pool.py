@@ -230,6 +230,7 @@ class WarmContainerPool:
                 ) from None
 
         # Start the container; on failure, discard and cold-create a fresh one
+        assert self._manager.client is not None  # pool only runs once the manager connected
         try:
             await self._start_agent(pooled, before_start)
         except _PolicyRejected:

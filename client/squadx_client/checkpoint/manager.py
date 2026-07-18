@@ -12,7 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class CheckpointMetadata:
     checkpoint_id: str
     execution_id: str
     created_at: float = field(default_factory=time.time)
-    agent_name: Optional[str] = None
+    agent_name: str | None = None
     description: str = ""
     task_count: int = 0
     log_count: int = 0
@@ -48,12 +48,12 @@ class CheckpointManager:
         self._data_dir = os.path.expanduser(data_dir)
         os.makedirs(self._data_dir, exist_ok=True)
 
-    def save(self, execution_id: str, state: dict, workspace_path: Optional[str] = None, description: str = "") -> CheckpointMetadata:
+    def save(self, execution_id: str, state: dict, workspace_path: str | None = None, description: str = "") -> CheckpointMetadata:
         # Include a short random suffix so multiple checkpoints saved within the
         # same second for the same execution don't collide (and overwrite).
         checkpoint_id = f"ckpt-{int(time.time())}-{execution_id[:8]}-{uuid.uuid4().hex[:6]}"
 
-        snapshot = {
+        snapshot: dict[str, Any] = {
             "metadata": {
                 "checkpointId": checkpoint_id,
                 "executionId": execution_id,
@@ -96,7 +96,7 @@ class CheckpointManager:
         logger.info(f"Saved checkpoint {checkpoint_id} for execution {execution_id}")
         return metadata
 
-    def restore(self, checkpoint_id: str) -> Optional[dict]:
+    def restore(self, checkpoint_id: str) -> dict | None:
         filepath = os.path.join(self._data_dir, f"{checkpoint_id}.json.gz")
         if not os.path.exists(filepath):
             logger.error(f"Checkpoint {checkpoint_id} not found")
@@ -108,7 +108,7 @@ class CheckpointManager:
         logger.info(f"Restored checkpoint {checkpoint_id}")
         return snapshot.get("state")
 
-    def list_checkpoints(self, execution_id: Optional[str] = None) -> list[CheckpointMetadata]:
+    def list_checkpoints(self, execution_id: str | None = None) -> list[CheckpointMetadata]:
         checkpoints = []
         for filename in sorted(Path(self._data_dir).glob("ckpt-*.json.gz")):
             try:

@@ -4,11 +4,10 @@ Replaces echo/cat-based file I/O with robust tar-based operations.
 Inspired by OpenSandbox's execd file API.
 """
 import io
+import logging
 import os
 import tarfile
-import logging
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class FileInfo:
     size: int
     mode: int
     is_directory: bool
-    modified_at: Optional[float] = None
+    modified_at: float | None = None
 
 
 class SandboxFileOps:
@@ -62,7 +61,7 @@ class SandboxFileOps:
             logger.error(f"Failed to write {path}: {e}")
             return False
 
-    def read_file(self, path: str) -> Optional[bytes]:
+    def read_file(self, path: str) -> bytes | None:
         """Read file from container using get_archive (binary-safe)."""
         try:
             container = self._client.containers.get(self._container_id)
@@ -84,7 +83,7 @@ class SandboxFileOps:
             logger.error(f"Failed to read {path}: {e}")
             return None
 
-    def read_file_text(self, path: str, encoding: str = "utf-8") -> Optional[str]:
+    def read_file_text(self, path: str, encoding: str = "utf-8") -> str | None:
         """Read file as text."""
         data = self.read_file(path)
         return data.decode(encoding) if data is not None else None
@@ -98,7 +97,7 @@ class SandboxFileOps:
         except Exception:
             return False
 
-    def get_file_info(self, path: str) -> Optional[FileInfo]:
+    def get_file_info(self, path: str) -> FileInfo | None:
         """Get file metadata."""
         try:
             container = self._client.containers.get(self._container_id)

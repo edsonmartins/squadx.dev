@@ -286,7 +286,7 @@ def create_agent(
             brainsentry_session_id=brainsentry_session_id,
         )
 
-    agents = {
+    agents: dict[str, type[BaseAgent]] = {
         "frontend": FrontendAgent,
         "backend": BackendAgent,
         "fullstack": FullstackAgent,

@@ -213,7 +213,7 @@ export function useWebRTC({
 
       try {
         switch (signal.type) {
-          case "offer":
+          case "offer": {
             // Host is sending us an offer
             hostIdRef.current = signal.sender_id;
             await pc.setRemoteDescription(
@@ -225,6 +225,7 @@ export function useWebRTC({
             await pc.setLocalDescription(answer);
             await signaling.sendAnswer(answer.sdp!, signal.sender_id);
             break;
+          }
 
           case "answer":
             // Host is responding to our offer

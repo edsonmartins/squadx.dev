@@ -49,6 +49,10 @@ frontend:
 
 # -- Client (desktop/CLI)
 client:
+  # The client daemon runs on a dedicated Docker host, not in-cluster (it needs the
+  # host Docker daemon to create sandboxes). Off by default; see client/deploy/README.md.
+  # Only enable if you have reworked the deployment for an in-cluster docker topology.
+  enabled: false
   replicaCount: 1
   image:
     repository: ghcr.io/edsonmartins/squadx.dev/client

@@ -191,6 +191,48 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The sandbox base image the daemon runs agents in. Without this published,
+      # the client can create no sandboxes and the core flow does not work.
+      - name: Build and Push Agent Sandbox Image (base)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/docker/agent.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/agent:latest
+            ghcr.io/${{ github.repository }}/agent:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Live-view variant (Xvfb + x11vnc + noVNC) — used when SQUADX_ENABLE_VNC is on.
+      - name: Build and Push Agent Sandbox Image (live-view)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/docker/agent.Dockerfile
+          target: live-view
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/agent:live
+            ghcr.io/${{ github.repository }}/agent:live-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Egress firewall sidecar (RFC-0006) — required for the default-deny egress
+      # policy the daemon applies before an agent joins the network namespace.
+      - name: Build and Push Egress Proxy Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client/docker
+          file: ./client/docker/egress-proxy.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/egress-proxy:latest
+            ghcr.io/${{ github.repository }}/egress-proxy:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
@@ -218,4 +260,5 @@ jobs:
         run: |
           kubectl set image deployment/backend backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }} -n squadx
           kubectl set image deployment/frontend frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }} -n squadx
-          kubectl set image deployment/client client=ghcr.io/${{ github.repository }}/client:${{ github.sha }} -n squadx
+          # The client daemon is not an in-cluster Deployment — it runs on a dedicated
+          # Docker host (client/deploy/README.md), so there is nothing to set here.

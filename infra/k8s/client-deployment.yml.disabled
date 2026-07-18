@@ -1,3 +1,12 @@
+# DISABLED — the client daemon does NOT run as a Kubernetes pod.
+#
+# It creates hardened Docker sandboxes via the host Docker daemon, which a plain
+# pod cannot reach. Deploy it on a dedicated Docker host instead — see
+# client/deploy/README.md. This file is kept (with a .disabled suffix so
+# `kubectl apply -f infra/k8s/` skips it) only as a reference for anyone who later
+# chooses an in-cluster topology (host-socket mount or a Docker-in-Docker sidecar),
+# which would require reworking this manifest and accepting the extra privilege.
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

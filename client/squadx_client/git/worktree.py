@@ -31,9 +31,15 @@ class WorktreeManager:
         self._worktrees_dir = os.path.join(repo_path, ".worktrees")
         self._registry: dict[str, WorktreeInfo] = {}
 
-    def create(self, agent_name: str, task_id: str | None = None, base_branch: str = "main") -> WorktreeInfo:
+    def create(self, agent_name: str, task_id: str | None = None, base_branch: str | None = None) -> WorktreeInfo:
         branch = f"squadx/{task_id or 'default'}/{agent_name}"
         worktree_path = os.path.join(self._worktrees_dir, agent_name)
+
+        # Fork from the repo's current commit by default. Hardcoding "main" broke on
+        # any repo whose base branch is named otherwise (e.g. "master", which is what
+        # `git init` still produces on many hosts) — the worktree add would fail and
+        # no branch was recorded. HEAD is branch-name-agnostic.
+        base = base_branch or "HEAD"
 
         os.makedirs(self._worktrees_dir, exist_ok=True)
 
@@ -43,7 +49,7 @@ class WorktreeManager:
 
         try:
             subprocess.run(
-                ["git", "worktree", "add", worktree_path, "-b", branch, base_branch],
+                ["git", "worktree", "add", worktree_path, "-b", branch, base],
                 cwd=self._repo, check=True, capture_output=True, text=True
             )
         except subprocess.CalledProcessError:

@@ -387,10 +387,11 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 # Unique key per subtask so two backend subtasks don't collide.
                 wt_key = f"{subtask.agent_type}-{subtask_id}"
                 wm = WorktreeManager(workspace_path)
+                # Fork from the workspace's current commit (HEAD), not a hardcoded
+                # "main" — the base branch may be "master" or anything else.
                 wt_info = wm.create(
                     agent_name=wt_key,
                     task_id=str(state.task_id),
-                    base_branch="main",
                 )
                 subtask_work_path = wt_info.path
                 subtask_worktree_branch = wt_info.branch

@@ -1,12 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Clock,
   Calendar,
   User,
   Play,
-  Pause,
   Square,
   Video,
   Eye,
@@ -19,7 +19,6 @@ import {
   Bot,
 } from "lucide-react";
 import {
-  tasksApi,
   executionsApi,
   liveViewApi,
   TaskResponse,
@@ -74,6 +73,7 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { setSelectedTask } = useTaskStore();
+  const router = useRouter();
 
   // Fetch executions for the task
   const { data: executions } = useQuery({
@@ -124,6 +124,23 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
     },
   });
 
+  // Cancel the running execution. There is no "pause" on the backend, so the only
+  // real control here is stop/cancel.
+  const cancelExecutionMutation = useMutation({
+    mutationFn: (executionId: number) => executionsApi.cancel(executionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["executions", task?.id] });
+      toast({ title: "Stopping", description: "The run is being cancelled." });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to stop the run. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleClose = () => {
     setSelectedTask(null);
     onClose();
@@ -131,7 +148,15 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
 
   const latestExecution = executions?.content?.[0];
   const isRunning = latestExecution?.status === "RUNNING";
-  const progress = isRunning ? 75 : latestExecution?.status === "COMPLETED" ? 100 : 0;
+  const isDone = latestExecution?.status === "COMPLETED";
+  // There is no real progress percentage on the execution (the daemon streams step
+  // updates over STOMP but they are not persisted), so don't fabricate one: show a
+  // determinate bar only when finished, and surface the latest real log line as the
+  // current step instead of a hardcoded string.
+  const latestLog =
+    latestExecution?.logs && latestExecution.logs.length > 0
+      ? latestExecution.logs[latestExecution.logs.length - 1].message
+      : undefined;
 
   return (
     <Sheet open={!!task} onOpenChange={handleClose}>
@@ -190,12 +215,19 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
             <div className="rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Progress</span>
-                <span className="text-sm text-muted-foreground">{progress}% Complete</span>
+                <span className="text-sm text-muted-foreground">
+                  {isRunning ? "In progress…" : isDone ? "100% Complete" : latestExecution?.status}
+                </span>
               </div>
-              <Progress value={progress} className="h-2" />
-              {isRunning && (
-                <p className="text-sm text-muted-foreground">
-                  Current Step: Writing unit tests for validation
+              {/* Running has no known percentage — a pulsing full bar signals activity
+                  without claiming a false number; finished runs show a real 100%. */}
+              <Progress
+                value={isDone ? 100 : isRunning ? 100 : 0}
+                className={cn("h-2", isRunning && "animate-pulse")}
+              />
+              {isRunning && latestLog && (
+                <p className="text-sm text-muted-foreground line-clamp-2">
+                  Current step: {latestLog}
                 </p>
               )}
             </div>
@@ -218,7 +250,11 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
                     <span>Session started: {format(new Date(liveSession.created_at), "p")}</span>
                   </div>
 
-                  <Button className="w-full" variant="destructive">
+                  <Button
+                    className="w-full"
+                    variant="destructive"
+                    onClick={() => router.push(`/live/${liveSession.code}`)}
+                  >
                     <Video className="mr-2 h-4 w-4" />
                     Watch Live
                   </Button>
@@ -226,10 +262,10 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
               )}
 
               {!liveSession && isRunning && (
-                <Button className="w-full" variant="outline">
-                  <Video className="mr-2 h-4 w-4" />
-                  Start Live Session
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  A live view opens automatically once the agent starts streaming its
+                  screen; the link will appear here.
+                </p>
               )}
             </div>
           )}
@@ -333,17 +369,16 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
               </Button>
             )}
 
-            {isRunning && (
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">
-                  <Pause className="mr-2 h-4 w-4" />
-                  Pause
-                </Button>
-                <Button variant="destructive" className="flex-1">
-                  <Square className="mr-2 h-4 w-4" />
-                  Stop
-                </Button>
-              </div>
+            {isRunning && latestExecution && (
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={() => cancelExecutionMutation.mutate(latestExecution.id)}
+                disabled={cancelExecutionMutation.isPending}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                {cancelExecutionMutation.isPending ? "Stopping..." : "Stop"}
+              </Button>
             )}
           </div>
 

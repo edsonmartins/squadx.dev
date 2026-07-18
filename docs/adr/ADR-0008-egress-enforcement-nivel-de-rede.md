@@ -2,11 +2,22 @@
 
 ## Status
 
-Proposto — 2026-07-13. **Fase 0 implementada** (2026-07-13): bloqueio host-side do metadata via
+Aceito — 2026-07-13. **Fase 0 implementada** (2026-07-13): bloqueio host-side do metadata via
 `client/squadx_client/docker/egress_guard.py` (`ensure_cloud_metadata_blocked`, regra DROP idempotente
 na chain `DOCKER-USER`), gate `settings.block_cloud_metadata` (default on), aplicado uma vez em
-`DockerManager.connect`; degrada **ruidosamente** (log ERROR) quando o host não pode aplicar. Fases 1/2
-pendentes.
+`DockerManager.connect`; degrada **ruidosamente** (log ERROR) quando o host não pode aplicar.
+
+**Fase 1 implementada e ligada por default** (2026-07-17) — ver RFC-0006: sidecar de egress com netns
+compartilhado, default-deny + allowlist por domínio via dns-proxy vivo (o agente só enxerga esse
+resolver; respostas permitidas são fixadas num ipset), policy **por squad** vinda do backend, e
+composição com o warm pool (pares agente+sidecar pré-criados). Fail-closed: um run cuja policy não
+possa ser aplicada aborta. **Não verificado** ponta-a-ponta em host real ainda (teste `integration`
+escrito, não executado).
+
+**Fase 2 (gVisor) pendente.** Nota: `settings.auto_upgrade_runtime` / `gvisor_threshold` /
+`firecracker_threshold` existem mas **não têm consumidor** — `resolve_runtime()` decide por presença
+de binário e nunca os lê. Estão em quarentena explícita em `client/tests/test_architecture_guards.py`
+para que a lacuna não passe por implementada.
 
 ## Contexto
 

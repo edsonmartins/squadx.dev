@@ -25,7 +25,7 @@ from squadx_client.docker.network_policy import (
     EgressRule,
     EgressSidecarConfig,
     NetworkPolicy,
-    generate_network_setup_script,
+    generate_sidecar_setup_script,
     get_predefined_policy,
 )
 from squadx_client.docker.pool import (
@@ -72,7 +72,7 @@ __all__ = [
     "EgressAction",
     "EgressSidecarConfig",
     "get_predefined_policy",
-    "generate_network_setup_script",
+    "generate_sidecar_setup_script",
     # Warm Container Pool
     "WarmContainerPool",
     "PooledContainer",

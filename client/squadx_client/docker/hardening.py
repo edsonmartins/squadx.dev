@@ -213,7 +213,15 @@ class HardeningManager:
 
     # Default paths for security profiles
     DEFAULT_SECCOMP_PATH = Path(__file__).parent.parent.parent / "docker" / "seccomp" / "agent.json"
-    DEFAULT_APPARMOR_PROFILE = "squadx-agent"
+
+    # There is deliberately no DEFAULT_APPARMOR_PROFILE. One used to be declared
+    # ("squadx-agent"), but no such profile ships in this repo and the property below
+    # never returned it anyway — so AppArmor was never applied, while the constant read
+    # like it was. Naming a profile that is not loaded on the host does not harden
+    # anything: Docker simply refuses to create the container. AppArmor stays available
+    # to operators who load their own profile and set SQUADX_APPARMOR_PROFILE.
+    # To make it a real default, ship a profile under client/docker/apparmor/ and
+    # provision it on the host — see test_architecture_guards.py.
 
     def __init__(self):
         self._seccomp_path: Path | None = None

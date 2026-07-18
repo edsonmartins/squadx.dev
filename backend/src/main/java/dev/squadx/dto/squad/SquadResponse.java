@@ -43,6 +43,10 @@ public class SquadResponse {
     @JsonProperty("leader_agent_name")
     private String leaderAgentName;
 
+    /** Egress policy this squad's agents run under in the sandbox (RFC-0006). */
+    @JsonProperty("sandbox_egress_policy")
+    private String sandboxEgressPolicy;
+
     private List<AgentSummary> agents;
 
     @JsonProperty("created_at")

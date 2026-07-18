@@ -1,6 +1,7 @@
 package dev.squadx.dto.squad;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.squadx.model.enums.SandboxEgressPolicy;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -25,4 +26,12 @@ public class SquadRequest {
 
     @JsonProperty("leader_agent_id")
     private Long leaderAgentId;
+
+    /**
+     * Egress policy for this squad's agents (RFC-0006). Null leaves it unchanged on
+     * update, and takes the entity default (AGENT_DEFAULT) on create — a squad is never
+     * created without a policy.
+     */
+    @JsonProperty("sandbox_egress_policy")
+    private SandboxEgressPolicy sandboxEgressPolicy;
 }

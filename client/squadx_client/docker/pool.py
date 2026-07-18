@@ -13,6 +13,18 @@ worktrees if you run concurrent tasks — they will step on each other.
 
 A background refill task keeps `available` topped up to `target_size`,
 replacing containers that fail the post-release health check.
+
+Egress enforcement (RFC-0006) composes with the pool: when it is on, a pooled
+unit is an agent *plus* the sidecar whose netns it was created into. Netns
+membership is fixed at create time, which is exactly the slow work the pool
+exists to pre-pay, so the pair is created, recycled and removed together. The
+run's policy is applied through acquire()'s `before_start` hook while the agent
+is still `created` — so a pooled agent, like a cold one, can never execute an
+instruction before its egress rules are in place.
+
+Note the pool carries no per-run credentials: secrets ride the exec, not the
+container (see AgentSandbox._exec_env). Container-create env is fixed at create
+time, so a pre-created container could never carry them.
 """
 
 import asyncio
@@ -30,15 +42,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _PolicyRejected(RuntimeError):
+    """The pre-start hook refused this unit (e.g. egress policy could not be applied).
+
+    Distinct from a generic start failure: retrying with a fresh container would hit
+    the same rejection, so acquire() must not paper over it with a cold-create.
+    """
+
+
 @dataclass
 class PooledContainer:
-    """A container the pool owns. Identity is the container_id (set by Docker)."""
+    """A container the pool owns. Identity is the container_id (set by Docker).
+
+    When egress enforcement is on (RFC-0006) the pool holds a *pair*: the agent plus
+    the sidecar whose netns it joined at create time. The pair is inseparable — netns
+    membership is fixed at create — so they are pooled, recycled and removed together.
+    """
 
     container_id: str
     container_name: str
     created_at: float
     in_use_since: float | None = None
     use_count: int = 0
+    sidecar_id: str | None = None
 
 
 @dataclass
@@ -85,6 +111,7 @@ class WarmContainerPool:
         enable_vnc: bool = True,
         vnc_port: int = 5900,
         refill_interval_seconds: float = 5.0,
+        egress_enabled: bool = False,
     ):
         if target_size < 1:
             raise ValueError("target_size must be >= 1")
@@ -93,6 +120,7 @@ class WarmContainerPool:
 
         self._manager = manager
         self._image = image
+        self._egress_enabled = egress_enabled
         self._target_size = target_size
         self._min_ready = min_ready
         self._workspace_mount = workspace_mount
@@ -174,11 +202,19 @@ class WarmContainerPool:
         *,
         task_id: int,
         agent_type: str,
+        before_start=None,
     ) -> PooledContainer:
         """Return a started container. Cold-creates one if the pool is empty.
 
-        Raises RuntimeError if the cold-create fallback also fails. Callers
-        should catch and fall back to the unmanaged create_container path.
+        ``before_start`` is an optional async hook called with the ``PooledContainer``
+        after its sidecar is available and *before* the agent starts. It is how the
+        caller applies the run's egress policy while the agent still cannot execute
+        anything; returning False aborts the acquire fail-closed. The pool deliberately
+        knows nothing about policy — it owns container mechanics, the caller owns rules.
+
+        Raises RuntimeError if the cold-create fallback also fails, or if
+        ``before_start`` rejects. Callers should catch and fall back to the unmanaged
+        create_container path.
         """
         pooled: PooledContainer | None = None
         try:
@@ -196,8 +232,11 @@ class WarmContainerPool:
         # Start the container; on failure, discard and cold-create a fresh one
         assert self._manager.client is not None  # pool only runs once the manager connected
         try:
-            container = self._manager.client.containers.get(pooled.container_id)
-            container.start()
+            await self._start_agent(pooled, before_start)
+        except _PolicyRejected:
+            # Never recycle a unit we could not put a policy on.
+            await self._safe_remove(pooled)
+            raise
         except Exception as e:  # noqa: BLE001 - discard and try once more
             logger.warning(
                 f"warm_pool_start_failed discarding container_id={pooled.container_id} "
@@ -209,14 +248,38 @@ class WarmContainerPool:
                 raise RuntimeError(
                     f"Warm pool start failed and replacement cold-create also failed: {e}"
                 ) from e
-            container = self._manager.client.containers.get(pooled.container_id)
-            container.start()
+            await self._start_agent(pooled, before_start)
 
         pooled.in_use_since = time.time()
         pooled.use_count += 1
         async with self._lock:
             self._in_use[pooled.container_id] = pooled
         return pooled
+
+    async def _start_agent(self, pooled: PooledContainer, before_start) -> None:
+        """Ensure the sidecar is up, run the pre-start hook, then start the agent.
+
+        Order is the RFC-0006 invariant: the agent must never be runnable before its
+        egress policy is in place.
+        """
+        assert self._manager.client is not None  # pool only runs once the daemon connected
+        if pooled.sidecar_id:
+            # A recycled unit's sidecar was left running, but a restart (or a daemon
+            # crash) can leave it stopped — the agent cannot join a dead netns.
+            sidecar = self._manager.client.containers.get(pooled.sidecar_id)
+            sidecar.reload()
+            if sidecar.status != "running":
+                sidecar.start()
+
+        if before_start is not None:
+            ok = await before_start(pooled)
+            if ok is False:
+                raise _PolicyRejected(
+                    f"egress policy rejected for pooled unit {pooled.container_id}"
+                )
+
+        container = self._manager.client.containers.get(pooled.container_id)
+        container.start()
 
     async def release(self, pooled: PooledContainer) -> None:
         """Stop the container, health-check, and either recycle or discard.
@@ -275,7 +338,13 @@ class WarmContainerPool:
                 )
 
     async def _create_one(self) -> PooledContainer | None:
-        """Create a single container in Docker's `created` state and return its handle."""
+        """Create a single pooled unit in Docker's `created` state and return its handle.
+
+        With egress enforcement on, the unit is a pair: an egress sidecar (started, so
+        it owns a live netns) plus an agent created into that netns. Only the *create*
+        is done here — that is the 10-20s the pool exists to hide. The agent is left
+        `created` so acquire() can apply the run's policy before it ever executes.
+        """
         if self._manager.client is None:
             return None
         async with self._lock:
@@ -284,6 +353,21 @@ class WarmContainerPool:
             self._total_created += 1
 
         name = f"squadx-pool-{counter}"
+
+        # The sidecar must exist and be running before the agent can be created into
+        # its netns, so it is part of the pre-created (slow) work, not the acquire path.
+        sidecar_id: str | None = None
+        if self._egress_enabled:
+            published = {f"{self._vnc_port}/tcp": None} if self._enable_vnc else {}
+            sidecar_id = await self._manager.create_egress_sidecar(
+                task_id=0,
+                agent_type=f"pool-{counter}",
+                published_ports=published,
+            )
+            if not sidecar_id:
+                logger.error(f"warm_pool_sidecar_create_failed name={name}")
+                return None
+
         config = ContainerConfig(
             image=self._image,
             name=name,
@@ -299,18 +383,26 @@ class WarmContainerPool:
             config=config,
             task_id=0,  # not tied to a specific task
             agent_type="pool",
+            netns_container=sidecar_id,
         )
         if not container_id:
             logger.error(f"warm_pool_create_failed name={name}")
+            if sidecar_id:
+                await self._manager.remove_container(sidecar_id, force=True)
             return None
         return PooledContainer(
             container_id=container_id,
             container_name=name,
             created_at=time.time(),
+            sidecar_id=sidecar_id,
         )
 
     async def _safe_remove(self, pooled: PooledContainer) -> None:
-        """Best-effort container removal; never raises."""
+        """Best-effort removal of the whole unit (agent + its sidecar); never raises.
+
+        The sidecar goes last: it owns the netns the agent lives in, and removing it
+        first would strand the agent.
+        """
         if self._manager.client is None:
             return
         try:
@@ -324,6 +416,14 @@ class WarmContainerPool:
             logger.debug(
                 f"warm_pool_safe_remove_failed container_id={pooled.container_id} error={e}"
             )
+        if pooled.sidecar_id:
+            try:
+                await self._manager.remove_container(pooled.sidecar_id, force=True)
+            except Exception as e:  # noqa: BLE001
+                logger.debug(
+                    f"warm_pool_sidecar_remove_failed id={pooled.sidecar_id} error={e}"
+                )
+            pooled.sidecar_id = None
 
 
 # Module-level singleton placeholder. The daemon assigns the real instance
@@ -343,4 +443,5 @@ def build_pool_from_settings(manager: "DockerManager") -> WarmContainerPool:
         cpu_limit=settings.agent_cpu_limit,
         enable_vnc=settings.enable_vnc,
         refill_interval_seconds=settings.sandbox_pool_refill_interval_seconds,
+        egress_enabled=settings.egress_sidecar_enabled,
     )

@@ -7,7 +7,7 @@ import tarfile
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
-from docker.errors import APIError, DockerException, NotFound
+from docker.errors import APIError, DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 
 import docker
@@ -59,18 +59,16 @@ class DockerManager:
     def __init__(self):
         self.client: docker.DockerClient | None = None
         self.containers: dict[str, Container] = {}
-        # Set by the daemon when the warm-container pool is enabled (sandbox fast-path).
-        self.warm_pool: WarmContainerPool | None = None
         self._lock = asyncio.Lock()
         # Live streaming tracking
         self._live_streams: dict[str, LiveStreamInfo] = {}  # container_id -> LiveStreamInfo
         self._live_enabled = bool(settings.supabase_url and settings.supabase_anon_key)
+        # Optional warm pool, attached by the daemon at startup (RFC-0006 / pool.py).
+        self.warm_pool: WarmContainerPool | None = None
 
     async def connect(self) -> bool:
         """Connect to Docker daemon."""
         try:
-            # docker-py ships no stubs, and the local `docker/` subpackage confuses
-            # mypy's module resolution for the third-party client.
             self.client = docker.from_env()  # type: ignore[attr-defined]
             # Test connection
             self.client.ping()
@@ -200,9 +198,21 @@ class DockerManager:
                     # Merge security kwargs
                     container_kwargs.update(security_config.to_docker_kwargs())
 
-                    # Override network if VNC is enabled (needs port binding)
+                    # VNC needs a network stack to publish a port on, so `network=none`
+                    # cannot stand. Under RFC-0006 the sidecar provides that stack (and
+                    # filters it) — the netns block below overrides this. Falling back to
+                    # a plain bridge means the agent gets UNFILTERED egress, which is the
+                    # opposite of what network_disabled asked for, so it is never silent.
                     if config.enable_vnc and security_config.network_disabled:
                         container_kwargs["network_mode"] = "bridge"
+                        if not netns_container:
+                            logger.error(
+                                f"egress_open_bridge task={task_id} agent={agent_type} — "
+                                f"VNC requires a network stack and no egress sidecar owns "
+                                f"one, so `network=none` was downgraded to `bridge`: this "
+                                f"agent has UNRESTRICTED egress. Enable the sidecar "
+                                f"(SQUADX_EGRESS_SIDECAR=true) or disable VNC. See RFC-0006."
+                            )
 
                     logger.info(
                         f"Security hardening enabled: level={level.value}, "
@@ -277,6 +287,16 @@ class DockerManager:
                 self.containers[container.id] = container
                 logger.info(f"egress_sidecar_started task={task_id} id={container.short_id}")
                 return container.id
+            except ImageNotFound:
+                # Egress enforcement is on by default, so a missing image fails every
+                # run. Name the fix instead of surfacing a bare Docker 404.
+                logger.error(
+                    f"egress_sidecar_image_missing task={task_id} "
+                    f"image={settings.egress_sidecar_image} — the egress firewall cannot "
+                    f"start, so runs fail closed. Build it with `make build-egress-proxy`, "
+                    f"or set SQUADX_EGRESS_SIDECAR=false to run WITHOUT egress filtering."
+                )
+                return None
             except APIError as e:
                 logger.error(f"egress_sidecar_create_failed task={task_id}: {e}")
                 return None
@@ -364,8 +384,16 @@ class DockerManager:
         container_id: str,
         command: list[str],
         workdir: str | None = None,
+        environment: dict | None = None,
     ) -> tuple[int, str]:
-        """Execute a command in a container."""
+        """Execute a command in a container.
+
+        ``environment`` is scoped to this exec only. Prefer it over container-create
+        env for secrets: create-time env is baked into the container, readable via
+        ``docker inspect`` and ``/proc/1/environ`` for the container's whole life, and
+        cannot be varied per run (which is what makes pre-created warm-pool containers
+        unable to carry per-run credentials).
+        """
         if not self.client:
             return -1, "Docker client not connected"
 
@@ -375,6 +403,7 @@ class DockerManager:
                 command,
                 workdir=workdir,
                 demux=True,
+                environment=environment or None,
             )
 
             stdout = result.output[0].decode("utf-8") if result.output[0] else ""
@@ -392,6 +421,7 @@ class DockerManager:
         container_id: str,
         command: list[str],
         workdir: str | None = None,
+        environment: dict | None = None,
     ):
         """Execute a command, streaming output incrementally.
 
@@ -399,6 +429,8 @@ class DockerManager:
         arrives, then a final ("exit", exit_code) tuple. The blocking Docker
         iteration runs in a worker thread; chunks are marshalled back to the
         event loop via a queue so callbacks run safely on the main loop.
+
+        ``environment`` is scoped to this exec only — see ``exec_command``.
         """
         if not self.client:
             yield ("error", "Docker client not connected")
@@ -412,7 +444,9 @@ class DockerManager:
         def _worker():
             try:
                 api = self.client.api
-                exec_id = api.exec_create(container_id, command, workdir=workdir)["Id"]
+                exec_id = api.exec_create(
+                    container_id, command, workdir=workdir, environment=environment or None
+                )["Id"]
                 stream = api.exec_start(exec_id, stream=True, demux=True)
                 for stdout_chunk, stderr_chunk in stream:
                     if stdout_chunk:
@@ -553,13 +587,19 @@ class DockerManager:
         container_id: str,
         task_id: int,
         fps: int = 30,
+        vnc_port: int | None = None,
     ) -> str | None:
         """Start live streaming for a container.
 
         Args:
-            container_id: The container ID
+            container_id: The agent container ID (identifies the stream)
             task_id: The task ID for the session
             fps: Frames per second for the stream
+            vnc_port: Published host port for the agent's VNC. Pass it when the port
+                does not live on ``container_id`` itself — under RFC-0006 the agent
+                shares the egress sidecar's netns and the sidecar publishes the port,
+                so resolving it here would look at the wrong container and find None.
+                Omitted (non-sidecar path): resolved from ``container_id``.
 
         Returns:
             The join code for the live session, or None if failed
@@ -573,7 +613,8 @@ class DockerManager:
             return self._live_streams[container_id].join_code
 
         # Get VNC port
-        vnc_port = await self.get_vnc_port(container_id)
+        if vnc_port is None:
+            vnc_port = await self.get_vnc_port(container_id)
         if not vnc_port:
             logger.error(f"Cannot start live stream: VNC port not available for {container_id}")
             return None

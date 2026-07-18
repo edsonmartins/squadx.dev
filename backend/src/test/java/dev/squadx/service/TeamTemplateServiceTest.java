@@ -3,6 +3,7 @@ package dev.squadx.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.squadx.dto.template.ApplyTemplateRequest;
 import dev.squadx.dto.template.TemplateResponse;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.Agent;
 import dev.squadx.model.Organization;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +47,9 @@ class TeamTemplateServiceTest {
 
     @Mock
     private OrganizationRepository organizationRepository;
+
+    @Mock
+    private OrganizationAccessGuard accessGuard;
 
     @InjectMocks
     private TeamTemplateService teamTemplateService;
@@ -235,6 +240,23 @@ class TeamTemplateServiceTest {
                     .hasMessageContaining("Template not found");
 
             verify(squadRepository, never()).save(any(Squad.class));
+        }
+
+        @Test
+        @DisplayName("applyTemplate denies a non-member of the target organization")
+        void applyTemplate_deniesNonMember() {
+            ApplyTemplateRequest request = ApplyTemplateRequest.builder()
+                    .organizationId(1L)
+                    .build();
+
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> teamTemplateService.applyTemplate("software-dev", request, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verify(squadRepository, never()).save(any(Squad.class));
+            verifyNoInteractions(organizationRepository);
         }
     }
 }

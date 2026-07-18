@@ -1,11 +1,14 @@
 package dev.squadx.service;
 
 import dev.squadx.exception.BadRequestException;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.Organization;
 import dev.squadx.model.Subscription;
+import dev.squadx.model.User;
 import dev.squadx.model.enums.SubscriptionPlan;
 import dev.squadx.model.enums.SubscriptionStatus;
+import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.OrganizationRepository;
 import dev.squadx.repository.SubscriptionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,14 +39,26 @@ class BillingServiceTest {
     @Mock
     private OrganizationRepository organizationRepository;
 
+    @Mock
+    private OrganizationAccessGuard accessGuard;
+
     @InjectMocks
     private BillingService billingService;
 
     private Organization testOrg;
     private Subscription testSubscription;
+    private User testUser;
 
     @BeforeEach
     void setUp() throws Exception {
+        testUser = User.builder()
+                .email("test@example.com")
+                .fullName("Test User")
+                .role(UserRole.USER)
+                .isActive(true)
+                .build();
+        testUser.setId(1L);
+
         testOrg = Organization.builder()
                 .name("Test Org")
                 .slug("test-org")
@@ -83,7 +99,7 @@ class BillingServiceTest {
             when(subscriptionRepository.findByOrganizationId(1L))
                     .thenReturn(Optional.of(testSubscription));
 
-            Subscription result = billingService.getSubscription(1L);
+            Subscription result = billingService.getSubscription(1L, testUser);
 
             assertThat(result).isNotNull();
             assertThat(result.getStripeCustomerId()).isEqualTo("cus_test123");
@@ -98,7 +114,7 @@ class BillingServiceTest {
             when(subscriptionRepository.findByOrganizationId(99L))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> billingService.getSubscription(99L))
+            assertThatThrownBy(() -> billingService.getSubscription(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Subscription not found");
 
@@ -115,7 +131,7 @@ class BillingServiceTest {
         void shouldThrowWhenApiKeyIsBlank() throws Exception {
             setStripeApiKey("");
 
-            assertThatThrownBy(() -> billingService.createCheckoutSession(1L, "STARTER"))
+            assertThatThrownBy(() -> billingService.createCheckoutSession(1L, "STARTER", testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Stripe is not configured");
 
@@ -127,7 +143,7 @@ class BillingServiceTest {
         void shouldThrowWhenApiKeyIsNull() throws Exception {
             setStripeApiKey(null);
 
-            assertThatThrownBy(() -> billingService.cancelSubscription(1L))
+            assertThatThrownBy(() -> billingService.cancelSubscription(1L, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Stripe is not configured");
 
@@ -144,7 +160,7 @@ class BillingServiceTest {
         void shouldThrowWhenStripeNotConfigured() throws Exception {
             setStripeApiKey("");
 
-            assertThatThrownBy(() -> billingService.createCheckoutSession(1L, "STARTER"))
+            assertThatThrownBy(() -> billingService.createCheckoutSession(1L, "STARTER", testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Stripe is not configured");
 
@@ -159,7 +175,7 @@ class BillingServiceTest {
 
             when(organizationRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> billingService.createCheckoutSession(99L, "STARTER"))
+            assertThatThrownBy(() -> billingService.createCheckoutSession(99L, "STARTER", testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Organization not found");
 
@@ -176,7 +192,7 @@ class BillingServiceTest {
         void shouldThrowWhenStripeNotConfigured() throws Exception {
             setStripeApiKey("");
 
-            assertThatThrownBy(() -> billingService.cancelSubscription(1L))
+            assertThatThrownBy(() -> billingService.cancelSubscription(1L, testUser))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Stripe is not configured");
 
@@ -191,7 +207,7 @@ class BillingServiceTest {
             when(subscriptionRepository.findByOrganizationId(99L))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> billingService.cancelSubscription(99L))
+            assertThatThrownBy(() -> billingService.cancelSubscription(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Subscription not found");
 
@@ -217,7 +233,7 @@ class BillingServiceTest {
             when(subscriptionRepository.save(any(Subscription.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            billingService.cancelSubscription(1L);
+            billingService.cancelSubscription(1L, testUser);
 
             assertThat(subWithoutStripeId.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
             verify(subscriptionRepository).save(subWithoutStripeId);
@@ -246,6 +262,23 @@ class BillingServiceTest {
             assertThatThrownBy(() -> billingService.handleWebhook("payload", "sig"))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("Stripe is not configured");
+        }
+    }
+
+    @Nested
+    @DisplayName("cross-tenant access control")
+    class CrossTenantAccess {
+
+        @Test
+        @DisplayName("getSubscription denies a non-member and never touches the subscription")
+        void getSubscription_deniesNonMember() {
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> billingService.getSubscription(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verifyNoInteractions(subscriptionRepository);
         }
     }
 }

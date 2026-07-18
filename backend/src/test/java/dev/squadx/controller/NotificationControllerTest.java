@@ -27,6 +27,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -145,7 +146,7 @@ class NotificationControllerTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        when(notificationService.update(eq(1L), any(NotificationConfigRequest.class))).thenReturn(response);
+        when(notificationService.update(eq(1L), any(NotificationConfigRequest.class), nullable(User.class))).thenReturn(response);
 
         mockMvc.perform(put("/api/v1/organizations/1/notifications/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -169,7 +170,7 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(notificationService).delete(1L);
+        verify(notificationService).delete(eq(1L), nullable(User.class));
     }
 
     @Test

@@ -23,7 +23,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -394,6 +398,65 @@ class ApprovalServiceTest {
                     .hasMessage("Only the requester can cancel an approval");
 
             verify(approvalRepository, never()).save(any(Approval.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("cross-tenant access control")
+    class CrossTenantAccess {
+
+        @Test
+        @DisplayName("getById denies a user who is not a member of the approval's organization")
+        void getById_deniesNonMember() {
+            User nonMember = User.builder()
+                    .email("intruder@example.com")
+                    .fullName("Intruder")
+                    .role(UserRole.USER)
+                    .isActive(true)
+                    .build();
+            nonMember.setId(3L);
+
+            when(approvalRepository.findById(1L)).thenReturn(Optional.of(testApproval));
+            when(memberRepository.existsByOrganizationIdAndUserId(eq(1L), eq(3L))).thenReturn(false);
+
+            assertThatThrownBy(() -> approvalService.getById(1L, nonMember))
+                    .isInstanceOf(ForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("getByStatus filters out approvals from organizations the user is not a member of")
+        void getByStatus_filtersNonMemberOrgs() {
+            // Second approval belongs to a different organization (id 2) the user is NOT in.
+            Organization otherOrg = Organization.builder().build();
+            otherOrg.setId(2L);
+            Project otherProject = Project.builder().organization(otherOrg).build();
+            otherProject.setId(2L);
+            Task otherTask = Task.builder()
+                    .title("Other Task")
+                    .status(TaskStatus.IN_REVIEW)
+                    .project(otherProject)
+                    .createdBy(testUser)
+                    .build();
+            otherTask.setId(2L);
+
+            Approval otherApproval = Approval.builder()
+                    .task(otherTask)
+                    .requestedBy(testUser)
+                    .approvalType(ApprovalType.COMMIT)
+                    .status(ApprovalStatus.PENDING)
+                    .title("Other approval")
+                    .build();
+            otherApproval.setId(2L);
+
+            Pageable pageable = PageRequest.of(0, 10);
+            when(approvalRepository.findByStatus(ApprovalStatus.PENDING, pageable))
+                    .thenReturn(new PageImpl<>(List.of(testApproval, otherApproval), pageable, 2));
+            // testUser is a member of org 1 (lenient stub) but not org 2 (unstubbed -> false).
+
+            var result = approvalService.getByStatus(ApprovalStatus.PENDING, pageable, testUser);
+
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).getId()).isEqualTo(1L);
         }
     }
 }

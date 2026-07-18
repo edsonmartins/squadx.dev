@@ -2,6 +2,7 @@ package dev.squadx.service;
 
 import dev.squadx.dto.meeting.MeetingResponse;
 import dev.squadx.dto.meeting.CreateMeetingRequest;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.Meeting;
 import dev.squadx.model.MeetingAttendee;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +44,9 @@ class MeetingServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private OrganizationAccessGuard accessGuard;
 
     @InjectMocks
     private MeetingService meetingService;
@@ -211,7 +216,7 @@ class MeetingServiceTest {
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(testMeeting));
             when(meetingRepository.save(any(Meeting.class))).thenReturn(testMeeting);
 
-            MeetingResponse result = meetingService.cancel(1L);
+            MeetingResponse result = meetingService.cancel(1L, testUser);
 
             assertThat(result).isNotNull();
             assertThat(testMeeting.getStatus()).isEqualTo(MeetingStatus.CANCELLED);
@@ -224,7 +229,7 @@ class MeetingServiceTest {
         void shouldThrowWhenMeetingNotFound() {
             when(meetingRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> meetingService.cancel(99L))
+            assertThatThrownBy(() -> meetingService.cancel(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Meeting not found");
 
@@ -242,7 +247,7 @@ class MeetingServiceTest {
         void shouldReturnMeeting() {
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(testMeeting));
 
-            MeetingResponse result = meetingService.getById(1L);
+            MeetingResponse result = meetingService.getById(1L, testUser);
 
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(1L);
@@ -256,6 +261,17 @@ class MeetingServiceTest {
             assertThat(result.getCreatedByName()).isEqualTo("John Doe");
             assertThat(result.getAttendees()).isEmpty();
             verify(meetingRepository).findById(1L);
+        }
+
+        @Test
+        @DisplayName("getById denies a non-member of the meeting's organization")
+        void getById_deniesNonMember() {
+            when(meetingRepository.findById(1L)).thenReturn(Optional.of(testMeeting));
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> meetingService.getById(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
         }
     }
 }

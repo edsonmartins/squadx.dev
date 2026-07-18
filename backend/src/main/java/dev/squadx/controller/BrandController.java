@@ -26,7 +26,7 @@ public class BrandController {
             @PathVariable Long orgId,
             @AuthenticationPrincipal User user
     ) {
-        BrandConfigResponse config = brandService.getByOrganization(orgId);
+        BrandConfigResponse config = brandService.getByOrganization(orgId, user);
         return ResponseEntity.ok(ApiResponse.success(config));
     }
 
@@ -37,7 +37,7 @@ public class BrandController {
             @RequestBody BrandConfigRequest request,
             @AuthenticationPrincipal User user
     ) {
-        BrandConfigResponse config = brandService.upsert(orgId, request);
+        BrandConfigResponse config = brandService.upsert(orgId, request, user);
         return ResponseEntity.ok(ApiResponse.success(config, "Brand configuration updated successfully"));
     }
 
@@ -47,7 +47,7 @@ public class BrandController {
             @PathVariable Long orgId,
             @AuthenticationPrincipal User user
     ) {
-        brandService.delete(orgId);
+        brandService.delete(orgId, user);
         return ResponseEntity.ok(ApiResponse.success(null, "Brand configuration removed successfully"));
     }
 

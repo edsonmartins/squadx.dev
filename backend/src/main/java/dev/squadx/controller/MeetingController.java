@@ -48,7 +48,8 @@ public class MeetingController {
     public ResponseEntity<ApiResponse<MeetingResponse>> getById(
             @PathVariable Long id,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(ApiResponse.success(meetingService.getById(id)));
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        return ResponseEntity.ok(ApiResponse.success(meetingService.getById(id, currentUser)));
     }
 
     @GetMapping("/organization/{orgId}")
@@ -57,7 +58,8 @@ public class MeetingController {
             @PathVariable Long orgId,
             @PageableDefault Pageable pageable,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(ApiResponse.success(meetingService.getByOrganization(orgId, pageable)));
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        return ResponseEntity.ok(ApiResponse.success(meetingService.getByOrganization(orgId, pageable, currentUser)));
     }
 
     @GetMapping("/upcoming")
@@ -76,7 +78,8 @@ public class MeetingController {
             @RequestParam Instant from,
             @RequestParam Instant to,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(ApiResponse.success(meetingService.getByDateRange(orgId, from, to)));
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        return ResponseEntity.ok(ApiResponse.success(meetingService.getByDateRange(orgId, from, to, currentUser)));
     }
 
     @PostMapping("/{id}/rsvp")
@@ -95,6 +98,7 @@ public class MeetingController {
     public ResponseEntity<ApiResponse<MeetingResponse>> cancel(
             @PathVariable Long id,
             @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(ApiResponse.success(meetingService.cancel(id), "Meeting cancelled"));
+        User currentUser = AuthenticatedUserResolver.resolve(user);
+        return ResponseEntity.ok(ApiResponse.success(meetingService.cancel(id, currentUser), "Meeting cancelled"));
     }
 }

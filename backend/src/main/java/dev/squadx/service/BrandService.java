@@ -6,6 +6,7 @@ import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.BrandConfig;
 import dev.squadx.model.Organization;
+import dev.squadx.model.User;
 import dev.squadx.repository.BrandConfigRepository;
 import dev.squadx.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class BrandService {
 
     private final BrandConfigRepository brandConfigRepository;
     private final OrganizationRepository organizationRepository;
+    private final OrganizationAccessGuard accessGuard;
 
     private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
     private static final Pattern DOMAIN_PATTERN = Pattern.compile(
@@ -29,7 +31,8 @@ public class BrandService {
     );
 
     @Transactional(readOnly = true)
-    public BrandConfigResponse getByOrganization(Long orgId) {
+    public BrandConfigResponse getByOrganization(Long orgId, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         BrandConfig config = brandConfigRepository.findByOrganizationId(orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Brand config not found for organization: " + orgId));
         return toResponse(config);
@@ -43,7 +46,8 @@ public class BrandService {
     }
 
     @Transactional
-    public BrandConfigResponse upsert(Long orgId, BrandConfigRequest request) {
+    public BrandConfigResponse upsert(Long orgId, BrandConfigRequest request, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + orgId));
 
@@ -62,7 +66,8 @@ public class BrandService {
     }
 
     @Transactional
-    public void delete(Long orgId) {
+    public void delete(Long orgId, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         if (!brandConfigRepository.existsByOrganizationId(orgId)) {
             throw new ResourceNotFoundException("Brand config not found for organization: " + orgId);
         }

@@ -153,13 +153,17 @@ public class ApprovalService {
         return mapToResponse(approval);
     }
 
-    public ApprovalResponse getById(Long id) {
+    public ApprovalResponse getById(Long id, User user) {
         Approval approval = approvalRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval not found"));
+        validateUserAccess(approval.getTask().getProject().getOrganization().getId(), user.getId());
         return mapToResponse(approval);
     }
 
-    public Page<ApprovalResponse> getByTask(Long taskId, Pageable pageable) {
+    public Page<ApprovalResponse> getByTask(Long taskId, Pageable pageable, User user) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        validateUserAccess(task.getProject().getOrganization().getId(), user.getId());
         return approvalRepository.findByTaskId(taskId, pageable).map(this::mapToResponse);
     }
 
@@ -167,8 +171,14 @@ public class ApprovalService {
         return approvalRepository.findPendingForUser(userId, pageable).map(this::mapToResponse);
     }
 
-    public Page<ApprovalResponse> getByStatus(ApprovalStatus status, Pageable pageable) {
-        return approvalRepository.findByStatus(status, pageable).map(this::mapToResponse);
+    public Page<ApprovalResponse> getByStatus(ApprovalStatus status, Pageable pageable, User user) {
+        Page<Approval> page = approvalRepository.findByStatus(status, pageable);
+        java.util.List<ApprovalResponse> scoped = page.getContent().stream()
+                .filter(a -> memberRepository.existsByOrganizationIdAndUserId(
+                        a.getTask().getProject().getOrganization().getId(), user.getId()))
+                .map(this::mapToResponse)
+                .toList();
+        return new org.springframework.data.domain.PageImpl<>(scoped, pageable, scoped.size());
     }
 
     private void validateUserAccess(Long organizationId, Long userId) {

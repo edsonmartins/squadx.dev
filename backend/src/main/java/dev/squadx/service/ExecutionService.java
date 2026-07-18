@@ -46,6 +46,7 @@ public class ExecutionService {
     private final RunAdmissionService runAdmissionService;
     private final FollowUpRequestRepository followUpRequestRepository;
     private final ApprovalService approvalService;
+    private final ProjectRepository projectRepository;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -167,6 +168,10 @@ public class ExecutionService {
     }
 
     public PageResponse<ExecutionResponse> getByProjectId(Long projectId, Pageable pageable, User currentUser) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        validateUserAccess(project.getOrganization().getId(), currentUser.getId());
+
         Page<ExecutionResponse> page = executionRepository.findByProjectId(projectId, pageable)
                 .map(this::mapToResponse);
 

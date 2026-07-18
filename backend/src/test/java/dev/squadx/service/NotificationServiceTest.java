@@ -3,10 +3,13 @@ package dev.squadx.service;
 import dev.squadx.dto.notification.NotificationConfigRequest;
 import dev.squadx.dto.notification.NotificationConfigResponse;
 import dev.squadx.exception.BadRequestException;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.NotificationChannel;
 import dev.squadx.model.NotificationConfig;
 import dev.squadx.model.Organization;
+import dev.squadx.model.User;
+import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.NotificationConfigRepository;
 import dev.squadx.repository.OrganizationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,14 +44,26 @@ class NotificationServiceTest {
     @Mock
     private RestClient.Builder restClientBuilder;
 
+    @Mock
+    private OrganizationAccessGuard accessGuard;
+
     @InjectMocks
     private NotificationService notificationService;
 
     private Organization testOrg;
     private NotificationConfig testConfig;
+    private User testUser;
 
     @BeforeEach
     void setUp() {
+        testUser = User.builder()
+                .email("test@example.com")
+                .fullName("Test User")
+                .role(UserRole.USER)
+                .isActive(true)
+                .build();
+        testUser.setId(1L);
+
         testOrg = Organization.builder()
                 .name("Test Org")
                 .slug("test-org")
@@ -234,7 +250,7 @@ class NotificationServiceTest {
             when(notificationConfigRepository.findById(1L)).thenReturn(Optional.of(testConfig));
             when(notificationConfigRepository.save(any(NotificationConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            NotificationConfigResponse response = notificationService.update(1L, request);
+            NotificationConfigResponse response = notificationService.update(1L, request, testUser);
 
             assertThat(response.getWebhookUrl()).isEqualTo("https://hooks.slack.com/services/updated");
         }
@@ -244,7 +260,7 @@ class NotificationServiceTest {
         void shouldThrowWhenNotFound() {
             when(notificationConfigRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> notificationService.update(99L, NotificationConfigRequest.builder().build()))
+            assertThatThrownBy(() -> notificationService.update(99L, NotificationConfigRequest.builder().build(), testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Notification config not found");
         }
@@ -257,21 +273,39 @@ class NotificationServiceTest {
         @Test
         @DisplayName("should delete config when it exists")
         void shouldDeleteConfig() {
-            when(notificationConfigRepository.existsById(1L)).thenReturn(true);
+            when(notificationConfigRepository.findById(1L)).thenReturn(Optional.of(testConfig));
 
-            notificationService.delete(1L);
+            notificationService.delete(1L, testUser);
 
-            verify(notificationConfigRepository).deleteById(1L);
+            verify(notificationConfigRepository).delete(testConfig);
         }
 
         @Test
         @DisplayName("should throw when config not found")
         void shouldThrowWhenNotFound() {
-            when(notificationConfigRepository.existsById(99L)).thenReturn(false);
+            when(notificationConfigRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> notificationService.delete(99L))
+            assertThatThrownBy(() -> notificationService.delete(99L, testUser))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("Notification config not found");
+        }
+    }
+
+    @Nested
+    @DisplayName("cross-tenant access control")
+    class CrossTenantAccess {
+
+        @Test
+        @DisplayName("delete denies a non-member of the config's organization")
+        void delete_deniesNonMember() {
+            when(notificationConfigRepository.findById(1L)).thenReturn(Optional.of(testConfig));
+            doThrow(new ForbiddenException("nope"))
+                    .when(accessGuard).requireMember(anyLong(), anyLong());
+
+            assertThatThrownBy(() -> notificationService.delete(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verify(notificationConfigRepository, never()).delete(any(NotificationConfig.class));
         }
     }
 }

@@ -31,7 +31,7 @@ public class BillingController {
         Long orgId = Long.valueOf(request.get("organizationId").toString());
         String plan = request.get("plan").toString();
 
-        Map<String, String> session = billingService.createCheckoutSession(orgId, plan);
+        Map<String, String> session = billingService.createCheckoutSession(orgId, plan, user);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(session, "Checkout session created successfully"));
@@ -53,7 +53,7 @@ public class BillingController {
             @RequestParam Long organizationId,
             @AuthenticationPrincipal User user
     ) {
-        Subscription subscription = billingService.getSubscription(organizationId);
+        Subscription subscription = billingService.getSubscription(organizationId, user);
         return ResponseEntity.ok(ApiResponse.success(subscription));
     }
 
@@ -64,7 +64,7 @@ public class BillingController {
             @AuthenticationPrincipal User user
     ) {
         Long orgId = Long.valueOf(request.get("organizationId").toString());
-        billingService.cancelSubscription(orgId);
+        billingService.cancelSubscription(orgId, user);
         return ResponseEntity.ok(ApiResponse.success(null, "Subscription cancelled successfully"));
     }
 }

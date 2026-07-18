@@ -29,7 +29,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -98,7 +100,7 @@ class RecordingControllerTest {
             StartRecordingRequest request = new StartRecordingRequest();
             request.setSessionId(10L);
 
-            when(recordingService.startRecording(10L)).thenReturn(sampleRecording);
+            when(recordingService.startRecording(eq(10L), nullable(User.class))).thenReturn(sampleRecording);
 
             mockMvc.perform(post("/api/v1/recordings/start")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -131,7 +133,7 @@ class RecordingControllerTest {
                     .completedAt(Instant.now())
                     .build();
 
-            when(recordingService.completeRecording(eq(1L), eq(1024000L), eq(300)))
+            when(recordingService.completeRecording(eq(1L), eq(1024000L), eq(300), nullable(User.class)))
                     .thenReturn(completed);
 
             mockMvc.perform(post("/api/v1/recordings/1/complete")
@@ -157,7 +159,7 @@ class RecordingControllerTest {
                     .status(RecordingStatus.COMPLETED)
                     .build();
 
-            when(recordingService.getRecordingUrl(1L)).thenReturn(withUrl);
+            when(recordingService.getRecordingUrl(eq(1L), nullable(User.class))).thenReturn(withUrl);
 
             mockMvc.perform(get("/api/v1/recordings/1/url")
                             .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
@@ -169,7 +171,7 @@ class RecordingControllerTest {
         @Test
         @DisplayName("should return 404 when recording not found")
         void shouldReturn404WhenNotFound() throws Exception {
-            when(recordingService.getRecordingUrl(999L))
+            when(recordingService.getRecordingUrl(eq(999L), nullable(User.class)))
                     .thenThrow(new ResourceNotFoundException("Recording not found"));
 
             mockMvc.perform(get("/api/v1/recordings/999/url")
@@ -187,7 +189,7 @@ class RecordingControllerTest {
         @Test
         @DisplayName("should return recordings by session with 200")
         void shouldReturnRecordingsBySession() throws Exception {
-            when(recordingService.listBySession(10L))
+            when(recordingService.listBySession(eq(10L), nullable(User.class)))
                     .thenReturn(List.of(sampleRecording));
 
             mockMvc.perform(get("/api/v1/recordings/session/10")

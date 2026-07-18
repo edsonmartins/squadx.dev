@@ -36,6 +36,7 @@ public class TeamTemplateService {
     private final SquadRepository squadRepository;
     private final AgentRepository agentRepository;
     private final OrganizationRepository organizationRepository;
+    private final OrganizationAccessGuard accessGuard;
 
     public List<TemplateResponse> listTemplates() {
         List<TemplateResponse> templates = new ArrayList<>();
@@ -111,6 +112,7 @@ public class TeamTemplateService {
 
     @Transactional
     public Squad applyTemplate(String name, ApplyTemplateRequest request, User user) {
+        accessGuard.requireMember(request.getOrganizationId(), user.getId());
         TemplateResponse template = getTemplate(name);
 
         Organization org = organizationRepository.findById(request.getOrganizationId())

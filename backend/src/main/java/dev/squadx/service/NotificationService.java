@@ -10,6 +10,7 @@ import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.NotificationChannel;
 import dev.squadx.model.NotificationConfig;
 import dev.squadx.model.Organization;
+import dev.squadx.model.User;
 import dev.squadx.model.enums.ExecutionStatus;
 import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.notification.NotificationProviderRegistry;
@@ -33,6 +34,7 @@ public class NotificationService {
     private final NotificationConfigRepository notificationConfigRepository;
     private final OrganizationRepository organizationRepository;
     private final NotificationProviderRegistry providerRegistry;
+    private final OrganizationAccessGuard accessGuard;
 
     // ── Domain Event Listeners ──────────────────────────────
 
@@ -101,9 +103,10 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationConfigResponse update(Long configId, NotificationConfigRequest request) {
+    public NotificationConfigResponse update(Long configId, NotificationConfigRequest request, User currentUser) {
         NotificationConfig config = notificationConfigRepository.findById(configId)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification config not found: " + configId));
+        accessGuard.requireMember(config.getOrganization().getId(), currentUser.getId());
 
         if (request.getWebhookUrl() != null) {
             validateWebhookUrl(request.getWebhookUrl());
@@ -118,11 +121,11 @@ public class NotificationService {
     }
 
     @Transactional
-    public void delete(Long configId) {
-        if (!notificationConfigRepository.existsById(configId)) {
-            throw new ResourceNotFoundException("Notification config not found: " + configId);
-        }
-        notificationConfigRepository.deleteById(configId);
+    public void delete(Long configId, User currentUser) {
+        NotificationConfig config = notificationConfigRepository.findById(configId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification config not found: " + configId));
+        accessGuard.requireMember(config.getOrganization().getId(), currentUser.getId());
+        notificationConfigRepository.delete(config);
         log.info("Notification config deleted id={}", configId);
     }
 

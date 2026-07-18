@@ -31,9 +31,11 @@ public class MeetingService {
     private final MeetingRepository meetingRepository;
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
+    private final OrganizationAccessGuard accessGuard;
 
     @Transactional
     public MeetingResponse create(CreateMeetingRequest request, User createdBy) {
+        accessGuard.requireMember(request.getOrganizationId(), createdBy.getId());
         Organization org = organizationRepository.findById(request.getOrganizationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found"));
 
@@ -81,21 +83,24 @@ public class MeetingService {
     }
 
     @Transactional
-    public MeetingResponse cancel(Long meetingId) {
+    public MeetingResponse cancel(Long meetingId, User currentUser) {
         Meeting meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Meeting not found"));
+        accessGuard.requireMember(meeting.getOrganization().getId(), currentUser.getId());
         meeting.setStatus(MeetingStatus.CANCELLED);
         meeting = meetingRepository.save(meeting);
         return mapToResponse(meeting);
     }
 
-    public MeetingResponse getById(Long id) {
+    public MeetingResponse getById(Long id, User currentUser) {
         Meeting meeting = meetingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Meeting not found"));
+        accessGuard.requireMember(meeting.getOrganization().getId(), currentUser.getId());
         return mapToResponse(meeting);
     }
 
-    public Page<MeetingResponse> getByOrganization(Long organizationId, Pageable pageable) {
+    public Page<MeetingResponse> getByOrganization(Long organizationId, Pageable pageable, User currentUser) {
+        accessGuard.requireMember(organizationId, currentUser.getId());
         return meetingRepository.findByOrganizationId(organizationId, pageable)
                 .map(this::mapToResponse);
     }
@@ -106,7 +111,8 @@ public class MeetingService {
                 .collect(Collectors.toList());
     }
 
-    public List<MeetingResponse> getByDateRange(Long orgId, Instant from, Instant to) {
+    public List<MeetingResponse> getByDateRange(Long orgId, Instant from, Instant to, User currentUser) {
+        accessGuard.requireMember(orgId, currentUser.getId());
         return meetingRepository.findByOrganizationAndDateRange(orgId, from, to).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());

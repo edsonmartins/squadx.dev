@@ -12,6 +12,7 @@ import dev.squadx.model.*;
 import dev.squadx.model.enums.*;
 import dev.squadx.repository.*;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -67,6 +68,9 @@ class ExecutionServiceTest {
 
     @Mock
     private ApprovalService approvalService;
+
+    @Mock
+    private ProjectRepository projectRepository;
 
     @InjectMocks
     private ExecutionService executionService;
@@ -641,5 +645,22 @@ class ExecutionServiceTest {
                 eq(ExecutionStatus.PENDING), any())).thenReturn(1);
 
         assertThat(executionService.claimPending(1L, testUser)).isTrue();
+    }
+
+    @Nested
+    @DisplayName("getByProjectId()")
+    class GetByProjectId {
+
+        @Test
+        @DisplayName("should deny a user who is not a member of the project's organization")
+        void getByProjectId_deniesNonMember() {
+            when(projectRepository.findById(1L)).thenReturn(Optional.of(testProject));
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(false);
+
+            assertThatThrownBy(() -> executionService.getByProjectId(1L, PageRequest.of(0, 20), testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verify(executionRepository, never()).findByProjectId(any(), any());
+        }
     }
 }

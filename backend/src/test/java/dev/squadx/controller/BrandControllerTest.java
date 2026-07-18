@@ -28,6 +28,7 @@ import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -93,7 +94,7 @@ class BrandControllerTest {
         @Test
         @DisplayName("should return brand config for organization")
         void shouldReturnBrandConfig() throws Exception {
-            when(brandService.getByOrganization(10L)).thenReturn(sampleBrand);
+            when(brandService.getByOrganization(eq(10L), nullable(User.class))).thenReturn(sampleBrand);
 
             mockMvc.perform(get("/api/v1/branding/10")
                             .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))
@@ -118,7 +119,7 @@ class BrandControllerTest {
                     .enabled(true)
                     .build();
 
-            when(brandService.upsert(eq(10L), any(BrandConfigRequest.class)))
+            when(brandService.upsert(eq(10L), any(BrandConfigRequest.class), nullable(User.class)))
                     .thenReturn(sampleBrand);
 
             mockMvc.perform(put("/api/v1/branding/10")
@@ -139,7 +140,7 @@ class BrandControllerTest {
         @Test
         @DisplayName("should delete brand config and return 200")
         void shouldDeleteBrandConfig() throws Exception {
-            doNothing().when(brandService).delete(10L);
+            doNothing().when(brandService).delete(eq(10L), nullable(User.class));
 
             mockMvc.perform(delete("/api/v1/branding/10")
                             .with(authentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()))))

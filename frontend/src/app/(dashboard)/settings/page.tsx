@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save, User, Bell, Shield, Palette, Key, Brain, Search, Trash2 } from "lucide-react";
 import {
@@ -25,7 +25,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/stores/auth-store";
 import { useOrganizationStore } from "@/stores/organization-store";
-import { api, memoryApi, type CreateMemorySkillRequest } from "@/lib/api";
+import {
+  api,
+  memoryApi,
+  preferencesApi,
+  type CreateMemorySkillRequest,
+  type LiveViewQuality,
+  type UpdateUserPreferencesRequest,
+} from "@/lib/api";
 
 export default function SettingsPage() {
   const { user, setUser } = useAuthStore();
@@ -50,7 +57,7 @@ export default function SettingsPage() {
 
   // Live View settings
   const [autoStartLive, setAutoStartLive] = useState(true);
-  const [defaultQuality, setDefaultQuality] = useState("hd");
+  const [defaultQuality, setDefaultQuality] = useState<LiveViewQuality>("HD");
   const [maxViewers, setMaxViewers] = useState("5");
   const [memoryQuery, setMemoryQuery] = useState("");
   const [skillTitle, setSkillTitle] = useState("");
@@ -73,6 +80,52 @@ export default function SettingsPage() {
   const memoryPolicyQuery = useQuery({
     queryKey: ["memory", "policy"],
     queryFn: () => memoryApi.getPolicy(),
+  });
+
+  // Per-user preferences (notifications + live view), persisted server-side.
+  const preferencesQuery = useQuery({
+    queryKey: ["preferences", "me"],
+    queryFn: () => preferencesApi.get(),
+  });
+
+  // Seed the local form state once the persisted preferences load (and whenever they
+  // change server-side), so the toggles reflect what's actually stored.
+  const preferences = preferencesQuery.data;
+  useEffect(() => {
+    if (!preferences) return;
+    setEmailNotifications(preferences.email_notifications);
+    setPushNotifications(preferences.push_notifications);
+    setExecutionAlerts(preferences.execution_alerts);
+    setLiveSessionAlerts(preferences.live_session_alerts);
+    setAutoStartLive(preferences.auto_start_live);
+    setDefaultQuality(preferences.default_quality);
+    setMaxViewers(String(preferences.max_viewers));
+  }, [preferences]);
+
+  // Full-replace PUT: the backend requires every field, so both the Notifications and
+  // Live View "Save" buttons submit the complete current state, not a partial patch.
+  const buildPreferencesPayload = (): UpdateUserPreferencesRequest => ({
+    email_notifications: emailNotifications,
+    push_notifications: pushNotifications,
+    execution_alerts: executionAlerts,
+    live_session_alerts: liveSessionAlerts,
+    auto_start_live: autoStartLive,
+    default_quality: defaultQuality,
+    max_viewers: Number(maxViewers) || 5,
+  });
+
+  const updatePreferencesMutation = useMutation({
+    mutationFn: (data: UpdateUserPreferencesRequest) => preferencesApi.update(data),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["preferences", "me"], saved);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save preferences. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const memorySkillsQuery = useQuery({
@@ -206,16 +259,22 @@ export default function SettingsPage() {
   };
 
   const handleSaveNotifications = () => {
-    toast({
-      title: "Notifications updated",
-      description: "Your notification preferences have been saved.",
+    updatePreferencesMutation.mutate(buildPreferencesPayload(), {
+      onSuccess: () =>
+        toast({
+          title: "Notifications updated",
+          description: "Your notification preferences have been saved.",
+        }),
     });
   };
 
   const handleSaveLiveView = () => {
-    toast({
-      title: "Live View settings updated",
-      description: "Your Live View preferences have been saved.",
+    updatePreferencesMutation.mutate(buildPreferencesPayload(), {
+      onSuccess: () =>
+        toast({
+          title: "Live View settings updated",
+          description: "Your Live View preferences have been saved.",
+        }),
     });
   };
 
@@ -434,9 +493,12 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <Button onClick={handleSaveNotifications}>
+              <Button
+                onClick={handleSaveNotifications}
+                disabled={updatePreferencesMutation.isPending || preferencesQuery.isLoading}
+              >
                 <Save className="mr-2 h-4 w-4" />
-                Save Preferences
+                {updatePreferencesMutation.isPending ? "Saving..." : "Save Preferences"}
               </Button>
             </CardContent>
           </Card>
@@ -467,14 +529,17 @@ export default function SettingsPage() {
 
               <div className="grid gap-2">
                 <Label>Default Quality</Label>
-                <Select value={defaultQuality} onValueChange={setDefaultQuality}>
+                <Select
+                  value={defaultQuality}
+                  onValueChange={(v) => setDefaultQuality(v as LiveViewQuality)}
+                >
                   <SelectTrigger className="w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto (adapt to connection)</SelectItem>
-                    <SelectItem value="hd">HD (1280x720)</SelectItem>
-                    <SelectItem value="sd">SD (854x480)</SelectItem>
+                    <SelectItem value="AUTO">Auto (adapt to connection)</SelectItem>
+                    <SelectItem value="HD">HD (1280x720)</SelectItem>
+                    <SelectItem value="SD">SD (854x480)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -494,9 +559,12 @@ export default function SettingsPage() {
                 </Select>
               </div>
 
-              <Button onClick={handleSaveLiveView}>
+              <Button
+                onClick={handleSaveLiveView}
+                disabled={updatePreferencesMutation.isPending || preferencesQuery.isLoading}
+              >
                 <Save className="mr-2 h-4 w-4" />
-                Save Settings
+                {updatePreferencesMutation.isPending ? "Saving..." : "Save Settings"}
               </Button>
             </CardContent>
           </Card>
@@ -508,45 +576,35 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>API Keys</CardTitle>
               <CardDescription>
-                Manage your LLM provider API keys for the client.
+                Where your LLM provider keys live and how the agents use them.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="openaiKey">OpenAI API Key</Label>
-                <Input
-                  id="openaiKey"
-                  type="password"
-                  placeholder="sk-..."
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="anthropicKey">Anthropic API Key</Label>
-                <Input
-                  id="anthropicKey"
-                  type="password"
-                  placeholder="sk-ant-..."
-                />
-              </div>
-
               <div className="rounded-lg border p-4 bg-muted/50">
                 <div className="flex items-start gap-2">
                   <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">Your keys are secure</p>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Keys stay on your machine</p>
                     <p className="text-sm text-muted-foreground">
-                      API keys are encrypted and stored locally on your machine.
-                      They are never sent to SquadX servers.
+                      Provider API keys (OpenAI, Anthropic, …) are configured on the
+                      SquadX client daemon and injected into the sandbox environment when
+                      an agent runs. They are never sent to or stored on SquadX servers,
+                      so there is nothing to enter here.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Set them in the client&apos;s environment or config file — for example{" "}
+                      <code className="rounded bg-background px-1 py-0.5 text-xs">
+                        ANTHROPIC_API_KEY
+                      </code>{" "}
+                      and{" "}
+                      <code className="rounded bg-background px-1 py-0.5 text-xs">
+                        OPENAI_API_KEY
+                      </code>
+                      .
                     </p>
                   </div>
                 </div>
               </div>
-
-              <Button>
-                <Save className="mr-2 h-4 w-4" />
-                Save API Keys
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>

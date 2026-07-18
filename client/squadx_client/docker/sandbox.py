@@ -2,17 +2,23 @@
 
 import asyncio
 import logging
-from typing import Optional, Callable, Any, TYPE_CHECKING
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 from squadx_client.config import settings
-from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
-from .manager import DockerManager, ContainerConfig, docker_manager
-from .lifecycle import SandboxLifecycleManager, SandboxState, SandboxInfo
+
 from .file_ops import SandboxFileOps
-from .metrics import ContainerMetricsCollector, ContainerMetrics
-from .network_policy import NetworkPolicy, generate_network_setup_script, get_predefined_policy
+from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
+from .manager import ContainerConfig, DockerManager, docker_manager
+from .metrics import ContainerMetrics, ContainerMetricsCollector
+from .network_policy import (
+    EgressSidecarConfig,
+    NetworkPolicy,
+    generate_sidecar_setup_script,
+    get_predefined_policy,
+)
 
 if TYPE_CHECKING:
     from .pool import PooledContainer
@@ -38,7 +44,7 @@ class SandboxResult:
     success: bool
     exit_code: int
     output: str
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -50,10 +56,10 @@ class AgentSandbox:
         task_id: int,
         agent_type: str,
         workspace_path: str,
-        manager: Optional[DockerManager] = None,
+        manager: DockerManager | None = None,
         enable_live_streaming: bool = True,
-        runtime: Optional[SandboxRuntime] = None,
-        network_policy: Optional[str] = None,
+        runtime: SandboxRuntime | None = None,
+        network_policy: str | None = None,
         ttl_seconds: int = 3600,
     ):
         self.task_id = task_id
@@ -69,31 +75,53 @@ class AgentSandbox:
             f"Sandbox for task {task_id} using runtime: {self.runtime.value}"
         )
 
-        # Network policy
-        self._network_policy: Optional[NetworkPolicy] = None
-        if network_policy:
-            try:
-                self._network_policy = get_predefined_policy(network_policy)
-            except ValueError:
-                logger.warning(f"Unknown network policy '{network_policy}', using none")
+        # Network policy. Always resolves to a real policy: an unset argument falls back
+        # to settings, never to None. Leaving it optional is what let both production
+        # call sites silently run with no policy at all for the parameter's whole life —
+        # a default that has to be passed to take effect is not a default.
+        self._network_policy: NetworkPolicy = self._resolve_policy(network_policy)
 
-        self.container_id: Optional[str] = None
+        # Per-exec environment (provider API keys). Deliberately NOT container-create
+        # env: create-time env is baked into the container for its whole life (visible
+        # in `docker inspect` and /proc/1/environ) and is fixed at create time, which
+        # is precisely why pre-created warm-pool containers cannot carry credentials.
+        # Injecting at exec keeps secrets out of the container's metadata and lets a
+        # pooled container serve any run.
+        self._exec_env: dict[str, str] = {}
+
+        self.container_id: str | None = None
         # RFC-0006: id of the egress sidecar whose netns the agent joins (when enabled).
-        self.sidecar_id: Optional[str] = None
+        self.sidecar_id: str | None = None
         self.status = SandboxStatus.CREATED
-        self.vnc_port: Optional[int] = None
-        self.live_join_code: Optional[str] = None
+        self.vnc_port: int | None = None
+        self.live_join_code: str | None = None
 
         # Set to the pool handle when the container came from the warm pool;
         # cleanup() uses this to release back to the pool instead of removing.
-        self._pooled_container: Optional["PooledContainer"] = None
+        self._pooled_container: PooledContainer | None = None
 
         # Enhanced file operations and metrics (initialized after container start)
-        self.file_ops: Optional[SandboxFileOps] = None
-        self.metrics_collector: Optional[ContainerMetricsCollector] = None
+        self.file_ops: SandboxFileOps | None = None
+        self.metrics_collector: ContainerMetricsCollector | None = None
 
-        self._output_callback: Optional[Callable[[str], Any]] = None
-        self._status_callback: Optional[Callable[[SandboxStatus], Any]] = None
+        self._output_callback: Callable[[str], Any] | None = None
+        self._status_callback: Callable[[SandboxStatus], Any] | None = None
+
+    @staticmethod
+    def _resolve_policy(name: str | None) -> NetworkPolicy:
+        """Resolve a policy name to a policy, falling back to settings then to the
+        secure default. Never returns None and never raises: an unknown name degrades
+        to the standing default rather than to no enforcement at all.
+        """
+        configured = str(name or getattr(settings, "network_policy", "agent-default"))
+        try:
+            return get_predefined_policy(configured)
+        except ValueError:
+            logger.warning(
+                f"unknown_network_policy name={configured!r} — falling back to "
+                f"'agent-default' (default-deny + allowlist)"
+            )
+            return get_predefined_policy("agent-default")
 
     def on_output(self, callback: Callable[[str], Any]):
         """Register a callback for output."""
@@ -118,14 +146,22 @@ class AgentSandbox:
         memory_limit: str = "2g",
         cpu_limit: float = 2.0,
         enable_vnc: bool = True,
-        environment: Optional[dict] = None,
+        environment: dict | None = None,
+        exec_env: dict | None = None,
     ) -> bool:
-        """Start the sandbox container."""
+        """Start the sandbox container.
+
+        ``environment`` is baked into the container at create time — use it only for
+        non-secret, per-container context. ``exec_env`` carries secrets (provider API
+        keys) and is applied per ``execute``/``execute_streaming`` call instead, so it
+        never lands in container metadata and works on pooled containers.
+        """
         if self.status not in (SandboxStatus.CREATED, SandboxStatus.STOPPED, SandboxStatus.ERROR):
             logger.warning(f"Cannot start sandbox in status: {self.status}")
             return False
 
         self._set_status(SandboxStatus.STARTING)
+        self._exec_env = dict(exec_env or {})
 
         try:
             # Ensure Docker connection
@@ -165,15 +201,19 @@ class AgentSandbox:
 
             warm_pool = getattr(self.manager, "warm_pool", None)
             used_pool = False
-            # The egress sidecar must own the netns at agent-create time, which pre-created
-            # warm-pool agents can't provide — so the pool fast-path is bypassed when egress
-            # enforcement is on (RFC-0006).
-            if warm_pool is not None and warm_pool.is_enabled and not sidecar_enabled:
+            # The egress sidecar must own the netns at agent-create time. The pool
+            # satisfies that by pre-creating the agent already joined to a sidecar, so
+            # both compose: the policy is applied via the pre-start hook below, while
+            # the agent is still `created` and cannot execute anything (RFC-0006).
+            if warm_pool is not None and warm_pool.is_enabled:
                 try:
                     pooled = await warm_pool.acquire(
-                        task_id=self.task_id, agent_type=self.agent_type
+                        task_id=self.task_id,
+                        agent_type=self.agent_type,
+                        before_start=self._apply_pooled_policy if sidecar_enabled else None,
                     )
                     self.container_id = pooled.container_id
+                    self.sidecar_id = pooled.sidecar_id
                     self._pooled_container = pooled
                     used_pool = True
                     logger.info(
@@ -182,6 +222,15 @@ class AgentSandbox:
                         f"use_count={pooled.use_count}"
                     )
                 except Exception as e:  # noqa: BLE001 - cold fallback is below
+                    if sidecar_enabled and not getattr(settings, "egress_fail_open", False):
+                        # Falling back to a cold, unfiltered sandbox would defeat the
+                        # whole point of the policy the pool just refused to apply.
+                        logger.error(
+                            f"warm_pool_acquire_failed_fail_closed task={self.task_id} "
+                            f"error={e}"
+                        )
+                        self._set_status(SandboxStatus.ERROR)
+                        return False
                     logger.warning(
                         f"warm_pool_acquire_failed_falling_back task={self.task_id} "
                         f"error={e}"
@@ -228,21 +277,22 @@ class AgentSandbox:
                     self._set_status(SandboxStatus.ERROR)
                     return False
 
-            # Legacy in-agent network policy (non-sidecar path). Best-effort: kept up on
-            # failure. The sidecar path already applied its policy fail-closed, above.
-            if self._network_policy and not sidecar_enabled:
-                script = generate_network_setup_script(self._network_policy)
-                ok, log = await self.manager.apply_network_setup(
-                    self.container_id, script
+            # Without the sidecar there is nowhere to enforce egress: the agent is
+            # cap-drop ALL (no NET_ADMIN, and it cannot be regained via exec) and its
+            # /tmp is noexec, so the in-agent iptables path cannot work by construction
+            # — see egress_guard's module docstring. Say so loudly rather than run a
+            # best-effort apply that always fails and reads like enforcement.
+            if not sidecar_enabled:
+                logger.error(
+                    f"egress_unenforced task={self.task_id} "
+                    f"policy={self._network_policy.default_action.value} — the egress "
+                    f"sidecar is disabled, so the agent has UNRESTRICTED network access "
+                    f"(only host-side cloud-metadata rules apply, where the host supports "
+                    f"them). Set SQUADX_EGRESS_SIDECAR=true. See RFC-0006 / ADR-0008."
                 )
-                if not ok:
-                    logger.warning(
-                        f"network_policy_apply_failed task={self.task_id} "
-                        f"policy={self._network_policy.default_action.value} "
-                        f"log={log[:500]}"
-                    )
 
             # Initialize enhanced file operations and metrics collector
+            assert self.container_id is not None  # set by create_container above
             if self.manager.client:
                 self.file_ops = SandboxFileOps(self.manager.client, self.container_id)
                 self.metrics_collector = ContainerMetricsCollector(self.manager.client)
@@ -255,11 +305,17 @@ class AgentSandbox:
                 self.vnc_port = await self.manager.get_vnc_port(vnc_host_container)
                 logger.info(f"VNC available on port: {self.vnc_port}")
 
-                # Start live streaming if enabled
+                # Start live streaming if enabled. The stream is keyed by the agent
+                # container (that is what stop/cleanup tear down), but the port was
+                # resolved above from whichever container actually publishes it —
+                # the sidecar, when it owns the netns. Pass it explicitly rather than
+                # letting the manager re-resolve it against the agent, which has no
+                # published ports under RFC-0006 and would silently yield None.
                 if self.enable_live_streaming and self.vnc_port:
                     self.live_join_code = await self.manager.start_live_stream(
                         container_id=self.container_id,
                         task_id=self.task_id,
+                        vnc_port=self.vnc_port,
                     )
                     if self.live_join_code:
                         logger.info(f"Live streaming available: {self.live_join_code}")
@@ -273,13 +329,34 @@ class AgentSandbox:
             self._set_status(SandboxStatus.ERROR)
             return False
 
+    async def _apply_pooled_policy(self, pooled) -> bool:
+        """Pre-start hook for a pooled agent+sidecar pair.
+
+        Runs while the agent is still `created`, so a rejection here means the agent
+        never executed a single instruction with the wrong policy. The generated script
+        flushes before applying, which is what makes a recycled sidecar safe to reuse.
+        """
+        self.sidecar_id = pooled.sidecar_id
+        if not self.sidecar_id:
+            logger.error(
+                f"pooled_unit_without_sidecar_fail_closed task={self.task_id} "
+                f"container_id={pooled.container_id[:12]}"
+            )
+            return False
+        return await self._apply_sidecar_policy()
+
     async def _apply_sidecar_policy(self) -> bool:
         """Apply the egress policy on the sidecar. Returns False only when it could not
         be applied AND fail-open is off (caller then aborts the run)."""
-        policy = self._network_policy or get_predefined_policy(
-            getattr(settings, "network_policy", "agent-default")
+        # The sidecar runs the DNS-proxy topology (RFC-0006 §3 layer 2), not the legacy
+        # one-shot `dig` allowlist: only names on the allowlist resolve at all, and the
+        # addresses they resolve to are pinned as they are handed out.
+        config = EgressSidecarConfig(
+            image=getattr(settings, "egress_sidecar_image", "squadx/egress-proxy:latest"),
+            policy=self._network_policy,
         )
-        script = generate_network_setup_script(policy)
+        script = generate_sidecar_setup_script(config)
+        assert self.sidecar_id is not None  # only called on the sidecar path
         ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
         if ok:
             return True
@@ -404,6 +481,7 @@ class AgentSandbox:
                     self.container_id,
                     command,
                     workdir=workdir,
+                    environment=self._exec_env or None,
                 ),
                 timeout=timeout,
             )
@@ -424,7 +502,7 @@ class AgentSandbox:
                 duration_seconds=duration,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return SandboxResult(
                 success=False,
                 exit_code=-1,
@@ -466,12 +544,19 @@ class AgentSandbox:
         start_time = time.time()
         chunks: list[str] = []
         exit_code = 0
-        error: Optional[str] = None
+        error: str | None = None
+
+        # Bind to a local so the narrowing holds inside the nested closure below.
+        container_id = self.container_id
+        assert container_id is not None  # guarded by the status check above
 
         async def _run() -> None:
             nonlocal exit_code, error
             async for kind, payload in self.manager.exec_command_stream(
-                self.container_id, command, workdir=workdir
+                container_id,
+                command,
+                workdir=workdir,
+                environment=self._exec_env or None,
             ):
                 if kind in ("stdout", "stderr"):
                     chunks.append(payload)
@@ -488,7 +573,7 @@ class AgentSandbox:
 
         try:
             await asyncio.wait_for(_run(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return SandboxResult(
                 success=False,
                 exit_code=-1,
@@ -518,7 +603,7 @@ class AgentSandbox:
         result = await self.execute(command)
         return result.success
 
-    async def read_file(self, path: str) -> Optional[str]:
+    async def read_file(self, path: str) -> str | None:
         """Read a file from the sandbox.
 
         Uses tar-based file_ops when available for binary-safe reads,
@@ -532,17 +617,17 @@ class AgentSandbox:
             return result.output
         return None
 
-    def get_metrics(self) -> Optional[ContainerMetrics]:
+    def get_metrics(self) -> ContainerMetrics | None:
         """Get current container resource metrics."""
         if self.metrics_collector and self.container_id:
             return self.metrics_collector.collect(self.container_id)
         return None
 
-    def get_network_policy(self) -> Optional[NetworkPolicy]:
+    def get_network_policy(self) -> NetworkPolicy | None:
         """Get the network policy applied to this sandbox."""
         return self._network_policy
 
-    async def get_logs(self, tail: int = 100) -> Optional[str]:
+    async def get_logs(self, tail: int = 100) -> str | None:
         """Get sandbox container logs."""
         if not self.container_id:
             return None

@@ -42,6 +42,9 @@ docker-down: ## Stop all Docker services
 docker-build: ## Build all Docker images
 	docker-compose build
 
+build-egress-proxy: ## Build the egress firewall sidecar image (RFC-0006). Required: egress enforcement is on by default.
+	cd client/docker && docker build -f egress-proxy.Dockerfile -t squadx/egress-proxy:latest .
+
 docker-logs: ## Show Docker logs
 	docker-compose logs -f
 

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -129,6 +130,91 @@ class ExecutionServiceTest {
         testExecution.setId(1L);
 
         lenient().when(brainSentryClient.isEnabled()).thenReturn(false);
+    }
+
+    @Nested
+    @DisplayName("sandbox egress policy dispatch (RFC-0006)")
+    class SandboxEgressPolicyDispatch {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> dispatchedPayload() {
+            ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+            verify(webSocketEventService)
+                    .sendTaskAssignedToUser(eq("test@example.com"), eq(1L), captor.capture());
+            return captor.getValue();
+        }
+
+        private void startRun() {
+            ExecutionRequest request = ExecutionRequest.builder().taskId(1L).agentId(1L).build();
+            when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+            RunAdmissionDecision decision = RunAdmissionDecision.builder()
+                    .action(RunAdmissionAction.START)
+                    .reasonCode(RunAdmissionReasonCode.NEW_EVENT)
+                    .reason("ok")
+                    .decidedAt(Instant.now())
+                    .build();
+            when(runAdmissionService.admit(any(Task.class), any(ExecutionRequest.class), any(User.class)))
+                    .thenReturn(new RunAdmissionService.AdmissionResult(decision, null, null));
+            when(agentRepository.findById(1L)).thenReturn(Optional.of(testAgent));
+            when(executionRepository.save(any(Execution.class))).thenAnswer(invocation -> {
+                Execution saved = invocation.getArgument(0);
+                saved.setId(1L);
+                return saved;
+            });
+            when(taskRepository.save(any(Task.class))).thenReturn(testTask);
+            executionService.startExecution(request, testUser);
+        }
+
+        private Squad squadWith(SandboxEgressPolicy policy) {
+            Squad squad = Squad.builder().name("Squad").sandboxEgressPolicy(policy).build();
+            squad.setId(9L);
+            return squad;
+        }
+
+        @Test
+        @DisplayName("dispatches the executing agent's squad policy")
+        void shouldDispatchAgentSquadPolicy() {
+            testAgent.setSquad(squadWith(SandboxEgressPolicy.DENY_ALL));
+
+            startRun();
+
+            assertThat(dispatchedPayload().get("sandbox_egress_policy")).isEqualTo("DENY_ALL");
+        }
+
+        @Test
+        @DisplayName("falls back to the task's assigned squad when the agent has none")
+        void shouldFallBackToTaskSquad() {
+            testAgent.setSquad(null);
+            testTask.setAssignedSquad(squadWith(SandboxEgressPolicy.FULL));
+
+            startRun();
+
+            assertThat(dispatchedPayload().get("sandbox_egress_policy")).isEqualTo("FULL");
+        }
+
+        @Test
+        @DisplayName("the executing agent's squad wins over the task's")
+        void shouldPreferAgentSquadOverTaskSquad() {
+            testAgent.setSquad(squadWith(SandboxEgressPolicy.DENY_ALL));
+            testTask.setAssignedSquad(squadWith(SandboxEgressPolicy.FULL));
+
+            startRun();
+
+            assertThat(dispatchedPayload().get("sandbox_egress_policy")).isEqualTo("DENY_ALL");
+        }
+
+        @Test
+        @DisplayName("an unresolvable policy dispatches the default, never nothing")
+        void shouldNeverDispatchNull() {
+            testAgent.setSquad(null);
+            testTask.setAssignedSquad(null);
+
+            startRun();
+
+            // A run with no resolvable policy must not become a run with no policy.
+            assertThat(dispatchedPayload().get("sandbox_egress_policy")).isEqualTo("AGENT_DEFAULT");
+        }
     }
 
     @Nested

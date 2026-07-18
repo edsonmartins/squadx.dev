@@ -6,8 +6,8 @@ Inspired by ClawTeam's TaskWaiter.
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +44,10 @@ class TaskWaiter:
         self,
         poll_interval: float = 5.0,
         timeout: float = 300.0,
-        on_task_complete: Optional[Callable] = None,
-        on_agent_dead: Optional[Callable] = None,
-        on_timeout: Optional[Callable] = None,
-        on_progress: Optional[Callable] = None,
+        on_task_complete: Callable | None = None,
+        on_agent_dead: Callable | None = None,
+        on_timeout: Callable | None = None,
+        on_progress: Callable | None = None,
     ):
         self._poll_interval = poll_interval
         self._timeout = timeout
@@ -64,7 +64,7 @@ class TaskWaiter:
         self,
         task_ids: list[str],
         check_status: Callable,
-        check_agent_health: Optional[Callable] = None,
+        check_agent_health: Callable | None = None,
     ) -> WaitResult:
         """
         Wait for all tasks to complete.
@@ -75,9 +75,9 @@ class TaskWaiter:
             check_agent_health: callable() -> list of dead agent IDs
         """
         start_time = time.time()
-        completed = set()
-        failed = set()
-        dead_agents = set()
+        completed: set[str] = set()
+        failed: set[str] = set()
+        dead_agents: set[str] = set()
         pending = set(task_ids)
 
         while not self._interrupted:

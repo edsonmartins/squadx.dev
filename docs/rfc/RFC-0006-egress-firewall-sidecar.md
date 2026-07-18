@@ -1,19 +1,30 @@
 # RFC-0006 — Egress firewall sidecar (default-deny + allowlist)
 
-> **Status:** Implementado atrás de flag (`SQUADX_EGRESS_SIDECAR`, default **off**) em 2026-07 —
-> `egress_sidecar.py` + wiring em `manager.py`/`sandbox.py` (política aplicada **antes** do agente
-> entrar no netns, fail-closed), preset `POLICY_AGENT_DEFAULT`, e a imagem
-> `client/docker/egress-proxy.Dockerfile` (+ entrypoint: baseline metadata-drop + stay-alive; iptables
-> injetado em runtime). **Pendente:** verificação ponta-a-ponta de drop em host Linux (testes marcados
-> `integration`, pulados por default; `SQUADX_DOCKER_IT=1`) e, se necessário, o modo dns-proxy vivo
-> (§3 camada 2 — hoje o allowlist de domínio é resolvido uma vez via `dig`). Rollout: ligar o flag,
-> calibrar allowlist por telemetria, então flip do default.
+> **Status:** Implementado e **ligado por default** (`SQUADX_EGRESS_SIDECAR`, default **on**) em
+> 2026-07 — `egress_sidecar.py` + wiring em `manager.py`/`sandbox.py` (política aplicada **antes** do
+> agente entrar no netns, fail-closed), preset `POLICY_AGENT_DEFAULT`, imagem
+> `client/docker/egress-proxy.Dockerfile` (`make build-egress-proxy`), e a **camada 2 (§3): o
+> dns-proxy vivo** (`client/docker/egress-dns-proxy.py` + `generate_sidecar_setup_script`), que
+> substituiu a resolução one-shot via `dig`. A policy é **por squad**, vinda do backend
+> (`sandbox_egress_policy` no payload de dispatch; migration V36).
+>
+> **Pendente:** verificação ponta-a-ponta de drop em host real (testes marcados `integration`,
+> pulados por default; `make build-egress-proxy && SQUADX_DOCKER_IT=1 pytest -m integration
+> client/tests`). O corpo do teste existe e afirma as quatro alegações do §7; ele **não foi
+> executado** — não havia daemon Docker na máquina de desenvolvimento. Requer `xt_set` no kernel do
+> host para o match de ipset; sem ele o script aborta sob `set -e` com default-DROP em vigor
+> (fail-closed). Falta ainda telemetria de "egress negado" (§7/§8) para calibrar o allowlist.
 >
 > Realiza **ADR-0008** Fase 1. Define como aplicar egress default-deny com allowlist de domínios ao
 > sandbox **sem** iptables dentro do container não-confiável, movendo o enforcement para um **sidecar
-> privilegiado** que compartilha o network namespace do agente. Reusa o motor já existente em
-> `client/squadx_client/docker/network_policy.py` (`NetworkPolicy`, `EgressSidecarConfig`,
-> `generate_network_setup_script`), que hoje é código morto. Precedência abaixo de ADR-0008.
+> privilegiado** que compartilha o network namespace do agente. Precedência abaixo de ADR-0008.
+>
+> **Correção histórica (importante para quem ler o histórico):** antes deste ciclo o egress **não era
+> aplicado em produção de forma alguma** — não apenas "atrás de flag". `AgentSandbox.__init__` aceitava
+> `network_policy`, mas nenhum call site de produção o passava (só um teste), e o caminho não-sidecar
+> exigia `self._network_policy` truthy; logo `_network_policy` era sempre `None` e nenhuma policy era
+> aplicada. Somado a isso, `enable_vnc` (default on) rebaixava `network=none` para `bridge`
+> (`manager.py`), dando egress irrestrito a todo agente com live-view. Ambos corrigidos.
 
 ## 0. Contexto e restrição central
 

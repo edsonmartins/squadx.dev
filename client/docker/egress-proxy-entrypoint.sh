@@ -3,9 +3,10 @@
 #
 # Establishes an always-on baseline (loopback up, cloud-metadata dropped) and then
 # stays alive so the network namespace persists for the whole run. The FULL policy
-# (default-deny OUTPUT + domain allowlist) is injected afterwards by the daemon via
-# `apply_network_setup`, which runs `generate_network_setup_script` in this netns —
-# this container has NET_ADMIN, so unlike the agent it can actually apply it.
+# (default-deny OUTPUT + the DNS proxy that domain-allowlists and pins answers into
+# an ipset) is injected afterwards by the daemon via `apply_network_setup`, which runs
+# `generate_sidecar_setup_script` in this netns — this container has NET_ADMIN, so
+# unlike the agent it can actually apply it.
 #
 # Baseline is intentionally minimal and idempotent: it must not conflict with the
 # injected default-deny script (which sets `iptables -P OUTPUT DROP`). We only add a

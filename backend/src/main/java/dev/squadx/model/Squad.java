@@ -1,5 +1,6 @@
 package dev.squadx.model;
 
+import dev.squadx.model.enums.SandboxEgressPolicy;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,6 +24,16 @@ public class Squad extends BaseEntity {
     @Column(name = "is_active")
     @Builder.Default
     private boolean isActive = true;
+
+    /**
+     * Egress policy this squad's agents run under in the sandbox (RFC-0006 / ADR-0008).
+     * Every agent has a mandatory squad, so this always resolves for an executing agent.
+     * Dispatched to the client daemon, which is where it is actually enforced.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sandbox_egress_policy", nullable = false)
+    @Builder.Default
+    private SandboxEgressPolicy sandboxEgressPolicy = SandboxEgressPolicy.AGENT_DEFAULT;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id", nullable = false)

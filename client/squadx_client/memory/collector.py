@@ -1,7 +1,8 @@
 """Memory collector that batches execution artifacts for BrainSentry storage."""
 
-import structlog
 from dataclasses import dataclass, field
+
+import structlog
 
 from squadx_client.memory.client import BrainSentryClient
 

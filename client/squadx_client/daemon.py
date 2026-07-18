@@ -1,11 +1,10 @@
 """SquadX Daemon - Background service for task execution."""
 
 import asyncio
-import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 import structlog
@@ -16,10 +15,9 @@ from squadx_client.docker.manager import docker_manager
 from squadx_client.memory import BrainSentryClient
 from squadx_client.messaging.run_event import default_run_event_metadata
 from squadx_client.orchestrator.graph import create_orchestrator
-from squadx_client.websocket import StompClientManager, MessageType
-from squadx_client.websocket.handlers import TaskMessageHandler
-from squadx_client.streaming import StreamManager, VNCStreamer, StreamConfig
 from squadx_client.streaming.vnc_streamer import stream_manager
+from squadx_client.websocket import MessageType, StompClientManager
+from squadx_client.websocket.handlers import TaskMessageHandler
 
 logger = structlog.get_logger()
 
@@ -379,30 +377,41 @@ class SquadXDaemon:
         cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
         workspace_path = task_data.get("project_path") or settings.workspace_path
 
-        # Inject provider API keys into the sandbox environment (BYO key). Scrub defensively so
-        # only these explicitly-allowed secrets (and safe vars) ever reach the CLI (ADR-0007).
-        environment: dict[str, str] = {}
+        # Inject provider API keys for the CLI (BYO key). Scrub defensively so only these
+        # explicitly-allowed secrets (and safe vars) ever reach it (ADR-0007). These go in
+        # as *per-exec* env, not container-create env: keys must not be readable from the
+        # container's metadata for its whole lifetime, and create-time env is fixed at
+        # create — which is what stops a pre-created warm-pool container from carrying them.
+        exec_env: dict[str, str] = {}
         if settings.anthropic_api_key:
-            environment["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+            exec_env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
         if settings.openai_api_key:
-            environment["OPENAI_API_KEY"] = settings.openai_api_key
-        if getattr(settings, "google_api_key", None):
-            environment["GOOGLE_API_KEY"] = settings.google_api_key
-        environment = scrub_env(
-            environment, allow=("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY")
+            exec_env["OPENAI_API_KEY"] = settings.openai_api_key
+        if settings.google_api_key:
+            exec_env["GOOGLE_API_KEY"] = settings.google_api_key
+        exec_env = scrub_env(
+            exec_env, allow=("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY")
         )
+
+        # Per-squad egress policy from the backend (RFC-0006). None when this backend
+        # does not send it or sends a value we do not know — AgentSandbox then falls
+        # back to the daemon's own default rather than to no policy.
+        from squadx_client.docker.network_policy import policy_name_from_backend
+
+        network_policy = policy_name_from_backend(task_data.get("sandbox_egress_policy"))
 
         sandbox = AgentSandbox(
             task_id=task_id,
             agent_type="external_cli",
             workspace_path=workspace_path,
+            network_policy=network_policy,
         )
         started = await sandbox.start(
             image=settings.agent_image,
             memory_limit=settings.agent_memory_limit,
             cpu_limit=settings.agent_cpu_limit,
             enable_vnc=settings.enable_vnc,
-            environment=environment,
+            exec_env=exec_env,
         )
         if not started:
             raise RuntimeError("Failed to start sandbox for external CLI agent")
@@ -512,7 +521,7 @@ class SquadXDaemon:
 
         logger.info("starting_live_view", task_id=task_id, session_id=session_id, vnc_port=vnc_port)
 
-        if not session_id or not vnc_port:
+        if not session_id or not vnc_port or task_id is None:
             logger.error("missing_live_view_params", data=data)
             return
 
@@ -520,7 +529,7 @@ class SquadXDaemon:
             # Create streaming session
             streamer = await stream_manager.create_session(
                 session_id=session_id,
-                task_id=task_id,
+                task_id=int(task_id),
                 vnc_port=vnc_port,
             )
 
@@ -585,7 +594,7 @@ class SquadXDaemon:
         self,
         session_id: str,
         status: str,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Send live view status update.
 
@@ -655,7 +664,11 @@ class SquadXDaemon:
 
         # Extract metrics if available
         metrics = result.get("metrics")
-        metrics_summary = metrics.to_summary() if hasattr(metrics, "to_summary") else {}
+        metrics_summary = (
+            metrics.to_summary()
+            if metrics is not None and hasattr(metrics, "to_summary")
+            else {}
+        )
 
         await self.stomp.send(
             destination,

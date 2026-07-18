@@ -69,17 +69,18 @@ class TestSettingsDefaults:
         s = Settings(_env_file=None)
         assert s.network_policy == "agent-default"
 
-    def test_egress_sidecar_off_by_default(self):
-        # RFC-0006 rollout is opt-in; default off means no behavior change.
+    def test_egress_sidecar_on_by_default(self):
+        # The sidecar is the only place egress can be enforced (the agent is cap-drop
+        # ALL), so off-by-default meant every agent ran with unrestricted network.
         s = Settings(_env_file=None)
-        assert s.egress_sidecar_enabled is False
-        assert s.egress_fail_open is False
+        assert s.egress_sidecar_enabled is True
+        assert s.egress_fail_open is False  # a policy that cannot be applied aborts
         assert s.egress_sidecar_image == "squadx/egress-proxy:latest"
 
     def test_egress_sidecar_env_override(self):
-        with patch.dict(os.environ, {"SQUADX_EGRESS_SIDECAR": "true"}):
+        with patch.dict(os.environ, {"SQUADX_EGRESS_SIDECAR": "false"}):
             s = Settings(_env_file=None)
-        assert s.egress_sidecar_enabled is True
+        assert s.egress_sidecar_enabled is False
 
 
 class TestExpandedPaths:

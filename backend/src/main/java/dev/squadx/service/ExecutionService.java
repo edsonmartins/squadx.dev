@@ -12,6 +12,7 @@ import dev.squadx.integration.BrainSentryClient;
 import dev.squadx.model.*;
 import dev.squadx.model.enums.ExecutionStatus;
 import dev.squadx.model.enums.FollowUpStatus;
+import dev.squadx.model.enums.SandboxEgressPolicy;
 import dev.squadx.model.enums.TaskStatus;
 import dev.squadx.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -442,7 +443,30 @@ public class ExecutionService {
         payload.put("execution_id", execution.getId());
         payload.put("brain_sentry_session_id", execution.getBrainSentrySessionId());
         payload.put("tags", task.getTags());
+        payload.put("sandbox_egress_policy", resolveEgressPolicy(task, execAgent).name());
         return payload;
+    }
+
+    /**
+     * Resolve the egress policy for this run (RFC-0006 / ADR-0008).
+     *
+     * <p>The executing agent's own squad wins: it is the squad whose code is actually
+     * about to run, and it is mandatory, so it always resolves. A task's assigned squad
+     * is the fallback for work dispatched to a squad rather than a specific agent.
+     *
+     * <p>Never returns null. A run with no resolvable policy must not become a run with
+     * no policy — it gets the default-deny preset, which is also what the client falls
+     * back to if this field is missing entirely (older backend, newer daemon).
+     */
+    private SandboxEgressPolicy resolveEgressPolicy(Task task, Agent execAgent) {
+        if (execAgent != null && execAgent.getSquad() != null
+                && execAgent.getSquad().getSandboxEgressPolicy() != null) {
+            return execAgent.getSquad().getSandboxEgressPolicy();
+        }
+        if (task.getAssignedSquad() != null && task.getAssignedSquad().getSandboxEgressPolicy() != null) {
+            return task.getAssignedSquad().getSandboxEgressPolicy();
+        }
+        return SandboxEgressPolicy.AGENT_DEFAULT;
     }
 
     private void handleTaskStatusUpdate(Execution execution, Map<String, Object> payload) {

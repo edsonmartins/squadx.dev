@@ -1,14 +1,15 @@
 """Metrics collector for SquadX client."""
 
-import time
 import logging
-from datetime import datetime
-from typing import Optional, Callable, Any
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from threading import Lock
+from typing import Any
 
-from ..storage.local_db import local_db, MetricsRecord
+from ..storage.local_db import MetricsRecord, local_db
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,8 @@ class ExecutionMetrics:
     api_calls: int = 0
     errors: int = 0
 
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+    start_time: float | None = None
+    end_time: float | None = None
     execution_time_s: float = 0.0
 
     latencies_ms: list[float] = field(default_factory=list)
@@ -124,7 +125,7 @@ class MetricsCollector:
             logger.debug(f"Started metrics for execution {execution_id}")
             return metrics
 
-    def end_execution(self, execution_id: int) -> Optional[ExecutionMetrics]:
+    def end_execution(self, execution_id: int) -> ExecutionMetrics | None:
         """End tracking an execution."""
         with self._lock:
             metrics = self._executions.get(execution_id)
@@ -187,7 +188,7 @@ class MetricsCollector:
             if metrics:
                 metrics.errors += count
 
-    def get_metrics(self, execution_id: int) -> Optional[ExecutionMetrics]:
+    def get_metrics(self, execution_id: int) -> ExecutionMetrics | None:
         """Get metrics for an execution."""
         return self._executions.get(execution_id)
 
@@ -231,8 +232,8 @@ class MetricsCollector:
 
     def get_summary(
         self,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get aggregated metrics summary."""
         summary = {}
@@ -248,8 +249,8 @@ class MetricsCollector:
 
     def get_cost_breakdown(
         self,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get cost breakdown."""
         cost_metrics = local_db.get_aggregated_metrics(
@@ -299,7 +300,7 @@ def track_llm_call(execution_id: int):
 
                 return result
 
-            except Exception as e:
+            except Exception:
                 metrics_collector.increment_errors(execution_id)
                 raise
 

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { squadsApi, SquadResponse } from "@/lib/api";
+import { squadsApi, SquadResponse, SandboxEgressPolicy } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,35 @@ const squadSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),
   leader_agent_id: z.number().nullable().optional(),
+  sandbox_egress_policy: z.enum(["AGENT_DEFAULT", "DENY_ALL", "FULL"]).optional(),
 });
+
+/**
+ * What each egress policy means, in the operator's terms (RFC-0006). These agents run
+ * model output, so this is a security control — the copy says what it costs, not just
+ * what it is.
+ */
+const EGRESS_POLICY_OPTIONS: {
+  value: SandboxEgressPolicy;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    value: "AGENT_DEFAULT",
+    label: "Default (recommended)",
+    hint: "Blocks everything except LLM providers, package registries and git.",
+  },
+  {
+    value: "DENY_ALL",
+    label: "No network",
+    hint: "No egress at all. Breaks anything that installs dependencies.",
+  },
+  {
+    value: "FULL",
+    label: "Unrestricted (debugging)",
+    hint: "Agents can reach any host. Prompt injection reaches the whole internet.",
+  },
+];
 
 type SquadFormData = z.infer<typeof squadSchema>;
 
@@ -60,10 +88,12 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
       name: "",
       description: "",
       leader_agent_id: null,
+      sandbox_egress_policy: "AGENT_DEFAULT",
     },
   });
 
   const leaderAgentId = watch("leader_agent_id");
+  const egressPolicy = watch("sandbox_egress_policy");
   const squadAgents = squad?.agents ?? [];
 
   // Reset form when modal opens/closes or squad changes
@@ -74,12 +104,16 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
           name: squad.name,
           description: squad.description || "",
           leader_agent_id: squad.leader_agent_id ?? null,
+          // A backend that predates this field sends nothing; show the default it is
+          // actually running under rather than an empty control.
+          sandbox_egress_policy: squad.sandbox_egress_policy ?? "AGENT_DEFAULT",
         });
       } else {
         reset({
           name: "",
           description: "",
           leader_agent_id: null,
+          sandbox_egress_policy: "AGENT_DEFAULT",
         });
       }
     }
@@ -204,6 +238,34 @@ export function SquadModal({ open, onClose, squad, organizationId }: SquadModalP
                 </p>
               </div>
             )}
+
+            <div className="grid gap-2">
+              <Label htmlFor="egress">Network access</Label>
+              <Select
+                value={egressPolicy ?? "AGENT_DEFAULT"}
+                onValueChange={(value) =>
+                  setValue("sandbox_egress_policy", value as SandboxEgressPolicy)
+                }
+              >
+                <SelectTrigger id="egress">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EGRESS_POLICY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {
+                  EGRESS_POLICY_OPTIONS.find(
+                    (o) => o.value === (egressPolicy ?? "AGENT_DEFAULT")
+                  )?.hint
+                }
+              </p>
+            </div>
           </div>
 
           <DialogFooter>

@@ -613,6 +613,13 @@ const squadResponseSchema = z.object({
   projects_count: z.number().catch(0),
   leader_agent_id: z.number().nullable().optional(),
   leader_agent_name: z.string().optional(),
+  // Optional: an installed client can talk to a backend that predates this field.
+  // .catch() rather than a bare enum so a policy added server-side later downgrades
+  // to the safe default here instead of failing the whole squad parse.
+  sandbox_egress_policy: z
+    .enum(["AGENT_DEFAULT", "DENY_ALL", "FULL"])
+    .catch("AGENT_DEFAULT")
+    .optional(),
   agents: z
     .array(
       z.object({
@@ -764,6 +771,12 @@ export interface SquadAgentSummary {
   is_active: boolean;
 }
 
+/**
+ * Egress policy a squad's agents run under in the sandbox (RFC-0006).
+ * Mirrors the backend's SandboxEgressPolicy enum.
+ */
+export type SandboxEgressPolicy = "AGENT_DEFAULT" | "DENY_ALL" | "FULL";
+
 export interface SquadResponse {
   id: number;
   name: string;
@@ -776,6 +789,7 @@ export interface SquadResponse {
   projects_count?: number;
   leader_agent_id?: number | null;
   leader_agent_name?: string;
+  sandbox_egress_policy?: SandboxEgressPolicy;
   agents?: SquadAgentSummary[];
   created_at: string;
   updated_at?: string;
@@ -860,12 +874,14 @@ export interface CreateSquadRequest {
   description?: string;
   organization_id: number;
   leader_agent_id?: number | null;
+  sandbox_egress_policy?: SandboxEgressPolicy;
 }
 
 export interface UpdateSquadRequest {
   name?: string;
   description?: string;
   leader_agent_id?: number | null;
+  sandbox_egress_policy?: SandboxEgressPolicy;
 }
 
 // Agent Types

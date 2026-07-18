@@ -10,16 +10,22 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
+from aiortc import (
+    RTCConfiguration,
+    RTCIceServer,
+    RTCPeerConnection,
+    RTCSessionDescription,
+)
 from aiortc.contrib.media import MediaRelay
-from aiortc.mediastreams import MediaStreamTrack, VideoStreamTrack
+from aiortc.mediastreams import VideoStreamTrack
+from aiortc.sdp import candidate_from_sdp
 from av import VideoFrame
 
-from squadx_client.streaming.vnc_client import VNCClient, VNCFrame
-from squadx_client.live.session_manager import LiveSessionManager, get_session_manager
 from squadx_client.config import settings
+from squadx_client.live.session_manager import LiveSessionManager, get_session_manager
+from squadx_client.streaming.vnc_client import VNCClient, VNCFrame
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +48,12 @@ class VNCVideoTrack(VideoStreamTrack):
         self.vnc_client = vnc_client
         self.fps = fps
         self._frame_time = 1.0 / fps
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._frame_count = 0
 
         # Frame queue for buffering
         self._frame_queue: asyncio.Queue[VNCFrame] = asyncio.Queue(maxsize=5)
-        self._capture_task: Optional[asyncio.Task] = None
+        self._capture_task: asyncio.Task | None = None
 
     async def start_capture(self):
         """Start capturing frames from VNC."""
@@ -68,7 +74,7 @@ class VNCVideoTrack(VideoStreamTrack):
                             self._frame_queue.put(frame),
                             timeout=0.1,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
             except asyncio.CancelledError:
                 pass
@@ -103,7 +109,7 @@ class VNCVideoTrack(VideoStreamTrack):
                 self._frame_queue.get(),
                 timeout=self._frame_time * 2,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Return black frame if no VNC frame available
             vnc_frame = VNCFrame(
                 width=self.vnc_client.width or 1920,
@@ -131,9 +137,10 @@ class PeerConnectionInfo:
 
     peer_id: str
     pc: RTCPeerConnection
-    video_track: Optional[VNCVideoTrack] = None
-    data_channel: Optional[Any] = None
+    video_track: VNCVideoTrack | None = None
+    data_channel: Any | None = None
     state: str = "new"
+    has_control: bool = False
     created_at: float = field(default_factory=time.time)
 
 
@@ -148,9 +155,9 @@ class WebRTCBridge:
         self,
         session_id: str,
         vnc_client: VNCClient,
-        session_manager: Optional[LiveSessionManager] = None,
+        session_manager: LiveSessionManager | None = None,
         fps: int = 30,
-        ice_servers: Optional[list[dict]] = None,
+        ice_servers: list[dict] | None = None,
     ):
         self.session_id = session_id
         self.vnc_client = vnc_client
@@ -163,11 +170,18 @@ class WebRTCBridge:
 
         self._peers: dict[str, PeerConnectionInfo] = {}
         self._relay = MediaRelay()
-        self._video_track: Optional[VNCVideoTrack] = None
+        self._video_track: VNCVideoTrack | None = None
         self._running = False
 
         # Register signal handler
         self.session_manager.on_signal(self._handle_signal)
+
+    def _rtc_configuration(self) -> RTCConfiguration:
+        """aiortc requires RTCConfiguration/RTCIceServer objects; a raw dict raises
+        AttributeError inside createOffer/createAnswer."""
+        return RTCConfiguration(
+            iceServers=[RTCIceServer(**server) for server in self.ice_servers]
+        )
 
     async def start(self):
         """Start the WebRTC bridge."""
@@ -204,9 +218,7 @@ class WebRTCBridge:
         Returns:
             SDP offer string
         """
-        pc = RTCPeerConnection(
-            configuration={"iceServers": self.ice_servers}
-        )
+        pc = RTCPeerConnection(configuration=self._rtc_configuration())
 
         # Add video track
         if self._video_track:
@@ -268,9 +280,7 @@ class WebRTCBridge:
         Returns:
             SDP answer string
         """
-        pc = RTCPeerConnection(
-            configuration={"iceServers": self.ice_servers}
-        )
+        pc = RTCPeerConnection(configuration=self._rtc_configuration())
 
         # Add video track
         if self._video_track:
@@ -321,11 +331,17 @@ class WebRTCBridge:
             return
 
         try:
-            ice_candidate = RTCIceCandidate(
-                sdpMid=candidate.get("sdpMid"),
-                sdpMLineIndex=candidate.get("sdpMLineIndex"),
-                candidate=candidate.get("candidate"),
+            candidate_str = candidate.get("candidate") or ""
+            # aiortc parses the SDP "candidate:..." attribute value, without the
+            # leading "candidate:" prefix that browsers include.
+            sdp = (
+                candidate_str.split(":", 1)[1]
+                if candidate_str.startswith("candidate:")
+                else candidate_str
             )
+            ice_candidate = candidate_from_sdp(sdp)
+            ice_candidate.sdpMid = candidate.get("sdpMid")
+            ice_candidate.sdpMLineIndex = candidate.get("sdpMLineIndex")
             await peer_info.pc.addIceCandidate(ice_candidate)
         except Exception as e:
             logger.error(f"Error adding ICE candidate: {e}")
@@ -348,7 +364,7 @@ class WebRTCBridge:
 
         try:
             await asyncio.wait_for(done.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("ICE gathering timed out")
 
     def _setup_peer_handlers(self, peer_info: PeerConnectionInfo):
@@ -498,7 +514,7 @@ class WebRTCBridge:
             peer_id: ID of the viewer to grant control
         """
         # Revoke control from any other peer first
-        for pid, peer_info in self._peers.items():
+        for _pid, peer_info in self._peers.items():
             if getattr(peer_info, "has_control", False):
                 peer_info.has_control = False
                 if peer_info.data_channel:
@@ -511,12 +527,12 @@ class WebRTCBridge:
                         pass
 
         # Grant control to the requesting peer
-        peer_info = self._peers.get(peer_id)
-        if peer_info:
-            peer_info.has_control = True
-            if peer_info.data_channel:
+        target = self._peers.get(peer_id)
+        if target:
+            target.has_control = True
+            if target.data_channel:
                 try:
-                    peer_info.data_channel.send(json.dumps({
+                    target.data_channel.send(json.dumps({
                         "type": "control-granted",
                         "timestamp": time.time(),
                     }))

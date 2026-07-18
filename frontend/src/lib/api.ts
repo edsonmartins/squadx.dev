@@ -185,6 +185,61 @@ export const authApi = {
   me: () => api.get<UserResponse>("/api/v1/auth/me"),
 };
 
+// User Preferences (per-user notification + live-view settings)
+export type LiveViewQuality = "AUTO" | "HD" | "SD";
+
+export interface UserPreferencesResponse {
+  email_notifications: boolean;
+  push_notifications: boolean;
+  execution_alerts: boolean;
+  live_session_alerts: boolean;
+  auto_start_live: boolean;
+  default_quality: LiveViewQuality;
+  max_viewers: number;
+  updated_at?: string;
+}
+
+export type UpdateUserPreferencesRequest = Omit<UserPreferencesResponse, "updated_at">;
+
+// Defaults mirror the backend entity builder — used as the parse-failure fallback so a
+// drifted/malformed payload downgrades to sane values instead of white-screening.
+export const DEFAULT_USER_PREFERENCES: UserPreferencesResponse = {
+  email_notifications: true,
+  push_notifications: true,
+  execution_alerts: true,
+  live_session_alerts: true,
+  auto_start_live: true,
+  default_quality: "HD",
+  max_viewers: 5,
+};
+
+const userPreferencesSchema = z.object({
+  email_notifications: z.boolean().catch(true),
+  push_notifications: z.boolean().catch(true),
+  execution_alerts: z.boolean().catch(true),
+  live_session_alerts: z.boolean().catch(true),
+  auto_start_live: z.boolean().catch(true),
+  default_quality: z.enum(["AUTO", "HD", "SD"]).catch("HD"),
+  max_viewers: z.number().catch(5),
+  updated_at: z.string().optional(),
+});
+
+// Both GET and PUT return the same shape and both feed the query cache + form state, so
+// validate both through the schema (parse, don't cast — CLAUDE.md), not just the GET.
+function parsePreferences(d: unknown): UserPreferencesResponse {
+  return parseWithFallback<UserPreferencesResponse>(
+    userPreferencesSchema as unknown as z.ZodType<UserPreferencesResponse>,
+    d,
+    DEFAULT_USER_PREFERENCES
+  );
+}
+
+export const preferencesApi = {
+  get: () => api.get<unknown>("/api/v1/me/preferences").then(parsePreferences),
+  update: (data: UpdateUserPreferencesRequest) =>
+    api.put<unknown>("/api/v1/me/preferences", data).then(parsePreferences),
+};
+
 // Organizations API
 export const organizationsApi = {
   list: () => api.get<PageResponse<OrganizationResponse>>("/api/v1/organizations/my"),

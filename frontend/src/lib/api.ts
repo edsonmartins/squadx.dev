@@ -224,19 +224,20 @@ const userPreferencesSchema = z.object({
   updated_at: z.string().optional(),
 });
 
+// Both GET and PUT return the same shape and both feed the query cache + form state, so
+// validate both through the schema (parse, don't cast — CLAUDE.md), not just the GET.
+function parsePreferences(d: unknown): UserPreferencesResponse {
+  return parseWithFallback<UserPreferencesResponse>(
+    userPreferencesSchema as unknown as z.ZodType<UserPreferencesResponse>,
+    d,
+    DEFAULT_USER_PREFERENCES
+  );
+}
+
 export const preferencesApi = {
-  get: () =>
-    api
-      .get<unknown>("/api/v1/me/preferences")
-      .then((d) =>
-        parseWithFallback<UserPreferencesResponse>(
-          userPreferencesSchema as unknown as z.ZodType<UserPreferencesResponse>,
-          d,
-          DEFAULT_USER_PREFERENCES
-        )
-      ),
+  get: () => api.get<unknown>("/api/v1/me/preferences").then(parsePreferences),
   update: (data: UpdateUserPreferencesRequest) =>
-    api.put<UserPreferencesResponse>("/api/v1/me/preferences", data),
+    api.put<unknown>("/api/v1/me/preferences", data).then(parsePreferences),
 };
 
 // Organizations API

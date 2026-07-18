@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save, User, Bell, Shield, Palette, Key, Brain, Search, Trash2 } from "lucide-react";
 import {
@@ -88,11 +88,14 @@ export default function SettingsPage() {
     queryFn: () => preferencesApi.get(),
   });
 
-  // Seed the local form state once the persisted preferences load (and whenever they
-  // change server-side), so the toggles reflect what's actually stored.
+  // Seed the local form state from the persisted preferences exactly once, on first load.
+  // Re-seeding on every data change would clobber the user's unsaved edits when the query
+  // refetches in the background (e.g. window refocus, or a change on another device).
   const preferences = preferencesQuery.data;
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!preferences) return;
+    if (!preferences || seededRef.current) return;
+    seededRef.current = true;
     setEmailNotifications(preferences.email_notifications);
     setPushNotifications(preferences.push_notifications);
     setExecutionAlerts(preferences.execution_alerts);
@@ -258,23 +261,11 @@ export default function SettingsPage() {
     });
   };
 
-  const handleSaveNotifications = () => {
+  // A single save path: PUT is full-replace, so both tabs submit the complete state.
+  // The Notifications and Live View buttons differ only in their success toast.
+  const savePreferences = (successToast: { title: string; description: string }) => {
     updatePreferencesMutation.mutate(buildPreferencesPayload(), {
-      onSuccess: () =>
-        toast({
-          title: "Notifications updated",
-          description: "Your notification preferences have been saved.",
-        }),
-    });
-  };
-
-  const handleSaveLiveView = () => {
-    updatePreferencesMutation.mutate(buildPreferencesPayload(), {
-      onSuccess: () =>
-        toast({
-          title: "Live View settings updated",
-          description: "Your Live View preferences have been saved.",
-        }),
+      onSuccess: () => toast(successToast),
     });
   };
 
@@ -494,7 +485,12 @@ export default function SettingsPage() {
               </div>
 
               <Button
-                onClick={handleSaveNotifications}
+                onClick={() =>
+                  savePreferences({
+                    title: "Notifications updated",
+                    description: "Your notification preferences have been saved.",
+                  })
+                }
                 disabled={updatePreferencesMutation.isPending || preferencesQuery.isLoading}
               >
                 <Save className="mr-2 h-4 w-4" />
@@ -551,6 +547,12 @@ export default function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* The backend accepts any value 1..50; if a stored value isn't one of
+                        the presets, surface it as its own option so the control never
+                        renders blank. */}
+                    {!["3", "5", "10", "20"].includes(maxViewers) && (
+                      <SelectItem value={maxViewers}>{maxViewers} viewers</SelectItem>
+                    )}
                     <SelectItem value="3">3 viewers</SelectItem>
                     <SelectItem value="5">5 viewers</SelectItem>
                     <SelectItem value="10">10 viewers</SelectItem>
@@ -560,7 +562,12 @@ export default function SettingsPage() {
               </div>
 
               <Button
-                onClick={handleSaveLiveView}
+                onClick={() =>
+                  savePreferences({
+                    title: "Live View settings updated",
+                    description: "Your Live View preferences have been saved.",
+                  })
+                }
                 disabled={updatePreferencesMutation.isPending || preferencesQuery.isLoading}
               >
                 <Save className="mr-2 h-4 w-4" />

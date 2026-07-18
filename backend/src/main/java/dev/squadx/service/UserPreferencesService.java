@@ -7,6 +7,7 @@ import dev.squadx.model.UserPreferences;
 import dev.squadx.repository.UserPreferencesRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +24,16 @@ public class UserPreferencesService {
     private final UserPreferencesRepository repository;
 
     /**
-     * Return the current user's preferences, materializing defaults on first access so a
-     * user who has never saved still gets a sensible payload (and a row to update later).
+     * Return the current user's preferences. Read-only: if the user has never saved, we
+     * return in-memory defaults WITHOUT persisting them. A GET must not write — doing so
+     * made the endpoint non-idempotent and let two concurrent first-access requests both
+     * INSERT, colliding on the unique {@code user_id} constraint. The row is created
+     * lazily by the first {@link #update}.
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public UserPreferencesResponse get(User currentUser) {
         UserPreferences prefs = repository.findByUserId(currentUser.getId())
-                .orElseGet(() -> repository.save(defaults(currentUser)));
+                .orElseGet(() -> defaults(currentUser));
         return mapToResponse(prefs);
     }
 
@@ -38,6 +42,25 @@ public class UserPreferencesService {
         UserPreferences prefs = repository.findByUserId(currentUser.getId())
                 .orElseGet(() -> defaults(currentUser));
 
+        apply(request, prefs);
+
+        UserPreferences saved;
+        try {
+            saved = repository.save(prefs);
+        } catch (DataIntegrityViolationException race) {
+            // A concurrent request inserted the row between our read and save. Re-read the
+            // now-existing row and re-apply this request's values onto it.
+            log.debug("Preferences insert raced for user {}, retrying as update", currentUser.getId());
+            UserPreferences existing = repository.findByUserId(currentUser.getId())
+                    .orElseThrow(() -> race);
+            apply(request, existing);
+            saved = repository.save(existing);
+        }
+        log.info("Updated preferences for user {}", currentUser.getId());
+        return mapToResponse(saved);
+    }
+
+    private void apply(UserPreferencesRequest request, UserPreferences prefs) {
         prefs.setEmailNotifications(request.getEmailNotifications());
         prefs.setPushNotifications(request.getPushNotifications());
         prefs.setExecutionAlerts(request.getExecutionAlerts());
@@ -45,10 +68,6 @@ public class UserPreferencesService {
         prefs.setAutoStartLive(request.getAutoStartLive());
         prefs.setDefaultQuality(request.getDefaultQuality());
         prefs.setMaxViewers(request.getMaxViewers());
-
-        UserPreferences saved = repository.save(prefs);
-        log.info("Updated preferences for user {}", currentUser.getId());
-        return mapToResponse(saved);
     }
 
     private UserPreferences defaults(User user) {

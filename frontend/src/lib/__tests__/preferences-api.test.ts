@@ -93,4 +93,23 @@ describe('preferencesApi.update', () => {
     expect(call[1].method).toBe('PUT')
     expect(JSON.parse(call[1].body)).toEqual(body)
   })
+
+  it('validates the PUT response too (drift is coerced, not passed through)', async () => {
+    const body = {
+      email_notifications: true,
+      push_notifications: true,
+      execution_alerts: true,
+      live_session_alerts: true,
+      auto_start_live: true,
+      default_quality: 'HD' as const,
+      max_viewers: 5,
+    }
+    // Server echoes back a drifted enum — the result feeds the cache + form state, so it
+    // must be coerced through the schema rather than trusted verbatim.
+    mockFetch.mockResolvedValueOnce(mockResponse({ ...body, default_quality: 'ULTRA' }))
+
+    const saved = await preferencesApi.update(body)
+
+    expect(saved.default_quality).toBe('HD')
+  })
 })

@@ -14,12 +14,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,10 +41,9 @@ class UserPreferencesServiceTest {
     }
 
     @Test
-    @DisplayName("get() returns defaults and persists a row on first access")
-    void getMaterializesDefaults() {
+    @DisplayName("get() returns defaults WITHOUT persisting on first access (read-only)")
+    void getReturnsDefaultsWithoutWriting() {
         when(repository.findByUserId(7L)).thenReturn(Optional.empty());
-        when(repository.save(any(UserPreferences.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UserPreferencesResponse response = service.get(currentUser);
 
@@ -55,9 +56,8 @@ class UserPreferencesServiceTest {
         assertThat(response.getDefaultQuality()).isEqualTo(LiveViewQuality.HD);
         assertThat(response.getMaxViewers()).isEqualTo(5);
 
-        ArgumentCaptor<UserPreferences> saved = ArgumentCaptor.forClass(UserPreferences.class);
-        verify(repository).save(saved.capture());
-        assertThat(saved.getValue().getUser()).isSameAs(currentUser);
+        // A GET must not write — no row is created until the first update().
+        verify(repository, never()).save(any());
     }
 
     @Test
@@ -131,5 +131,38 @@ class UserPreferencesServiceTest {
         ArgumentCaptor<UserPreferences> saved = ArgumentCaptor.forClass(UserPreferences.class);
         verify(repository).save(saved.capture());
         assertThat(saved.getValue().getUser()).isSameAs(currentUser);
+    }
+
+    @Test
+    @DisplayName("update() recovers from a concurrent insert by re-reading and re-applying")
+    void updateRetriesOnInsertRace() {
+        UserPreferences racedRow = UserPreferences.builder().user(currentUser).build();
+        // First lookup: no row yet. Our save loses the race and the unique constraint fires.
+        // Second lookup: the row the racing request inserted.
+        when(repository.findByUserId(7L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(racedRow));
+        when(repository.save(any(UserPreferences.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate user_id"))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        UserPreferencesRequest request = UserPreferencesRequest.builder()
+                .emailNotifications(false)
+                .pushNotifications(true)
+                .executionAlerts(true)
+                .liveSessionAlerts(true)
+                .autoStartLive(true)
+                .defaultQuality(LiveViewQuality.SD)
+                .maxViewers(10)
+                .build();
+
+        UserPreferencesResponse response = service.update(request, currentUser);
+
+        assertThat(response.getMaxViewers()).isEqualTo(10);
+        assertThat(response.getDefaultQuality()).isEqualTo(LiveViewQuality.SD);
+        assertThat(response.isEmailNotifications()).isFalse();
+        // The request's values were re-applied onto the row that won the race.
+        assertThat(racedRow.getMaxViewers()).isEqualTo(10);
+        verify(repository, times(2)).save(any(UserPreferences.class));
     }
 }

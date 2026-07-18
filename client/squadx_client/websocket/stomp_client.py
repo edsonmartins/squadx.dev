@@ -5,14 +5,15 @@ import json
 import random
 import string
 import uuid
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from squadx_client.websocket.messages import StompCommand, StompFrame, MessageType
+from squadx_client.websocket.messages import StompCommand, StompFrame
 
 logger = structlog.get_logger()
 
@@ -136,6 +137,7 @@ class StompClient:
 
     async def _stomp_connect(self) -> None:
         """Send STOMP CONNECT frame and wait for CONNECTED response."""
+        assert self._ws is not None  # the websocket is opened before _stomp_connect runs
         headers = {
             "accept-version": self.STOMP_VERSION,
             "heart-beat": f"{self.HEARTBEAT_SEND},{self.HEARTBEAT_RECEIVE}",
@@ -388,7 +390,7 @@ class StompClient:
                     logger.error("websocket_error", error=str(msg.data))
                     break
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Timeout is fine, just continue
                 continue
             except asyncio.CancelledError:

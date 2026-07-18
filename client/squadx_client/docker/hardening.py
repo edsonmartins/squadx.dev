@@ -20,7 +20,6 @@ Upgrade Path:
 
 import json
 import logging
-import os
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum

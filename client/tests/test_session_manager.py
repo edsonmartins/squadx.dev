@@ -1,5 +1,6 @@
 """Tests for squadx_client.live.session_manager module."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -183,3 +184,39 @@ class TestSignalHandling:
         session_manager._handle_signal_message(session.id, session.join_code, msg)
 
         callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_signal_callback_is_awaited(self, session_manager):
+        """An async on_signal callback must actually run (coroutine scheduled)."""
+        session = await session_manager.create_session(task_id=42)
+
+        ran = asyncio.Event()
+
+        async def async_handler(session_id, signal_type, signal_data):
+            ran.set()
+
+        session_manager.on_signal(async_handler)
+
+        msg = MagicMock(spec=RealtimeMessage)
+        msg.payload = {"type": "offer", "sender_id": "viewer-1", "sdp": "..."}
+
+        session_manager._handle_signal_message(session.id, session.join_code, msg)
+
+        # Without the dispatch fix the coroutine is dropped and this times out.
+        await asyncio.wait_for(ran.wait(), 1)
+        assert ran.is_set()
+
+    @pytest.mark.asyncio
+    async def test_sync_signal_callback_still_called(self, session_manager):
+        """A plain sync on_signal callback keeps being invoked directly."""
+        session = await session_manager.create_session(task_id=42)
+
+        callback = MagicMock()
+        session_manager.on_signal(callback)
+
+        msg = MagicMock(spec=RealtimeMessage)
+        msg.payload = {"type": "offer", "sender_id": "viewer-1", "sdp": "..."}
+
+        session_manager._handle_signal_message(session.id, session.join_code, msg)
+
+        callback.assert_called_once()

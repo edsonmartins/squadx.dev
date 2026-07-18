@@ -5,24 +5,42 @@ import os
 import tempfile
 import time
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from squadx_client.config import settings
-from squadx_client.llm.router import get_llm
-from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
-from squadx_client.memory.policy import MemoryScopeContext
-from squadx_client.orchestrator.state import OrchestratorState, TaskPlan, SubTask, ExecutionMetrics, AgentMetrics
-from squadx_client.orchestrator.context_packet import build_context_packet
 from squadx_client.agents.factory import create_agent
 from squadx_client.agents.security import enforce_prompt_security, filter_internal_artifacts
+from squadx_client.config import settings
 from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 from squadx_client.git.worktree import WorktreeManager
+from squadx_client.llm.router import get_llm
+from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
+from squadx_client.memory.policy import MemoryScopeContext
+from squadx_client.orchestrator.context_packet import build_context_packet
+from squadx_client.orchestrator.state import (
+    AgentMetrics,
+    OrchestratorState,
+    SubTask,
+    TaskPlan,
+)
 
 logger = structlog.get_logger()
+
+
+def _content_str(content: "str | list[str | dict[Any, Any]]") -> str:
+    """Flatten LangChain message content (str or list of blocks) into plain text."""
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict):
+            parts.append(str(item.get("text", "")))
+    return "".join(parts)
 
 
 async def _intercept_prompt(prompt: str, state: OrchestratorState) -> str:
@@ -186,13 +204,14 @@ Respond in JSON format:
         ]
     )
 
-    await _record_prompt_interaction(state, task_prompt, response.content, "analyze_task")
+    content = _content_str(response.content)
+    await _record_prompt_interaction(state, task_prompt, content, "analyze_task")
 
     # Parse the analysis
     try:
-        analysis = json.loads(response.content)
+        analysis = json.loads(content)
     except json.JSONDecodeError:
-        analysis = {"analysis": response.content, "approach": "General approach", "complexity": "medium"}
+        analysis = {"analysis": content, "approach": "General approach", "complexity": "medium"}
 
     complexity = _map_complexity(analysis.get("complexity"))
 
@@ -264,11 +283,12 @@ Create an execution plan."""
         ]
     )
 
-    await _record_prompt_interaction(state, plan_prompt, response.content, "create_plan")
+    content = _content_str(response.content)
+    await _record_prompt_interaction(state, plan_prompt, content, "create_plan")
 
     plan_complexity: str | None = None
     try:
-        plan_data = json.loads(response.content)
+        plan_data = json.loads(content)
         if plan_data.get("complexity"):
             plan_complexity = _map_complexity(plan_data.get("complexity"))
         subtasks = [
@@ -284,7 +304,7 @@ Create an execution plan."""
         ]
 
         plan = TaskPlan(
-            analysis=state.messages[-1].content if state.messages else "",
+            analysis=_content_str(state.messages[-1].content) if state.messages else "",
             approach="Multi-agent execution",
             subtasks=subtasks,
             execution_order=plan_data.get("execution_order", [st.id for st in subtasks]),
@@ -349,7 +369,7 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
 
     try:
         # Get workspace path from settings or use temp directory
-        workspace_path = getattr(settings, "workspace_path", None)
+        workspace_path: str = getattr(settings, "workspace_path", None) or ""
         if not workspace_path:
             workspace_path = os.path.join(tempfile.gettempdir(), f"squadx-task-{state.task_id}")
             os.makedirs(workspace_path, exist_ok=True)
@@ -583,14 +603,15 @@ so re-derive findings from scratch rather than just confirming old ones are gone
         ]
     )
 
-    await _record_prompt_interaction(state, summary_content, response.content, "review_results")
+    content = _content_str(response.content)
+    await _record_prompt_interaction(state, summary_content, content, "review_results")
 
     findings: list[dict[str, Any]] = []
-    summary_text = response.content
+    summary_text = content
     try:
-        parsed = json.loads(response.content)
+        parsed = json.loads(content)
         findings = [f for f in parsed.get("findings", []) if isinstance(f, dict)]
-        summary_text = parsed.get("summary", response.content)
+        summary_text = parsed.get("summary", content)
     except (json.JSONDecodeError, AttributeError):
         # Couldn't parse a structured verdict — treat any failed subtask as a blocker so the
         # arbiter still gates, but don't fabricate findings for completed work.
@@ -619,7 +640,9 @@ def _blockers(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [f for f in findings if str(f.get("severity", "")).lower() in ("blocker", "major")]
 
 
-def _pick_fix_agent(state: OrchestratorState, blockers: list[dict[str, Any]]) -> str:
+def _pick_fix_agent(
+    state: OrchestratorState, blockers: list[dict[str, Any]]
+) -> Literal["frontend", "backend", "fullstack", "devops", "qa"]:
     """Route a fix subtask to the specialist whose work the blockers touch."""
     valid = {"frontend", "backend", "fullstack", "devops", "qa"}
     if state.plan:
@@ -688,6 +711,7 @@ async def arbiter(state: OrchestratorState) -> dict[str, Any]:
 
     if verdict == "continue":
         # Inject a single fix subtask that owns the open blockers and route back to execute.
+        assert state.plan is not None  # a plan is always set by create_plan upstream
         plan = state.plan.model_copy(deep=True)
         fix_id = str(uuid.uuid4())
         blocker_desc = "\n".join(

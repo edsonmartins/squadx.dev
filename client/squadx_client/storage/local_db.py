@@ -1,13 +1,13 @@
 """SQLite local database for SquadX client."""
 
-import sqlite3
 import json
 import logging
-from datetime import datetime
-from typing import Optional, Any
-from dataclasses import dataclass, asdict
-from pathlib import Path
+import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from ..config import settings
 
@@ -18,38 +18,38 @@ logger = logging.getLogger(__name__)
 class ExecutionRecord:
     """Record of a task execution."""
 
-    id: Optional[int] = None
+    id: int | None = None
     task_id: int = 0
-    execution_id: Optional[int] = None
+    execution_id: int | None = None
     agent_type: str = ""
     status: str = "pending"
-    container_id: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    output: Optional[str] = None
-    error: Optional[str] = None
+    container_id: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    output: str | None = None
+    error: str | None = None
     tokens_used: int = 0
     cost: float = 0.0
-    metadata: Optional[str] = None  # JSON string
-    created_at: Optional[str] = None
+    metadata: str | None = None  # JSON string
+    created_at: str | None = None
 
 
 @dataclass
 class MetricsRecord:
     """Record of execution metrics."""
 
-    id: Optional[int] = None
+    id: int | None = None
     execution_id: int = 0
     timestamp: str = ""
     metric_type: str = ""  # tokens, cost, latency, etc.
     value: float = 0.0
-    metadata: Optional[str] = None
+    metadata: str | None = None
 
 
 class LocalDatabase:
     """SQLite database for local persistence."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = db_path or settings.db_path
         self._ensure_dir()
         self._init_schema()
@@ -189,7 +189,7 @@ class LocalDatabase:
             """, values)
             return cursor.rowcount > 0
 
-    def get_execution(self, id: int) -> Optional[ExecutionRecord]:
+    def get_execution(self, id: int) -> ExecutionRecord | None:
         """Get an execution record by ID."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -248,8 +248,8 @@ class LocalDatabase:
     def get_aggregated_metrics(
         self,
         metric_type: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict[str, float]:
         """Get aggregated metrics."""
         with self._get_connection() as conn:
@@ -286,7 +286,7 @@ class LocalDatabase:
             }
 
     # Cache operations
-    def cache_set(self, key: str, value: Any, expires_at: Optional[str] = None):
+    def cache_set(self, key: str, value: Any, expires_at: str | None = None):
         """Set a cache value."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -295,7 +295,7 @@ class LocalDatabase:
                 VALUES (?, ?, ?)
             """, (key, json.dumps(value), expires_at))
 
-    def cache_get(self, key: str) -> Optional[Any]:
+    def cache_get(self, key: str) -> Any | None:
         """Get a cache value."""
         with self._get_connection() as conn:
             cursor = conn.cursor()

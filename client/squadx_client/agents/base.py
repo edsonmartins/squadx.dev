@@ -1,10 +1,15 @@
 """Base agent class for all specialist agents."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 
 from squadx_client.llm.router import get_coding_llm
 from squadx_client.memory import BrainSentryClient, MemoryCollector, PromptInterceptor
@@ -134,14 +139,15 @@ Complete this task by using the available tools. After completing the task, prov
             total_input_tokens += input_tok
             total_output_tokens += output_tok
 
-            # Check if there are tool calls
-            if not response.tool_calls:
+            # Check if there are tool calls (only AIMessage exposes them)
+            tool_calls = getattr(response, "tool_calls", None)
+            if not tool_calls:
                 # No more tool calls, agent is done
                 self.logger.info("tool_loop_complete", iterations=iteration + 1, tool_calls=total_tool_calls)
                 break
 
             # Execute each tool call
-            for tool_call in response.tool_calls:
+            for tool_call in tool_calls:
                 tool_name = tool_call["name"]
                 tool_args = tool_call["args"]
                 total_tool_calls += 1
@@ -170,7 +176,7 @@ Complete this task by using the available tools. After completing the task, prov
         final_output = ""
         for msg in reversed(messages):
             if isinstance(msg, AIMessage) and msg.content:
-                final_output = msg.content
+                final_output = self._as_text(msg.content)
                 break
 
         self.logger.info(
@@ -270,7 +276,7 @@ Format your response as:
             ]
         )
 
-        output = response.content
+        output = self._as_text(response.content)
         files_modified = self._extract_files(output)
 
         input_tokens, output_tokens = self._extract_token_usage(response)
@@ -343,7 +349,20 @@ Format your response as:
         return files
 
     @staticmethod
-    def _extract_token_usage(response: AIMessage) -> tuple[int, int]:
+    def _as_text(content: "str | list[str | dict[Any, Any]]") -> str:
+        """Flatten LangChain message content (which may be a list of blocks) to text."""
+        if isinstance(content, str):
+            return content
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(str(item.get("text", "")))
+        return "".join(parts)
+
+    @staticmethod
+    def _extract_token_usage(response: BaseMessage) -> tuple[int, int]:
         """Extract token usage from an LLM response.
 
         Checks multiple metadata locations used by different LangChain providers:
@@ -423,7 +442,7 @@ Format your response as:
             scope=scope,
             steps=[
                 f"Execute task '{task_title}' with agent type {self.agent_type}",
-                f"Apply implementation based on current task context and completed subtasks",
+                "Apply implementation based on current task context and completed subtasks",
                 "Validate output and persist execution learnings",
             ],
             files_modified=files_modified,

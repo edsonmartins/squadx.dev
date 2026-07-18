@@ -3,12 +3,10 @@ Network policy enforcement for sandboxed containers.
 Implements domain-based egress filtering using a lightweight DNS proxy approach.
 Inspired by OpenSandbox's egress sidecar pattern.
 """
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
-import json
 import logging
 import shlex
+from dataclasses import dataclass, field
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 

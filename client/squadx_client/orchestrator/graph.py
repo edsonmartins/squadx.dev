@@ -3,19 +3,20 @@
 from typing import Literal
 
 import structlog
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
-from squadx_client.orchestrator.state import OrchestratorState
 from squadx_client.orchestrator.nodes import (
     analyze_task,
-    create_plan,
-    execute_subtask,
-    review_results,
     arbiter,
-    escalate,
     commit_changes,
+    create_plan,
+    escalate,
+    execute_subtask,
     handle_error,
+    review_results,
 )
+from squadx_client.orchestrator.state import OrchestratorState
 
 logger = structlog.get_logger()
 
@@ -68,7 +69,7 @@ def should_continue(state: OrchestratorState) -> Literal["execute", "review", "e
     return "execute"
 
 
-def create_orchestrator() -> StateGraph:
+def create_orchestrator() -> CompiledStateGraph:
     """Create the LangGraph orchestrator for task execution."""
     # Create the graph
     graph = StateGraph(OrchestratorState)

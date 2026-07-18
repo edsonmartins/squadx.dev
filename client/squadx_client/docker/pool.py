@@ -194,6 +194,7 @@ class WarmContainerPool:
                 ) from None
 
         # Start the container; on failure, discard and cold-create a fresh one
+        assert self._manager.client is not None  # pool only runs once the manager connected
         try:
             container = self._manager.client.containers.get(pooled.container_id)
             container.start()

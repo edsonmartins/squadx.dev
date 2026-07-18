@@ -262,6 +262,7 @@ class WarmContainerPool:
         Order is the RFC-0006 invariant: the agent must never be runnable before its
         egress policy is in place.
         """
+        assert self._manager.client is not None  # pool only runs once the daemon connected
         if pooled.sidecar_id:
             # A recycled unit's sidecar was left running, but a restart (or a daemon
             # crash) can leave it stopped — the agent cannot join a dead netns.

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: squadx-staging
+  labels:
+    app.kubernetes.io/name: squadx
+    app.kubernetes.io/part-of: squadx
+    squadx.dev/environment: staging

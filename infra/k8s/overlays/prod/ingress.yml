@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: squadx-ingress
-  namespace: squadx
   labels:
     app.kubernetes.io/name: squadx
   annotations:

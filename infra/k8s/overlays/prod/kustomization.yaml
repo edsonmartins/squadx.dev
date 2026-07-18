@@ -3,7 +3,15 @@ kind: Kustomization
 
 # Production overlay. The base config already carries prod values (squadx.dev
 # hosts, letsencrypt-prod), so this only pins the namespace and adds the prod
-# namespace + ingress. Secrets are created in-cluster, not here.
+# namespace + ingress.
+#
+# PREREQUISITE — secrets: unlike staging, NO pipeline creates `squadx-secrets` in this
+# namespace. Applying this overlay without it leaves backend/postgres pods in
+# CreateContainerConfigError. Before `kubectl apply -k .../overlays/prod`, create the
+# Secret out of band (Sealed Secrets / External Secrets / Vault — see infra/k8s/README.md
+# and secrets.example.yml), or wire a prod equivalent of the deploy-staging secret step.
+# The prod frontend image (ghcr .../frontend:latest, built with prod NEXT_PUBLIC_* args)
+# is the one to deploy here.
 namespace: squadx
 
 resources:

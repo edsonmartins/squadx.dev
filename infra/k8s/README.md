@@ -16,12 +16,27 @@ client-deployment.yml.disabled   the client runs on a Docker host, not in-cluste
 
 ```bash
 kubectl apply -k infra/k8s/overlays/staging   # homologation
-kubectl apply -k infra/k8s/overlays/prod      # production
+kubectl apply -k infra/k8s/overlays/prod      # production — see prerequisites below
 ```
 
 Staging and prod are fully isolated: different namespace, hosts, and TLS issuer.
 The `client` daemon is intentionally not here — it runs on a dedicated Docker host
 (see `client/deploy/README.md`).
+
+> **`overlays/prod` prerequisites.** Unlike staging, no pipeline creates its Secret
+> or builds/pins its images. Before applying prod: (1) create `squadx-secrets` in the
+> `squadx` namespace out of band (see Secrets); (2) deploy the prod frontend image
+> `ghcr.io/<repo>/frontend:latest` (built with prod `NEXT_PUBLIC_*` — see below), not
+> the staging one. Applying it with neither leaves pods in `CreateContainerConfigError`.
+
+## Frontend image is per-environment
+
+`NEXT_PUBLIC_*` values are **inlined into the browser bundle at build time**, so they
+**cannot** be overridden by a runtime ConfigMap. The CI therefore builds one frontend
+image per environment with the right build-args: `frontend:<sha>` (prod URLs) and
+`frontend:staging-<sha>` (staging URLs). The `deploy-staging` job pins the staging
+image; the ConfigMap's `NEXT_PUBLIC_*` only feed the Next.js *server* rewrite at
+runtime and must match the image's build-args.
 
 ## Secrets
 
@@ -46,6 +61,14 @@ Actions**:
 mechanisms (Sealed Secrets, External Secrets Operator, Vault) if you outgrow
 GitHub Actions secrets. For a prod overlay, wire an equivalent secret step (or a
 secrets controller) — do not reuse staging credentials.
+
+**Rotation.** `apply` upserts the Secret, but a pod only re-reads it on restart. A
+normal deploy rolls backend/frontend (the image sha changes), so rotated app secrets
+land automatically; rotating a secret **without** a code change needs a manual
+`kubectl rollout restart deployment/squadx-backend -n <ns>`. Rotating the **DB
+password** additionally requires a manual database step — postgres bakes
+`POSTGRES_PASSWORD` into its PVC on first init and will not adopt a new value by
+restart alone, so backend would then fail to authenticate.
 
 ## Config
 

@@ -7,6 +7,11 @@ data:
   # prod-valued). Everything not listed here is inherited from base. The Spring
   # profile stays "prod" — there is no "staging" profile, and staging should mirror
   # production behaviour.
+  #
+  # CORS_ALLOWED_ORIGINS is a backend (Spring) var read at runtime — this override is
+  # effective. The NEXT_PUBLIC_* values below feed the Next.js *server* (the
+  # next.config rewrite) at runtime; the *browser* bundle gets these baked in at image
+  # build time (staging frontend image build-args, see ci.yml), so both must agree.
   CORS_ALLOWED_ORIGINS: "https://staging.squadx.dev"
   NEXT_PUBLIC_API_URL: "https://api.staging.squadx.dev"
   NEXT_PUBLIC_WS_URL: "wss://api.staging.squadx.dev/ws"

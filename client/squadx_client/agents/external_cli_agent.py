@@ -11,6 +11,7 @@ A new CLI can be registered with *no code change* via a JSON command template in
 ``settings.external_cli_command_templates`` — see ``_resolve_template``.
 """
 
+import json
 import shlex
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -33,9 +34,13 @@ PROMPT_PLACEHOLDER = "{prompt}"
 # a new entry here — or, with zero code, a JSON entry in
 # settings.external_cli_command_templates (SQUADX_EXTERNAL_CLI_COMMAND_TEMPLATES).
 BUILTIN_HARNESS_TEMPLATES: dict[str, list[str]] = {
-    # Headless, non-interactive run that auto-accepts edits.
+    # Headless, non-interactive run that auto-accepts edits. `--output-format json`
+    # makes Claude Code emit a single result object with `total_cost_usd` and `usage`,
+    # so the run's real token/cost usage is reported back instead of hardcoded zero
+    # (see _extract_usage). Providers without a machine-readable usage format keep
+    # their plain-text output and report zero.
     "CLAUDE_CODE": ["claude", "-p", PROMPT_PLACEHOLDER, "--permission-mode", "acceptEdits",
-                    "--output-format", "text"],
+                    "--output-format", "json"],
     "CODEX": ["codex", "exec", "--full-auto", PROMPT_PLACEHOLDER],
     "GEMINI_CLI": ["gemini", "--yolo", "-p", PROMPT_PLACEHOLDER],
     # Aider is chat-style: --no-auto-commits leaves the commit to us (the
@@ -171,21 +176,53 @@ class ExternalCliAgent(BaseAgent):
                 f"{result.error or tail}"
             )
 
+        text, usage = self._extract_usage(result.output)
+
         self.logger.info(
             "external_cli_done",
             exit_code=result.exit_code,
             files=len(files_modified),
+            cost=usage["cost"],
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
         )
 
         return {
-            "output": result.output,
+            "output": text,
             "files_modified": files_modified,
-            # External CLIs don't report token usage back to us.
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost": 0.0,
+            **usage,
             "tool_calls": 0,
         }
+
+    def _extract_usage(self, raw_output: str) -> tuple[str, dict[str, Any]]:
+        """Pull token/cost usage out of the CLI's output.
+
+        Claude Code with ``--output-format json`` emits a single result object
+        carrying ``total_cost_usd`` and ``usage`` — parse it so EXTERNAL_CLI runs
+        are billed for real instead of always reporting zero (which let them slip
+        past the per-run cost ceiling). Returns the human-facing text plus a usage
+        dict. Any other provider — or a parse failure — degrades to the raw output
+        and zero usage, so a schema change never breaks the run.
+        """
+        zero = {"input_tokens": 0, "output_tokens": 0, "cost": 0.0}
+        if self.provider != "CLAUDE_CODE":
+            return raw_output, zero
+        try:
+            payload = json.loads((raw_output or "").strip())
+        except (json.JSONDecodeError, ValueError):
+            self.logger.warning("external_cli_usage_unparsed", provider=self.provider)
+            return raw_output, zero
+        if not isinstance(payload, dict):
+            return raw_output, zero
+        usage = payload.get("usage") or {}
+        return (
+            str(payload.get("result", raw_output)),
+            {
+                "input_tokens": int(usage.get("input_tokens", 0) or 0),
+                "output_tokens": int(usage.get("output_tokens", 0) or 0),
+                "cost": float(payload.get("total_cost_usd", 0.0) or 0.0),
+            },
+        )
 
     def _assess_prompt_security(self, prompt: str) -> None:
         """Scan the prompt for injection/exfiltration patterns (ADR-0007).

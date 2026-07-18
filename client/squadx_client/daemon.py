@@ -462,9 +462,12 @@ class SquadXDaemon:
                 "git_branch": branch.output.strip() if branch.success else None,
                 "git_commit": commit.output.strip() if commit.success else None,
                 "live_session_codes": live_codes,
-                "total_input_tokens": 0,
-                "total_output_tokens": 0,
-                "total_cost": 0.0,
+                # Usage the CLI reported back (Claude Code via --output-format json);
+                # zero for providers with no machine-readable usage. Previously
+                # hardcoded, so EXTERNAL_CLI runs never counted against the cost ceiling.
+                "total_input_tokens": result.get("input_tokens", 0),
+                "total_output_tokens": result.get("output_tokens", 0),
+                "total_cost": result.get("cost", 0.0),
             }
         finally:
             await sandbox.stop()

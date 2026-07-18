@@ -153,3 +153,53 @@ class TestExternalCliAgent:
         )
 
         assert seen == ["compiling...\nwriting files"]
+
+
+class TestUsageReporting:
+    """EXTERNAL_CLI runs must bill for real, not always report zero cost."""
+
+    def test_claude_code_uses_json_output_format(self):
+        # --output-format json is what makes Claude Code emit total_cost_usd + usage.
+        cmd = ExternalCliAgent(provider="CLAUDE_CODE")._build_command("x")
+        assert "json" in cmd
+        assert "text" not in cmd
+
+    def test_extract_usage_parses_claude_json(self):
+        agent = ExternalCliAgent(provider="CLAUDE_CODE")
+        blob = (
+            '{"result": "the answer", "total_cost_usd": 0.0234, '
+            '"usage": {"input_tokens": 1200, "output_tokens": 340}}'
+        )
+        text, usage = agent._extract_usage(blob)
+        assert text == "the answer"
+        assert usage == {"input_tokens": 1200, "output_tokens": 340, "cost": 0.0234}
+
+    def test_extract_usage_non_json_falls_back_to_zero(self):
+        # A schema change / plain text must never break the run.
+        agent = ExternalCliAgent(provider="CLAUDE_CODE")
+        text, usage = agent._extract_usage("not json at all")
+        assert text == "not json at all"
+        assert usage == {"input_tokens": 0, "output_tokens": 0, "cost": 0.0}
+
+    def test_extract_usage_other_provider_is_zero(self):
+        # Codex/Gemini/etc. have no machine-readable usage — stay at zero.
+        agent = ExternalCliAgent(provider="CODEX")
+        text, usage = agent._extract_usage('{"total_cost_usd": 9.9}')
+        assert text == '{"total_cost_usd": 9.9}'
+        assert usage["cost"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_execute_reports_claude_usage(self):
+        blob = (
+            '{"result": "done", "total_cost_usd": 0.05, '
+            '"usage": {"input_tokens": 500, "output_tokens": 200}}'
+        )
+        sandbox = _make_sandbox(SandboxResult(success=True, exit_code=0, output=blob))
+        agent = ExternalCliAgent(provider="CLAUDE_CODE", sandbox=sandbox)
+
+        result = await agent.execute("Build feature", "Implement X")
+
+        assert result["output"] == "done"          # parsed text, not the raw JSON
+        assert result["cost"] == 0.05
+        assert result["input_tokens"] == 500
+        assert result["output_tokens"] == 200

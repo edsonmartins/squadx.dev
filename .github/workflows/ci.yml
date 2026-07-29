@@ -144,6 +144,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend, frontend, client]
     if: github.ref == 'refs/heads/main'
+    # Repo default workflow token is read-only (Settings → Actions → General).
+    # Without packages:write the push fails with:
+    #   denied: installation not allowed to Create organization package
+    # release.yml already declares this; ci.yml was missing it (#38).
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -169,14 +176,35 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and Push Frontend Image
+      # NEXT_PUBLIC_* are inlined into the browser bundle at build time, so they cannot
+      # be overridden by a runtime ConfigMap — each environment needs its own image.
+      # Prod-facing image (squadx.dev); staging image is built in the next step.
+      - name: Build and Push Frontend Image (prod)
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.squadx.dev
+            NEXT_PUBLIC_WS_URL=wss://api.squadx.dev/ws
           tags: |
             ghcr.io/${{ github.repository }}/frontend:latest
             ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Staging-facing frontend (staging.squadx.dev). Pinned by deploy-staging.
+      - name: Build and Push Frontend Image (staging)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.staging.squadx.dev
+            NEXT_PUBLIC_WS_URL=wss://api.staging.squadx.dev/ws
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:staging
+            ghcr.io/${{ github.repository }}/frontend:staging-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -238,6 +266,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker]
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -258,32 +288,54 @@ jobs:
       # Real secrets come from GitHub Actions secrets, never from a committed file.
       # Add these under Settings > Secrets and variables > Actions. Created BEFORE the
       # overlay so the deployments' pods find the secret they reference on first start.
-      # Values never print (create ... | apply -f - keeps them off the log).
+      # Secret values are passed via `env:` (not spliced into the script) so a value
+      # containing a quote or shell metacharacter can neither break the command nor be
+      # interpreted as shell. Values never print (create ... | apply -f -).
+      #
+      # NOTE on rotation: `apply` upserts the Secret, but a running pod only re-reads it
+      # on restart. `Update image tags` below changes the pod template every commit and
+      # rolls backend/frontend, so app-secret changes land on a normal deploy. Rotating a
+      # secret WITHOUT a code change requires a manual `kubectl rollout restart
+      # deployment/squadx-backend -n squadx-staging`. Rotating STAGING_DB_PASSWORD also
+      # needs a manual DB step: postgres keeps the password baked into its PVC on first
+      # init and will NOT adopt a new POSTGRES_PASSWORD by restart alone.
       - name: Create application secrets from GitHub secrets
+        env:
+          JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+          DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_KEY }}
+          STRIPE_API_KEY: ${{ secrets.STAGING_STRIPE_API_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}
+          RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.STAGING_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.STAGING_AWS_SECRET_ACCESS_KEY }}
         run: |
           kubectl create secret generic squadx-secrets -n squadx-staging \
-            --from-literal=JWT_SECRET='${{ secrets.STAGING_JWT_SECRET }}' \
-            --from-literal=SPRING_DATASOURCE_PASSWORD='${{ secrets.STAGING_DB_PASSWORD }}' \
-            --from-literal=POSTGRES_PASSWORD='${{ secrets.STAGING_DB_PASSWORD }}' \
-            --from-literal=SUPABASE_ANON_KEY='${{ secrets.STAGING_SUPABASE_ANON_KEY }}' \
-            --from-literal=SUPABASE_SERVICE_KEY='${{ secrets.STAGING_SUPABASE_SERVICE_KEY }}' \
-            --from-literal=STRIPE_API_KEY='${{ secrets.STAGING_STRIPE_API_KEY }}' \
-            --from-literal=STRIPE_WEBHOOK_SECRET='${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}' \
-            --from-literal=RESEND_API_KEY='${{ secrets.STAGING_RESEND_API_KEY }}' \
-            --from-literal=AWS_ACCESS_KEY_ID='${{ secrets.STAGING_AWS_ACCESS_KEY_ID }}' \
-            --from-literal=AWS_SECRET_ACCESS_KEY='${{ secrets.STAGING_AWS_SECRET_ACCESS_KEY }}' \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --from-literal=SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
+            --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
+            --from-literal=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --from-literal=SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_KEY" \
+            --from-literal=STRIPE_API_KEY="$STRIPE_API_KEY" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
+            --from-literal=RESEND_API_KEY="$RESEND_API_KEY" \
+            --from-literal=AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+            --from-literal=AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy the staging overlay
         run: kubectl apply -k infra/k8s/overlays/staging
 
-      # Refresh the secret contents into already-running pods on redeploys.
-      - name: Roll deployments onto the current secret
-        run: kubectl rollout restart deployment/squadx-backend -n squadx-staging || true
-
+      # Pin the images to this commit. This changes the pod template (the sha differs
+      # every commit), so it rolls backend/frontend and they come up on the current
+      # squadx-secrets — no separate `rollout restart` needed. The frontend uses the
+      # STAGING image (built with staging NEXT_PUBLIC_* build-args): NEXT_PUBLIC_* is
+      # inlined into the browser bundle at build time and cannot be set from a ConfigMap
+      # at runtime, so per-env isolation requires a per-env image.
       - name: Update image tags
         run: |
           kubectl set image deployment/squadx-backend backend=ghcr.io/${{ github.repository }}/backend:${{ github.sha }} -n squadx-staging
-          kubectl set image deployment/squadx-frontend frontend=ghcr.io/${{ github.repository }}/frontend:${{ github.sha }} -n squadx-staging
+          kubectl set image deployment/squadx-frontend frontend=ghcr.io/${{ github.repository }}/frontend:staging-${{ github.sha }} -n squadx-staging
           # The client daemon is not an in-cluster Deployment — it runs on a dedicated
           # Docker host (client/deploy/README.md), so there is nothing to set here.

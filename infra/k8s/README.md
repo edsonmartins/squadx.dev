@@ -15,13 +15,21 @@ client-deployment.yml.disabled   the client runs on a Docker host, not in-cluste
 ## Deploy
 
 ```bash
+# Offline check (no cluster) — also runs in CI as job "Kustomize (overlays)"
+kustomize build infra/k8s/overlays/staging >/dev/null
+kustomize build infra/k8s/overlays/prod >/dev/null
+
 kubectl apply -k infra/k8s/overlays/staging   # homologation
-kubectl apply -k infra/k8s/overlays/prod      # production
+kubectl apply -k infra/k8s/overlays/prod      # production — see prerequisites below
 ```
 
 Staging and prod are fully isolated: different namespace, hosts, and TLS issuer.
 The `client` daemon is intentionally not here — it runs on a dedicated Docker host
 (see `client/deploy/README.md`).
+
+> **CI `deploy-staging` preflight.** The job aborts early if `KUBE_CONFIG`,
+> `STAGING_JWT_SECRET`, or `STAGING_DB_PASSWORD` are missing (instead of falling
+> through to `localhost:8080`). See issue #39 and `documentos/PILOTO-ESCOPO.md`.
 
 ## Frontend image is per-environment
 

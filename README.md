@@ -58,9 +58,9 @@ O SquadX disponibiliza **7 agentes especializados + 1 runtime adapter** para des
 
 | Camada | Tecnologia |
 |--------|-----------|
-| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (18 migrations) |
+| **Backend** | Spring Boot 3.4, Java 21, PostgreSQL 16, Redis, Flyway (37 migrations) |
 | **Frontend** | Next.js 16, React 19, TypeScript 5.7, Tailwind CSS, Zustand, TanStack Query |
-| **Client** | Python 3.12, LangGraph, LiteLLM, aiortc, Docker SDK |
+| **Client** | Python 3.11+, LangGraph, LiteLLM, aiortc, Docker SDK |
 | **Mobile** | Expo 52, React Native, expo-router 4 |
 | **Desktop** | Tauri v2, Rust, WebView |
 | **Streaming** | VNC (RFB), WebRTC mesh, Supabase Realtime signaling |
@@ -104,7 +104,7 @@ O SquadX disponibiliza **7 agentes especializados + 1 runtime adapter** para des
 - **File I/O robusto**: Tar-based binary-safe via Docker `put_archive`/`get_archive`
 - **Métricas internas**: CPU, memória, rede, PIDs, block I/O em real-time
 - **Checkpoint/restore**: Snapshot comprimido do estado da execução
-- **Runtime upgrades**: Docker (runc) → gVisor (runsc) → Firecracker (microVM)
+- **Runtime upgrades (opt-in)**: Docker (runc) default; gVisor/Firecracker só se o binário existir no host (scaffold — não default do piloto)
 - **Seccomp profile** customizado para agentes de desenvolvimento
 
 ### Enterprise

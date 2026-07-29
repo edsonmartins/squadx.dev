@@ -139,10 +139,41 @@ jobs:
       - name: Run tests
         run: pytest -v --cov=squadx_client
 
+  # Offline render of kustomize overlays (no cluster). Catches broken patch paths
+  # and missing resources before a real deploy (#45 / homolog gate).
+  kustomize:
+    name: Kustomize (overlays)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kustomize
+          kustomize version
+
+      - name: Build staging overlay
+        run: |
+          kustomize build infra/k8s/overlays/staging > /tmp/staging.yaml
+          # Isolation checks: staging must never land in the prod namespace/hosts.
+          grep -q 'name: squadx-staging' /tmp/staging.yaml
+          grep -q 'staging.squadx.dev' /tmp/staging.yaml
+          ! grep -E 'host: (www\.)?squadx\.dev$' /tmp/staging.yaml
+          echo "staging overlay: $(wc -l </tmp/staging.yaml) lines"
+
+      - name: Build prod overlay
+        run: |
+          kustomize build infra/k8s/overlays/prod > /tmp/prod.yaml
+          grep -q 'name: squadx$' /tmp/prod.yaml
+          grep -q 'squadx.dev' /tmp/prod.yaml
+          ! grep -q 'squadx-staging' /tmp/prod.yaml
+          echo "prod overlay: $(wc -l </tmp/prod.yaml) lines"
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [backend, frontend, client]
+    needs: [backend, frontend, client, kustomize]
     if: github.ref == 'refs/heads/main'
     # Repo default workflow token is read-only (Settings → Actions → General).
     # Without packages:write the push fails with:
@@ -272,13 +303,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fail fast with a human-readable message when secrets were never set
+      # (empty KUBE_CONFIG decodes to nothing → kubectl hits localhost:8080).
+      # See issue #39 and infra/k8s/README.md.
+      - name: Preflight — required GitHub secrets
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+          STAGING_JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          missing=0
+          require() {
+            name="$1"; val="$2"
+            if [ -z "$val" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          }
+          require KUBE_CONFIG "$KUBE_CONFIG_B64"
+          require STAGING_JWT_SECRET "$STAGING_JWT_SECRET"
+          require STAGING_DB_PASSWORD "$STAGING_DB_PASSWORD"
+          if [ "$missing" -ne 0 ]; then
+            echo ""
+            echo "Configure secrets under Settings → Secrets and variables → Actions."
+            echo "Full list: infra/k8s/README.md  ·  issue #39  ·  documentos/HOMOLOGACAO-VERIFICACAO.md §3"
+            exit 1
+          fi
+          # Sanity: base64 must produce a kubeconfig-looking file (has "clusters:" or "apiVersion:").
+          decoded=$(printf '%s' "$KUBE_CONFIG_B64" | base64 -d 2>/dev/null || true)
+          if ! printf '%s' "$decoded" | grep -qE 'clusters:|apiVersion:'; then
+            echo "::error::KUBE_CONFIG is set but does not look like a kubeconfig after base64 -d"
+            exit 1
+          fi
+          echo "Preflight OK (required secrets present; kubeconfig shape looks valid)."
+
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
 
       - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          printf '%s' "$KUBE_CONFIG_B64" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          # Non-sensitive sanity only (no secrets printed).
+          kubectl config current-context
+          kubectl cluster-info --request-timeout=15s
 
       # Staging is isolated from production: its own namespace (squadx-staging),
       # hosts, and issuer — see infra/k8s/overlays/staging.

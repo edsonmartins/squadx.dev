@@ -1,16 +1,27 @@
 """Tests for squadx_client.llm.router module."""
 
+import os
 from unittest.mock import patch, MagicMock
 
 import pytest
 
 from squadx_client.llm.router import get_llm, get_coding_llm, get_fast_llm
 
+_KEY_ENVS = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+)
+
 
 @pytest.fixture(autouse=True)
-def _clear_lru_cache():
-    """Clear the lru_cache on get_llm before each test."""
+def _clear_lru_cache_and_provider_env(monkeypatch):
+    """Clear get_llm cache and provider env so client/.env cannot leak into asserts."""
     get_llm.cache_clear()
+    for key in _KEY_ENVS:
+        monkeypatch.delenv(key, raising=False)
     yield
     get_llm.cache_clear()
 
@@ -20,6 +31,8 @@ def _make_settings(**overrides):
     defaults = {
         "openai_api_key": None,
         "anthropic_api_key": None,
+        "google_api_key": None,
+        "openrouter_api_key": None,
         "default_model": "gpt-4o",
     }
     defaults.update(overrides)
@@ -176,6 +189,22 @@ class TestGetCodingLlm:
         with pytest.raises(ValueError, match="No API key configured"):
             get_coding_llm()
 
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch(
+        "squadx_client.llm.router.settings",
+        _make_settings(
+            openrouter_api_key="sk-or-test",
+            default_model="openrouter/openai/gpt-4o-mini",
+        ),
+    )
+    def test_coding_llm_openrouter_default(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
+        get_coding_llm()
+        mock_chat_litellm.assert_called_once_with(
+            model="openrouter/openai/gpt-4o-mini",
+            temperature=0.7,
+        )
+
 
 class TestGetFastLlm:
     """Test get_fast_llm helper."""
@@ -207,3 +236,36 @@ class TestGetFastLlm:
     def test_fast_llm_no_keys_raises(self):
         with pytest.raises(ValueError, match="No API key configured"):
             get_fast_llm()
+
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch(
+        "squadx_client.llm.router.settings",
+        _make_settings(
+            openrouter_api_key="sk-or-test",
+            default_model="openrouter/openai/gpt-4o-mini",
+        ),
+    )
+    def test_fast_llm_openrouter_default(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
+        get_fast_llm()
+        mock_chat_litellm.assert_called_once_with(
+            model="openrouter/openai/gpt-4o-mini",
+            temperature=0.7,
+        )
+
+
+class TestOpenRouterEnsure:
+    @patch("squadx_client.llm.router.ChatLiteLLM")
+    @patch(
+        "squadx_client.llm.router.settings",
+        _make_settings(openrouter_api_key="sk-or-test"),
+    )
+    def test_openrouter_model_ok(self, mock_chat_litellm):
+        mock_chat_litellm.return_value = MagicMock()
+        get_llm("openrouter/openai/gpt-4o-mini")
+        mock_chat_litellm.assert_called_once()
+
+    @patch("squadx_client.llm.router.settings", _make_settings())
+    def test_openrouter_missing_key_raises(self):
+        with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+            get_llm("openrouter/openai/gpt-4o-mini")

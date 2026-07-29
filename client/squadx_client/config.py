@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     google_api_key: str | None = Field(default=None, alias="GOOGLE_API_KEY")
+    # OpenRouter (LiteLLM provider prefix openrouter/<vendor>/<model>)
+    openrouter_api_key: str | None = Field(default=None, alias="OPENROUTER_API_KEY")
     default_model: str = Field(default="gpt-4o", alias="SQUADX_DEFAULT_MODEL")
 
     # External CLI runtime adapter (Claude Code / Codex / Gemini CLI in the sandbox)

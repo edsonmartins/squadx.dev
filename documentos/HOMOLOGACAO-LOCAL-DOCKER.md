@@ -165,21 +165,31 @@ Em host Linux de homolog (systemd): seguir `client/deploy/README.md` à risca.
 
 ---
 
-## 4. Smoke — resultado de referência (2026-07-29, path local)
+## 4. Smoke — resultados de referência (2026-07-29)
+
+### 4.1 Pipeline sem LLM key
 
 | Passo | Resultado |
 |-------|-----------|
-| `docker compose` postgres+redis (55432/56379) | ✅ |
-| Backend health `UP` (db+redis) | ✅ |
-| Login `admin@squadx.dev` / `admin123` | ✅ (com JWT base64) |
-| Task create + `POST /executions` → `PENDING` / admission START | ✅ |
-| Client STOMP connect + register + poll claim task_id=1 | ✅ |
-| `task_execution_started` → analyze | ✅ |
-| Falha LLM sem chave | esperado: `OPENAI_API_KEY is required for OpenAI models` |
+| postgres+redis (55432/56379) + backend health | ✅ |
+| Login + task + execution START | ✅ |
+| Client STOMP + poll claim | ✅ |
+| Falha em analyze sem key | esperado |
 
-**Conclusão:** o pipeline local **sem k8s** (API → STOMP/poll → daemon claim → orquestrador) está comprovado. O que falta para smoke “agente completo” é só provider key (+ opcionalmente live/egress Linux).
+### 4.2 Pipeline com OpenRouter (aceite local A — GO)
 
-Checklist formal de UAT: issue #43.
+| Passo | Resultado |
+|-------|-----------|
+| `OPENROUTER_API_KEY` + `SQUADX_DEFAULT_MODEL=openrouter/openai/gpt-4o-mini` | ✅ |
+| Analyze + plan + coding LLM (fix #58) | ✅ |
+| `write_file` `homolog_ok.txt` = `HOMOLOG_OK` + `read_file` | ✅ |
+| `task_execution_completed` (task_id=6) | ✅ |
+| Arbiter | `escalate` (1 blocker na review) — pipeline ok |
+
+**Conclusão aceite local:** **GO** para “runtime funciona de ponta a ponta na dev machine com LLM”.  
+**Não é** GO de staging (#39–#43). Ver `documentos/PILOTO-ESCOPO.md` § Veredito.
+
+Checklist UAT formal (staging): issue #43.
 
 ---
 

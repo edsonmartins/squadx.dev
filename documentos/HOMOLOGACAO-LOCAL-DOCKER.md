@@ -89,18 +89,45 @@ O script exporta `DOCKER_HOST=unix://$HOME/.colima/docker.sock` automaticamente.
 
 ## 2. Backend local (sem k8s)
 
-```bash
-# Só deps de dados
-docker compose up -d postgres redis
+### Atalho automatizado
 
-# Backend (JDK 21)
+```bash
+./scripts/homolog-local-smoke.sh up      # postgres:55432 + redis:56379 (evita conflito com Postgres local)
+# em outro terminal: seguir o bloco que o script imprime (JDK 21 + JWT base64 + exclude OAuth2)
+./scripts/homolog-local-smoke.sh seed    # login admin, task, start execution
+./scripts/homolog-local-smoke.sh client  # daemon claima a task
+./scripts/homolog-local-smoke.sh status
+```
+
+### Gotchas (reproduzidos em 2026-07-29)
+
+| Problema | Sintoma | Fix |
+|----------|---------|-----|
+| Postgres do host na `:5432` | `role "squadx" does not exist` | usar portas **55432/56379** (script `up`) |
+| `JWT_SECRET` plain text | `Illegal base64 character: '-'` no login | `openssl rand -base64 48` |
+| OAuth2 vazio no `application.yml` | boot falha em `Client id must not be empty` / issuer resolve | `SPRING_AUTOCONFIGURE_EXCLUDE=...OAuth2ClientAutoConfiguration` |
+| `AWS_ACCESS_KEY_ID` vazio | `Access key ID cannot be blank` no S3 bean | dummy keys ou não ativar S3 |
+| Sem `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | daemon claima task e falha em `OPENAI_API_KEY is required` | exportar chave real para smoke “verde” de agente |
+
+### Manual
+
+```bash
+# deps (portas homolog se 5432/6379 ocupadas)
+./scripts/homolog-local-smoke.sh up
+
+# Backend (JDK 21) — JWT **base64**, OAuth2 excluído
 cd backend
-export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/squadx
+export SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:55432/squadx
 export SPRING_DATASOURCE_USERNAME=squadx
 export SPRING_DATASOURCE_PASSWORD=squadx_dev_password
-export SPRING_DATA_REDIS_HOST=localhost
-export JWT_SECRET=dev-secret-key-change-in-production-min-32-chars
-./mvnw spring-boot:run
+export SPRING_DATA_REDIS_HOST=127.0.0.1
+export SPRING_DATA_REDIS_PORT=56379
+export JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+export AWS_ACCESS_KEY_ID=local-dev-not-real
+export AWS_SECRET_ACCESS_KEY=local-dev-not-real
+export SPRING_AUTOCONFIGURE_EXCLUDE=\
+org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
+./mvnw spring-boot:run -DskipTests
 ```
 
 Frontend (opcional):
@@ -138,17 +165,21 @@ Em host Linux de homolog (systemd): seguir `client/deploy/README.md` à risca.
 
 ---
 
-## 4. Smoke manual (substitui live E2E em staging se não houver k8s)
+## 4. Smoke — resultado de referência (2026-07-29, path local)
 
-1. Login no frontend local  
-2. Criar org → project → squad → agent → task  
-3. Disparar execução  
-4. Confirmar containers `squadx-agent-*` / `squadx-egress-*` em `docker ps`  
-5. Logs da task no dashboard  
-6. Se `SQUADX_AGENT_IMAGE=...:live` e Supabase configurado: Watch Live  
-7. Stop da task  
+| Passo | Resultado |
+|-------|-----------|
+| `docker compose` postgres+redis (55432/56379) | ✅ |
+| Backend health `UP` (db+redis) | ✅ |
+| Login `admin@squadx.dev` / `admin123` | ✅ (com JWT base64) |
+| Task create + `POST /executions` → `PENDING` / admission START | ✅ |
+| Client STOMP connect + register + poll claim task_id=1 | ✅ |
+| `task_execution_started` → analyze | ✅ |
+| Falha LLM sem chave | esperado: `OPENAI_API_KEY is required for OpenAI models` |
 
-Checklist formal de UAT: issue #43 (mesmo roteiro, ambiente local).
+**Conclusão:** o pipeline local **sem k8s** (API → STOMP/poll → daemon claim → orquestrador) está comprovado. O que falta para smoke “agente completo” é só provider key (+ opcionalmente live/egress Linux).
+
+Checklist formal de UAT: issue #43.
 
 ---
 

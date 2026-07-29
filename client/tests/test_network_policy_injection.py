@@ -75,6 +75,20 @@ class TestManagerApplyNetworkSetup:
         assert ok is False
         assert "not connected" in log
 
+    @pytest.mark.asyncio
+    async def test_apply_network_setup_put_archive_bare_bool(self, manager):
+        """docker-py Container.put_archive returns bool, not (bool, …)."""
+        manager.client.containers.get.return_value.put_archive.return_value = True
+        exec_result = MagicMock()
+        exec_result.output = (b"ok", b"")
+        exec_result.exit_code = 0
+        manager.client.containers.get.return_value.exec_run.return_value = exec_result
+
+        ok, log = await manager.apply_network_setup("container-abc", "#!/bin/sh\necho ok\n")
+
+        assert ok is True
+        assert log == "ok"
+
 
 class TestPolicyAlwaysResolves:
     """A policy you have to pass to get is not a default.

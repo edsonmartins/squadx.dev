@@ -14,17 +14,33 @@ STOMP and does the sandbox work.
         └─ creates hardened sandboxes (siblings) + egress sidecar per task
 ```
 
+> **Homolog without k8s.** You can point the daemon at a backend started with
+> `docker compose` + `./mvnw spring-boot:run` on the same machine. See
+> `documentos/HOMOLOGACAO-LOCAL-DOCKER.md` and `scripts/homolog-client-host.sh`.
+
 > Why not a pod? Running the daemon in-cluster would require either mounting the
 > node's Docker socket into the pod (root-equivalent control of the node) or a
 > privileged Docker-in-Docker sidecar. A dedicated host keeps that privilege off
 > the cluster and matches what the code already assumes. See the audit note in the
 > repo for the rejected alternatives.
 
+## Quick smoke (from repo root)
+
+```bash
+./scripts/homolog-client-host.sh check
+./scripts/homolog-client-host.sh build-images   # or: pull-ghcr
+./scripts/homolog-client-host.sh test-egress    # SQUADX_DOCKER_IT=1 (Linux/Colima)
+```
+
 ## Provision the host
 
-1. **Install Docker** (Engine, Linux). The egress firewall needs an `xt_set`-capable
-   kernel (standard on most distros); without it the daemon fails closed rather than
-   running unfiltered.
+1. **Install Docker** (Engine, **Linux** preferred for egress). The egress firewall
+   needs an `xt_set`-capable kernel (standard on most distros); without it the
+   daemon fails closed rather than running unfiltered.
+
+   - **Linux:** Docker Engine from the distro/docs.
+   - **macOS (dev only):** `brew install colima docker && colima start` — good for
+     image builds and integration tests; production homolog should still use Linux.
 
 2. **Create the service user** and give it Docker access:
    ```bash

@@ -508,7 +508,11 @@ class DockerManager:
             buf.seek(0)
 
             container = self.client.containers.get(container_id)
-            ok, _ = container.put_archive("/tmp", buf.read())
+            # docker-py Container.put_archive returns a bare bool; older/API
+            # wrappers sometimes returned (ok, …). Accept both so we never
+            # crash with "cannot unpack non-iterable bool object".
+            put_result = container.put_archive("/tmp", buf.read())
+            ok = put_result[0] if isinstance(put_result, tuple) else bool(put_result)
             if not ok:
                 return False, "put_archive returned False"
 

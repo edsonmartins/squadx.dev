@@ -112,6 +112,19 @@ build-agent: ## Build the agent sandbox image (base :latest + live-view :live)
 build-sandbox-images: build-agent build-egress-proxy ## Build the images the daemon runs (agent + egress sidecar)
 	@echo "Built squadx/agent:latest, squadx/agent:live, squadx/egress-proxy:latest"
 
+# Homolog without k8s (#40 / #41) — see documentos/HOMOLOGACAO-LOCAL-DOCKER.md
+homolog-client-check: ## Prerequisites for client-host homolog (Docker, images)
+	./scripts/homolog-client-host.sh check
+
+homolog-client-images: ## Build agent + egress sandbox images for the client host
+	./scripts/homolog-client-host.sh build-images
+
+homolog-egress-it: ## Run egress integration tests (needs Docker; set SQUADX_DOCKER_IT=1)
+	./scripts/homolog-client-host.sh test-egress
+
+homolog-client: ## Full client-host homolog path: check → build images → egress IT
+	./scripts/homolog-client-host.sh all
+
 # Clean
 clean: ## Clean build artifacts
 	cd backend && ./mvnw clean

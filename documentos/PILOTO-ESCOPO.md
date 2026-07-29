@@ -61,6 +61,17 @@ Fonte: epic #37 + `documentos/HOMOLOGACAO-VERIFICACAO.md`.
 
 ---
 
+## Path sem Kubernetes (enquanto #39 não desbloqueia)
+
+Dá para provar **#40** (imagens + daemon) e **#41** (egress IT) sem cluster:
+
+- `documentos/HOMOLOGACAO-LOCAL-DOCKER.md`
+- `make homolog-client` (ou `./scripts/homolog-client-host.sh all`)
+- Backend local: `docker compose up -d postgres redis` + `./mvnw spring-boot:run`
+
+Live view / UAT completo ainda preferem staging k8s, mas o núcleo sandbox/egress
+não precisa esperar ingress.
+
 ## Pré-requisitos operacionais (#39)
 
 Sem cluster Kubernetes + secrets, o job `Deploy to Staging` falha no preflight (proposital).

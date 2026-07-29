@@ -23,6 +23,33 @@ Staging and prod are fully isolated: different namespace, hosts, and TLS issuer.
 The `client` daemon is intentionally not here — it runs on a dedicated Docker host
 (see `client/deploy/README.md`).
 
+## Frontend image is per-environment
+
+`NEXT_PUBLIC_*` values are **inlined into the browser bundle at build time**, so they
+**cannot** be overridden by a runtime ConfigMap. The CI therefore builds one frontend
+image per environment with the right build-args: `frontend:<sha>` (prod URLs) and
+`frontend:staging-<sha>` (staging URLs). The `deploy-staging` job pins the staging
+image; the ConfigMap's `NEXT_PUBLIC_*` only feed the Next.js *server* rewrite at
+runtime and must match the image's build-args.
+
+## GHCR push (CI)
+
+Repo **Actions → General → Workflow permissions** defaults to *Read repository
+contents*. The `docker` job therefore declares:
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+```
+
+Without `packages: write`, push fails with
+`denied: installation not allowed to Create organization package` (see issue #38).
+The first successful push creates the packages under
+`ghcr.io/edsonmartins/squadx.dev/*`. If the packages are **private**, the cluster
+needs an `imagePullSecret` (or make the packages public under
+https://github.com/users/edsonmartins/packages).
+
 ## Secrets
 
 Secrets are **created in-cluster from CI**, never committed. The `deploy-staging`

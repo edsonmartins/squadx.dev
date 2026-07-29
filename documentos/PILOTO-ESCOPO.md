@@ -52,10 +52,13 @@ Fonte: epic #37 + `documentos/HOMOLOGACAO-VERIFICACAO.md`.
 
 1. [x] CI publica imagens no GHCR (#38)
 2. [ ] Secrets `STAGING_*` + `KUBE_CONFIG`; pods healthy em `squadx-staging` (#39)
-3. [ ] Host Docker com `squadx-client` + imagens sandbox (#40)
-4. [ ] Egress comprovado em host real (#41)
+3. [x] Host Docker com imagens + daemon claim (path local/Colima) (#40) — *host Linux de prod formal opcional*
+4. [ ] Egress comprovado em host real Linux (#41) — *sandbox sobe no Colima; packet proof pendente*
 5. [ ] Live-view E2E + smoke UAT + authz (#42, #43)
-6. [ ] Este doc + README alinhados (#44)
+6. [x] Escopo piloto + docs locais + README alinhado ao essencial (#44)
+
+**Smoke LLM “agente verde”:** preencher `OPENAI_API_KEY` ou `ANTHROPIC_API_KEY` em
+`client/.env` e rodar `./scripts/homolog-local-smoke.sh seed && client`.
 
 **GO** só com 1–6. Qualquer fail vira issue `bug` com severidade.
 

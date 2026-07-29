@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![Java](https://img.shields.io/badge/java-21+-orange.svg)](https://openjdk.org)
 [![Next.js](https://img.shields.io/badge/next.js-16+-black.svg)](https://nextjs.org)
-[![Tests](https://img.shields.io/badge/tests-772%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-backend%2Bfrontend%2Bclient-brightgreen.svg)]()
 
 ---
 
@@ -146,7 +146,7 @@ O SquadX disponibiliza **7 agentes especializados + 1 runtime adapter** para des
 - Docker e Docker Compose
 - Java 21+ (com Maven)
 - Node.js 20+ (com pnpm)
-- Python 3.12+
+- Python 3.11+
 - PostgreSQL 16+
 - Redis 7+
 
@@ -282,39 +282,26 @@ SQUADX_AGENT_CPU_LIMIT=2.0
 
 ## Testes
 
-O projeto possui **772+ testes** distribuídos em 96 arquivos:
+Suítes unitárias/integração por runtime (contagens mudam com o código — rode os
+comandos abaixo para o número atual). CI na `main` executa as três.
 
 ### Backend (Java - JUnit 5 + Mockito)
 ```bash
-cd backend
-./mvnw test
-
-# 25 services + 23 controllers = ~365 testes
+cd backend && ./mvnw test
+# ~70 classes de teste sob backend/src/test
 ```
 
 ### Frontend (TypeScript - Vitest + Testing Library)
 ```bash
-cd frontend
-npx vitest run
-
-# 20 arquivos = 141 testes
+cd frontend && pnpm test
+# unitários em src/**/__tests__ + e2e Playwright (mock e e2e-real)
 ```
 
 ### Client (Python - pytest)
 ```bash
-cd client
-pytest tests/ -v
-
-# 28 arquivos = ~266 testes
+cd client && pytest tests/ -v
+# ~45 arquivos test_*.py; integration Docker: SQUADX_DOCKER_IT=1 pytest -m integration
 ```
-
-| Área | Arquivos | Testes | Cobertura |
-|------|----------|--------|-----------|
-| Backend Services | 25 | ~246 | 100% dos services |
-| Backend Controllers | 23 | ~119 | 100% dos controllers |
-| Frontend | 20 | 141 | ~60% componentes |
-| Python Client | 28 | ~266 | ~70% módulos |
-| **Total** | **96** | **~772** | |
 
 ---
 
@@ -375,7 +362,7 @@ squadx.dev/
 │   │   ├── security/           # JWT, PermissionChecker
 │   │   └── service/            # 25 business services
 │   └── src/main/resources/
-│       └── db/migration/       # V1-V18 Flyway migrations
+│       └── db/migration/       # Flyway V1–V37
 ├── frontend/                   # Next.js 16 Dashboard
 │   ├── src/
 │   │   ├── app/(dashboard)/    # Dashboard pages

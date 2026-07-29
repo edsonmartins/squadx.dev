@@ -1,39 +1,50 @@
 # Homologação — verificação em ambiente real
 
 Roteiro para exercitar, num host/cluster de verdade, os itens da auditoria de
-homologação que foram **implementados mas ainda não comprovados** (nenhum foi
-rodado com Docker/kubectl aqui). Cada seção tem: pré-condição, comandos, e o
-**critério de aprovação** (o que você deve observar para dar OK).
+homologação que foram **implementados mas ainda não comprovados em host real**.
+Cada seção tem: pré-condição, comandos, e o **critério de aprovação**.
 
-> Estado do `main` em 2026-07-18 (verificado por inspeção):
-> - ✅ **B1** (authz cross-tenant — `OrganizationAccessGuard`), **B2** (imagens do
->   sandbox + `client/deploy`), **egress firewall** — presentes no `main`.
-> - ❌ **B3** (isolamento de staging + secrets + kustomize) **NÃO está no `main`**.
->   `infra/k8s/` ainda é flat, `secrets.yml` (`change-me`) ainda existe, e o job
->   `deploy-staging` do `ci.yml` ainda faz `kubectl create namespace squadx`
->   (**namespace de PROD**). O B3 vive só no branch `origin/pr/staging-env-and-secrets`.
->   **A Seção 3 depende de mergear o B3 antes.**
+Escopo do piloto (IN/OUT): `documentos/PILOTO-ESCOPO.md` · epic [#37](https://github.com/edsonmartins/squadx.dev/issues/37).
+
+> Estado do `main` em 2026-07-29:
+> - ✅ **B1** authz cross-tenant · **B2** imagens sandbox + `client/deploy` · **egress** no código
+> - ✅ **B3** kustomize overlays staging/prod + secrets via Actions (PR #36)
+> - ✅ **#38** GHCR push (`packages:write`) — todas as imagens publicadas no CI
+> - ❌ **#39** cluster + `KUBE_CONFIG` / `STAGING_*` ainda **não** configurados
+> - ❌ §§1, 2, 4 (egress/live em host real) ainda não exercitados
 
 ---
 
-## Seção 0 — Pré-requisito: mergear o B3 (staging isolado + secrets)
+## Seção 0 — Pré-requisito: GHCR + B3  *(feito)*
 
-Sem isto, não existe overlay de staging para aplicar e o deploy aponta para o
-namespace de produção com `secrets.yml` `change-me`.
+- Overlays: `infra/k8s/base/` + `overlays/{staging,prod}/`, `secrets.example.yml`
+- CI Docker Build publica: backend, frontend, frontend:staging, client, agent, agent:live, egress-proxy
+- Job `Kustomize (overlays)` valida o render offline em todo PR
 
-```bash
-# Abrir PR do branch B3 (rebaseado no main atual) e revisar o diff
-git fetch origin
-git checkout -B pr/staging-env-and-secrets origin/pr/staging-env-and-secrets
-git rebase origin/main            # só toca infra/k8s + ci.yml → não deve conflitar com código
-git push --force-with-lease
-gh pr create --base main --head pr/staging-env-and-secrets \
-  --title "fix(infra): isolate staging (kustomize overlays) + secrets from GitHub Actions (B3)"
-```
+**Critério:** Docker Build verde na `main` (evidência: Actions runs pós-#52/#53).
 
-**Critério de aprovação:** CI verde no PR; após o merge, o `main` passa a ter
-`infra/k8s/base/` + `infra/k8s/overlays/{staging,prod}/` e `secrets.example.yml`
-(sem `secrets.yml`).
+---
+
+## Seção 0b — Secrets + cluster (#39)  *(bloqueio atual)*
+
+O job `Deploy to Staging` roda preflight e **falha cedo** se faltar secret (em vez de
+cair em `localhost:8080`).
+
+1. Ter um cluster k8s (GKE/EKS/DOKS/…) com `cert-manager` + ingress-nginx (ou ajustar o Ingress).
+2. Em **Settings → Secrets and variables → Actions**, criar:
+
+| Secret | Notas |
+|--------|--------|
+| `KUBE_CONFIG` | `base64 < ~/.kube/config` (conteúdo, não path) |
+| `STAGING_JWT_SECRET` | ≥32 chars |
+| `STAGING_DB_PASSWORD` | |
+| `STAGING_SUPABASE_ANON_KEY` / `STAGING_SUPABASE_SERVICE_KEY` | |
+| `STAGING_STRIPE_*`, `STAGING_RESEND_API_KEY`, `STAGING_AWS_*` | placeholder ok se não testar a feature |
+
+3. Re-run do workflow CI na `main` (ou push vazio).
+4. Packages GHCR private → `imagePullSecret` no cluster **ou** packages public.
+
+**Critério:** pods Running em `squadx-staging`; hosts do ingress = staging; sem `change-me`.
 
 ---
 
@@ -95,28 +106,11 @@ ghcr aceita.
 
 ---
 
-## Seção 3 — Deploy de staging isolado (kustomize) + secrets  *(requer Seção 0)*
+## Seção 3 — Deploy de staging isolado (kustomize) + secrets  *(requer §0b)*
 
-**Pré-condição:** B3 mergeado; um cluster k8s com `cert-manager` + ingress-nginx;
-`KUBE_CONFIG` e os secrets abaixo configurados em **Settings → Secrets and
-variables → Actions**.
+**Pré-condição:** §0b (secrets + cluster). O CI já aplica o overlay em push na `main`.
 
-Secrets do GitHub Actions a criar (o job `deploy-staging` monta o `squadx-secrets`
-no namespace `squadx-staging` a partir deles):
-
-| GitHub Actions secret | vira a chave |
-|---|---|
-| `STAGING_JWT_SECRET` | `JWT_SECRET` (≥32 chars) |
-| `STAGING_DB_PASSWORD` | `SPRING_DATASOURCE_PASSWORD` + `POSTGRES_PASSWORD` |
-| `STAGING_SUPABASE_ANON_KEY` | `SUPABASE_ANON_KEY` |
-| `STAGING_SUPABASE_SERVICE_KEY` | `SUPABASE_SERVICE_KEY` |
-| `STAGING_STRIPE_API_KEY` | `STRIPE_API_KEY` |
-| `STAGING_STRIPE_WEBHOOK_SECRET` | `STRIPE_WEBHOOK_SECRET` |
-| `STAGING_RESEND_API_KEY` | `RESEND_API_KEY` |
-| `STAGING_AWS_ACCESS_KEY_ID` | `AWS_ACCESS_KEY_ID` |
-| `STAGING_AWS_SECRET_ACCESS_KEY` | `AWS_SECRET_ACCESS_KEY` |
-
-Aplicação manual (o mesmo que o CI faz em push na `main`):
+Aplicação manual (o mesmo que o CI faz):
 
 ```bash
 # valida a montagem do overlay ANTES de aplicar (não precisa de cluster)
@@ -161,10 +155,11 @@ mais o texto fake) — comportamento entregue nos PRs #34/#32.
 
 ## Resumo dos critérios
 
-| # | Área | Aprovado quando… | Bloqueado por |
-|---|------|------------------|---------------|
-| 0 | Merge B3 | `main` tem overlays + `secrets.example.yml` | — |
-| 1 | Egress | integração passa; fora-da-allowlist e metadata falham | host Docker+xt_set |
-| 2 | Imagens | 3 imagens `squadx/*` existem | host Docker |
-| 3 | Staging | recursos em `squadx-staging`, sem `change-me` | Seção 0 + cluster |
-| 4 | Live-view | stream em `/live/{code}`, Stop funciona | daemon + backend + front |
+| # | Área | Aprovado quando… | Status (2026-07-29) |
+|---|------|------------------|---------------------|
+| 0 | GHCR + B3 | overlays no main + imagens publicadas | ✅ |
+| 0b | Secrets + cluster | preflight OK; pods em `squadx-staging` | ❌ #39 |
+| 1 | Egress | integração passa; fora-allowlist e metadata falham | ❌ #41 |
+| 2 | Imagens no host | `agent` / `agent:live` / `egress-proxy` no host do client | ❌ #40 |
+| 3 | Staging deploy | hosts staging, sem `change-me` | ❌ #39 |
+| 4 | Live-view | stream em `/live/{code}`, Stop funciona | ❌ #42 |

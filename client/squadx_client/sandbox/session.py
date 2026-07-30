@@ -14,20 +14,27 @@ from squadx_client.sandbox.types import ExecResult
 
 @runtime_checkable
 class SandboxSession(Protocol):
-    """Duck-typed session: Docker ``AgentSandbox`` or PROCESS ``ProcessSession``."""
+    """Duck-typed session: ``DockerSandboxSession`` or PROCESS ``ProcessSession``."""
 
-    live_join_code: str | None
+    @property
+    def live_join_code(self) -> str | None:
+        """WebRTC join code when Live View is active; always None for PROCESS."""
+        ...
 
     async def start(
         self,
-        image: str = ...,
-        memory_limit: str = ...,
-        cpu_limit: float = ...,
-        enable_vnc: bool = ...,
+        image: str | None = ...,
+        memory_limit: str | None = ...,
+        cpu_limit: float | None = ...,
+        enable_vnc: bool | None = ...,
         environment: dict | None = ...,
         exec_env: dict | None = ...,
     ) -> bool:
-        """Start the session. PROCESS ignores image/memory/cpu/vnc."""
+        """Start the session.
+
+        Docker: omitted image/memory/cpu/vnc come from settings.
+        PROCESS: image/memory/cpu/vnc are ignored.
+        """
         ...
 
     async def execute(

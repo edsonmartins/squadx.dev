@@ -44,10 +44,10 @@ class ProcessSession:
 
     async def start(
         self,
-        image: str = "",
-        memory_limit: str = "",
-        cpu_limit: float = 0.0,
-        enable_vnc: bool = False,
+        image: str | None = None,
+        memory_limit: str | None = None,
+        cpu_limit: float | None = None,
+        enable_vnc: bool | None = None,
         environment: dict | None = None,
         exec_env: dict | None = None,
     ) -> bool:

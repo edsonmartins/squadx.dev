@@ -1,25 +1,19 @@
-"""Docker implementation of ``SandboxBackend`` (ADR-0009).
-
-Hot path: ``create_session()`` → ``AgentSandbox`` (``SandboxSession``).
-Docker SDK and lifecycle stay in ``docker/sandbox.py`` / ``docker/manager.py``.
-"""
+"""Docker ``SandboxBackend`` — builds ``DockerSandboxSession`` over ``AgentSandbox``."""
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
+from squadx_client.sandbox.docker_session import DockerSandboxSession
+from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import SandboxBackendKind
 
 if TYPE_CHECKING:
     from squadx_client.docker.manager import DockerManager
-    from squadx_client.docker.sandbox import AgentSandbox
-
-logger = logging.getLogger(__name__)
 
 
 class DockerSandboxBackend:
-    """SandboxBackend that builds Docker ``AgentSandbox`` sessions."""
+    """Factory for Docker sessions; implementation lives in ``docker/sandbox.py``."""
 
     def __init__(self, manager: DockerManager | None = None) -> None:
         self._manager = manager
@@ -43,8 +37,8 @@ class DockerSandboxBackend:
         network_policy: str | None = None,
         enable_live_streaming: bool = True,
         ttl_seconds: int | None = None,
-    ) -> AgentSandbox:
-        """Build an unstarted ``AgentSandbox`` (orchestrator / factory hot path)."""
+    ) -> SandboxSession:
+        """Build an unstarted Docker session (settings applied on ``start()``)."""
         from squadx_client.docker.sandbox import AgentSandbox
 
         kwargs: dict[str, Any] = {
@@ -58,4 +52,4 @@ class DockerSandboxBackend:
             kwargs["manager"] = self._manager
         if ttl_seconds is not None:
             kwargs["ttl_seconds"] = ttl_seconds
-        return AgentSandbox(**kwargs)
+        return DockerSandboxSession(AgentSandbox(**kwargs))

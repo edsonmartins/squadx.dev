@@ -50,7 +50,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         external_cli=True,
         requires_docker=True,
         implemented=True,
-        notes="Default Team DOCKER / VPS; DockerSandboxBackend → AgentSandbox",
+        notes="Default Team DOCKER / VPS; DockerSandboxSession → AgentSandbox",
     ),
     SandboxBackendKind.PROCESS: BackendFeatures(
         kind=SandboxBackendKind.PROCESS,

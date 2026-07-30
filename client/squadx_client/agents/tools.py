@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 from langchain_core.tools import tool
 
 if TYPE_CHECKING:
-    from squadx_client.docker.sandbox import AgentSandbox
+    from squadx_client.sandbox.session import SandboxSession
 
 
 class SandboxToolkit:
     """Toolkit providing sandbox execution tools for agents."""
 
-    def __init__(self, sandbox: "AgentSandbox"):
+    def __init__(self, sandbox: "SandboxSession"):
         self.sandbox = sandbox
 
     def get_tools(self):
@@ -224,7 +224,7 @@ class SandboxToolkit:
 class GitToolkit:
     """Git-related tools for agent execution."""
 
-    def __init__(self, sandbox: "AgentSandbox"):
+    def __init__(self, sandbox: "SandboxSession"):
         self.sandbox = sandbox
 
     def get_tools(self):
@@ -312,11 +312,11 @@ class GitToolkit:
         return git_add
 
 
-def create_sandbox_tools(sandbox: "AgentSandbox") -> list:
+def create_sandbox_tools(sandbox: "SandboxSession") -> list:
     """Create all tools for a sandbox instance.
 
     Args:
-        sandbox: The AgentSandbox instance to bind tools to.
+        sandbox: The SandboxSession instance to bind tools to.
 
     Returns:
         List of LangChain tools.

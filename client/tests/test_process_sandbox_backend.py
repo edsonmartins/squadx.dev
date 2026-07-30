@@ -117,8 +117,25 @@ def test_create_agent_sandbox_rejects_process(monkeypatch: pytest.MonkeyPatch) -
     )
     from squadx_client.sandbox import create_agent_sandbox
 
-    with pytest.raises(SandboxNotSupportedError, match="docker"):
+    with pytest.raises(SandboxNotSupportedError, match="external_cli|docker"):
         create_agent_sandbox(task_id=1, agent_type="x", workspace_path="/tmp")
+
+
+@pytest.mark.asyncio
+async def test_process_write_refuses_traversal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SQUADX_PROCESS_UNSAFE", "1")
+    backend = ProcessSandboxBackend(isolator=ProcessIsolator.NONE)
+    session = backend.create_session(
+        task_id=1, agent_type="coder", workspace_path=str(tmp_path)
+    )
+    await session.start()
+    assert await session.write_file("../escape.txt", "nope") is False
+    assert await session.write_file("/workspace/../escape.txt", "nope") is False
+    assert await session.read_file("/etc/passwd") is None
+    assert await session.write_file("/workspace/ok.txt", "yes") is True
+    assert (tmp_path / "ok.txt").read_text() == "yes"
 
 
 def test_features_process_implemented() -> None:

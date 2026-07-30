@@ -17,7 +17,7 @@ from squadx_client.memory.policy import MemoryScopeContext
 from squadx_client.memory.procedural import ProceduralMemoryManager
 
 if TYPE_CHECKING:
-    from squadx_client.docker.sandbox import AgentSandbox
+    from squadx_client.sandbox.session import SandboxSession
 
 logger = structlog.get_logger()
 
@@ -28,7 +28,7 @@ class BaseAgent(ABC):
     agent_type: str = "base"
     system_prompt: str = "You are a helpful AI assistant."
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         self.llm = get_coding_llm()
         self.sandbox = sandbox
         self.tools = []

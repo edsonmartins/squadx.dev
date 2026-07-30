@@ -31,6 +31,7 @@ from squadx_client.sandbox.errors import (
     SandboxNotSupportedError,
     SandboxStartError,
 )
+from squadx_client.sandbox.paths import resolve_under_workspace
 from squadx_client.sandbox.types import (
     ExecResult,
     SandboxBackendKind,
@@ -148,20 +149,24 @@ class ProcessSession:
         )
 
     async def write_file(self, path: str, content: str) -> bool:
-        host_path = self._resolve_host_path(path)
+        # Host-side fs helper (not inside bwrap/seatbelt). Path must stay under workspace.
         try:
+            host_path = resolve_under_workspace(self.workspace_path, path)
             host_path.parent.mkdir(parents=True, exist_ok=True)
             host_path.write_text(content, encoding="utf-8")
             return True
+        except SandboxExecError as e:
+            logger.error("process_write_file_refused err=%s", e)
+            return False
         except OSError as e:
-            logger.error("process_write_file_failed path=%s err=%s", host_path, e)
+            logger.error("process_write_file_failed path=%s err=%s", path, e)
             return False
 
     async def read_file(self, path: str) -> str | None:
-        host_path = self._resolve_host_path(path)
         try:
+            host_path = resolve_under_workspace(self.workspace_path, path)
             return host_path.read_text(encoding="utf-8")
-        except OSError:
+        except (SandboxExecError, OSError):
             return None
 
     def get_metrics(self) -> dict[str, Any] | None:
@@ -170,23 +175,6 @@ class ProcessSession:
             "isolator": self.isolator.value,
             "workspace": self.workspace_path,
         }
-
-    def _resolve_host_path(self, path: str) -> Path:
-        """Map sandbox paths (/workspace/...) onto the host workspace tree."""
-        root = Path(self.workspace_path).expanduser().resolve()
-        if path.startswith("/workspace"):
-            rel = path[len("/workspace") :].lstrip("/")
-            return (root / rel).resolve() if rel else root
-        p = Path(path)
-        if p.is_absolute():
-            # Allow absolute only if under workspace
-            resolved = p.resolve()
-            if root == resolved or root in resolved.parents:
-                return resolved
-            raise SandboxExecError(
-                f"path outside workspace refused: {path} (workspace={root})"
-            )
-        return (root / path).resolve()
 
     async def _run(
         self,
@@ -215,7 +203,12 @@ class ProcessSession:
         # bwrap --clearenv drops Popen env; re-apply secrets as --setenv
         if self.isolator is ProcessIsolator.BWRAP and self._exec_env:
             full_cmd = inject_bwrap_env(full_cmd, self._exec_env)
-        start = time.time()
+        start = time.monotonic()
+        deadline = start + max(0.1, float(timeout))
+
+        def _remaining() -> float:
+            return max(0.01, deadline - time.monotonic())
+
         try:
             proc = await asyncio.create_subprocess_exec(
                 *full_cmd,
@@ -232,7 +225,11 @@ class ProcessSession:
             assert proc.stdout is not None
             try:
                 while True:
-                    line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError
+                    line = await asyncio.wait_for(
+                        proc.stdout.readline(), timeout=_remaining()
+                    )
                     if not line:
                         break
                     text = line.decode("utf-8", errors="replace")
@@ -242,7 +239,7 @@ class ProcessSession:
                             on_output(text)
                         except Exception as cb_err:  # noqa: BLE001
                             logger.error("process_output_callback_error err=%s", cb_err)
-                await asyncio.wait_for(proc.wait(), timeout=max(1.0, timeout / 10))
+                await asyncio.wait_for(proc.wait(), timeout=_remaining())
             except TimeoutError:
                 proc.kill()
                 await proc.wait()
@@ -251,7 +248,7 @@ class ProcessSession:
                     exit_code=-1,
                     output="".join(chunks),
                     error=f"Command timed out after {timeout}s",
-                    duration_seconds=timeout,
+                    duration_seconds=time.monotonic() - start,
                 )
 
             exit_code = proc.returncode if proc.returncode is not None else -1
@@ -259,7 +256,7 @@ class ProcessSession:
                 success=exit_code == 0,
                 exit_code=exit_code,
                 output="".join(chunks),
-                duration_seconds=time.time() - start,
+                duration_seconds=time.monotonic() - start,
             )
         except FileNotFoundError as e:
             return ExecResult(
@@ -267,7 +264,7 @@ class ProcessSession:
                 exit_code=-1,
                 output="",
                 error=f"isolator binary missing: {e}",
-                duration_seconds=time.time() - start,
+                duration_seconds=time.monotonic() - start,
             )
         except Exception as e:  # noqa: BLE001
             logger.exception("process_exec_failed")
@@ -276,7 +273,7 @@ class ProcessSession:
                 exit_code=-1,
                 output="",
                 error=str(e),
-                duration_seconds=time.time() - start,
+                duration_seconds=time.monotonic() - start,
             )
 
 
@@ -421,13 +418,7 @@ def _bwrap_argv(workspace: Path, command: list[str], *, workdir: str) -> list[st
             os.environ.get("LANG", "C.UTF-8"),
         ]
     )
-    # Forward selected exec env keys are applied by ProcessSession via env= for the
-    # outer process; with --clearenv they must be set here — handled by injecting
-    # after clearenv in the caller via environment for bwrap. Simpler: don't
-    # clearenv completely when we need keys — ProcessSession sets env on Popen;
-    # bwrap --clearenv drops them. So pass --setenv for each later in session.
-    # For bwrap we re-apply _exec_env in ProcessSession by appending --setenv.
-    # That is done in build when we pass env — see wrap below.
+    # Secrets: inject_bwrap_env() adds --setenv before "--" in ProcessSession._run.
 
     argv.append("--")
     argv.extend(command)
@@ -451,8 +442,19 @@ def inject_bwrap_env(argv: list[str], env: dict[str, str]) -> list[str]:
 
 
 def _write_seatbelt_profile(workspace: Path) -> Path:
-    """Write a restrictive Seatbelt profile allowing writes only under workspace + tmp."""
+    """Write a Seatbelt profile for PROCESS on macOS.
+
+    Honest limits (not multi-tenant isolation):
+    - ``file-read*`` is broad so host Python/toolchain still work (no bind mounts).
+    - Writes are limited to workspace + temp dirs.
+    - Network follows ``SQUADX_PROCESS_NETWORK`` (deny drops ``network*``).
+    """
     ws = str(workspace.resolve())
+    net_rule = (
+        "(deny network*)"
+        if process_network_mode() == "deny"
+        else "(allow network*)"
+    )
     # sandbox-exec profiles use (subpath "...") — include /private variants on macOS
     profile = f"""(version 1)
 (deny default)
@@ -462,13 +464,15 @@ def _write_seatbelt_profile(workspace: Path) -> Path:
 (allow mach-lookup)
 (allow mach-register)
 (allow ipc-posix*)
+; Broad read: required for host interpreters without a chroot/bind model.
+; Do not treat this as multi-tenant isolation.
 (allow file-read*)
 (allow file-write* (subpath "{ws}"))
 (allow file-write* (subpath "/tmp"))
 (allow file-write* (subpath "/private/tmp"))
 (allow file-write* (subpath "/var/folders"))
 (allow file-write* (subpath "/private/var/folders"))
-(allow network*)
+{net_rule}
 """
     fd, name = tempfile.mkstemp(prefix="squadx-seatbelt-", suffix=".sb")
     os.close(fd)

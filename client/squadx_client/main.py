@@ -159,5 +159,39 @@ def config():
     console.print(f"Log Level: {settings.log_level}")
 
 
+@app.command()
+def doctor(
+    skip_docker: bool = typer.Option(
+        False, "--skip-docker", help="Skip Docker daemon and image checks"
+    ),
+    skip_api: bool = typer.Option(
+        False, "--skip-api", help="Skip backend health HTTP check"
+    ),
+):
+    """Validate this host is ready to run agent sandboxes (ADR-0009 / install-vps)."""
+    from squadx_client.cli.doctor import CheckStatus, run_doctor
+
+    console.print(f"[bold]SquadX Client Doctor[/bold] v{__version__}\n")
+    report = run_doctor(skip_docker=skip_docker, skip_api=skip_api)
+
+    icons = {
+        CheckStatus.OK: "[green]OK[/green]",
+        CheckStatus.WARN: "[yellow]WARN[/yellow]",
+        CheckStatus.FAIL: "[red]FAIL[/red]",
+        CheckStatus.SKIP: "[dim]SKIP[/dim]",
+    }
+    for check in report.checks:
+        icon = icons[check.status]
+        detail = f" — {check.detail}" if check.detail else ""
+        console.print(f"  {icon}  {check.name}{detail}")
+
+    console.print()
+    if report.ok:
+        console.print("[green]Doctor passed[/green] (no FAIL checks).")
+        raise typer.Exit(0)
+    console.print("[red]Doctor failed[/red] — fix FAIL items before starting the daemon.")
+    raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

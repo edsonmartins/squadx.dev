@@ -150,11 +150,19 @@ class DockerSandboxBackend:
             enable_live_streaming=enable_live,
             ttl_seconds=ttl_seconds,
         )
+        mem = memory_limit if memory_limit is not None else str(
+            getattr(settings, "agent_memory_limit", "2g")
+        )
+        cpu = (
+            float(cpu_limit)
+            if cpu_limit is not None
+            else float(getattr(settings, "agent_cpu_limit", 2.0))
+        )
         ok = await sandbox.start(
-            image=getattr(settings, "agent_image", "squadx/agent:latest"),
-            memory_limit=memory_limit or getattr(settings, "agent_memory_limit", "2g"),
-            cpu_limit=cpu_limit if cpu_limit is not None else getattr(settings, "agent_cpu_limit", 2.0),
-            enable_vnc=enable_live and getattr(settings, "enable_vnc", True),
+            image=str(getattr(settings, "agent_image", "squadx/agent:latest")),
+            memory_limit=mem,
+            cpu_limit=cpu,
+            enable_vnc=bool(enable_live and getattr(settings, "enable_vnc", True)),
             environment=environment,
             exec_env=exec_env,
         )

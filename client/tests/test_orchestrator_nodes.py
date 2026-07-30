@@ -152,7 +152,7 @@ class TestExecuteSubtask:
 
         with (
             patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent),
-            patch("squadx_client.orchestrator.nodes.AgentSandbox") as mock_sandbox_cls,
+            patch("squadx_client.orchestrator.nodes.create_agent_sandbox") as mock_sandbox_cls,
             patch("squadx_client.orchestrator.nodes.settings") as mock_settings,
         ):
             mock_settings.workspace_path = None

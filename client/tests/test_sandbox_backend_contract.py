@@ -56,8 +56,45 @@ def test_features_process_not_implemented() -> None:
     assert feats.egress_sidecar is False
 
 
-def test_get_sandbox_backend_raises_until_phase2() -> None:
-    with pytest.raises(SandboxNotSupportedError, match="Phase 2"):
+def test_get_sandbox_backend_returns_docker_backend() -> None:
+    from squadx_client.sandbox.docker_backend import DockerSandboxBackend
+
+    backend = get_sandbox_backend()
+    assert isinstance(backend, DockerSandboxBackend)
+    assert backend.kind is SandboxBackendKind.DOCKER
+    assert backend.supports_live_view() is True
+    assert backend.supports_egress_sidecar() is True
+    assert isinstance(backend, SandboxBackend)
+
+
+def test_create_agent_sandbox_builds_agent_sandbox() -> None:
+    from squadx_client.docker.sandbox import AgentSandbox
+    from squadx_client.sandbox import create_agent_sandbox
+
+    sb = create_agent_sandbox(
+        task_id=42,
+        agent_type="coder",
+        workspace_path="/tmp/ws",
+        network_policy="agent-default",
+    )
+    assert isinstance(sb, AgentSandbox)
+    assert sb.task_id == 42
+    assert sb.agent_type == "coder"
+    assert sb.workspace_path == "/tmp/ws"
+
+
+def test_get_sandbox_backend_process_not_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "squadx_client.sandbox.factory.settings.sandbox_backend",
+        "process",
+        raising=False,
+    )
+    # settings is a pydantic object — patch the attribute used by get_sandbox_backend_kind
+    monkeypatch.setattr(
+        "squadx_client.config.settings.sandbox_backend",
+        "process",
+    )
+    with pytest.raises(SandboxNotSupportedError, match="process"):
         get_sandbox_backend()
 
 

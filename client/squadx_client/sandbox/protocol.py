@@ -1,9 +1,9 @@
 """``SandboxBackend`` Protocol — pluggable agent isolation (ADR-0009).
 
-Phase 0 ships the typed contract only. Production still uses
-``squadx_client.docker.sandbox.AgentSandbox`` (Docker). Phase 2 introduces
-``DockerSandboxBackend`` implementing this Protocol without changing the default
-runtime path until call sites are switched behind the factory.
+Implemented by ``DockerSandboxBackend`` (Phase 2). Prefer
+``create_agent_sandbox()`` / ``get_sandbox_backend()`` over constructing
+``AgentSandbox`` directly. LangGraph tools still take the concrete Docker
+session object for ``execute`` / fs helpers.
 """
 
 from __future__ import annotations

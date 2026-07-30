@@ -1,7 +1,8 @@
 """Pluggable sandbox backends (ADR-0009).
 
-Phase 0: typed contract + config selection. Runtime default remains Docker via
-``AgentSandbox`` until Phase 2 extracts ``DockerSandboxBackend``.
+Phase 2: ``DockerSandboxBackend`` implements ``SandboxBackend``; production
+sessions are created via ``create_agent_sandbox()`` (still returns ``AgentSandbox``
+for tool/CLI compatibility).
 """
 
 from squadx_client.sandbox.errors import (
@@ -13,6 +14,7 @@ from squadx_client.sandbox.errors import (
 )
 from squadx_client.sandbox.factory import (
     BackendFeatures,
+    create_agent_sandbox,
     features_for,
     get_sandbox_backend,
     get_sandbox_backend_kind,
@@ -38,6 +40,7 @@ __all__ = [
     "SandboxNotSupportedError",
     "SandboxPolicyError",
     "SandboxStartError",
+    "create_agent_sandbox",
     "features_for",
     "get_sandbox_backend",
     "get_sandbox_backend_kind",

@@ -302,6 +302,7 @@ Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
 
 | Data | Mudança |
 |------|---------|
+| 2026-07-30 | Phase 2: `DockerSandboxBackend` + `create_agent_sandbox()`; daemon/orchestrator via factory; guards contra Docker SDK fora de `docker/`. |
 | 2026-07-30 | Status **Aceito**. Contrato Python em `client/squadx_client/sandbox/` (Protocol + factory + `SQUADX_SANDBOX_BACKEND`); runtime default ainda `AgentSandbox` (Docker). Fase 1: `install-vps.sh` + `doctor`. |
 | 2026-07-30 | Status **Proposto** + packaging SKUs. |
 - [ ] Docs de install por OS e por backend.

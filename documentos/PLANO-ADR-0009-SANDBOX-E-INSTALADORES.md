@@ -1,6 +1,6 @@
 # Plano de implementação — ADR-0009 (sandbox pluggable + instaladores)
 
-**Status:** Em execução (Fase 1 parcial no main; Fase 0 contrato em curso)  
+**Status:** Em execução (Fases 0–1 no main; Fase 2 extract Docker em curso)  
 **Data:** 2026-07-30  
 **ADR:** [ADR-0009](../docs/adr/ADR-0009-sandbox-runtime-pluggable.md) (**Aceito**)  
 **Objetivo:** Entregar isolamento de agentes em **variantes** (leve / Docker VPS / enterprise) e **instaladores** que deixem cada perfil pronto para uso.

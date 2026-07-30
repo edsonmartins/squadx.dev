@@ -100,20 +100,85 @@ def check_sandbox_backend(report: DoctorReport) -> None:
     )
 
 
+def check_colima(report: DoctorReport) -> None:
+    """On macOS, surface Colima / DOCKER_HOST so Dev LIGHT install is diagnosable."""
+    if os.uname().sysname != "Darwin":
+        return
+
+    docker_host = os.environ.get("DOCKER_HOST", "")
+    colima_socks = [
+        os.path.expanduser("~/.colima/default/docker.sock"),
+        os.path.expanduser("~/.colima/docker.sock"),
+    ]
+    sock_found = next((s for s in colima_socks if os.path.exists(s)), None)
+
+    if shutil.which("colima"):
+        code, out = _run(["colima", "status"], timeout=15)
+        running = code == 0 and "Running" in (out or "")
+        if running:
+            report.add(
+                "docker.colima",
+                CheckStatus.OK,
+                f"Colima running; DOCKER_HOST={docker_host or 'default'}",
+            )
+        else:
+            report.add(
+                "docker.colima",
+                CheckStatus.WARN,
+                "Colima installed but not Running — colima start "
+                "(or use Docker Desktop and unset DOCKER_HOST)",
+            )
+    elif sock_found or "colima" in docker_host:
+        report.add(
+            "docker.colima",
+            CheckStatus.WARN,
+            f"Colima CLI missing but socket/host looks like Colima "
+            f"(sock={sock_found}, DOCKER_HOST={docker_host or 'unset'})",
+        )
+    elif not docker_host and not sock_found:
+        report.add(
+            "docker.colima",
+            CheckStatus.SKIP,
+            "no Colima socket — Docker Desktop or remote DOCKER_HOST OK for Dev LIGHT",
+        )
+
+
 def check_docker(report: DoctorReport) -> None:
     if not shutil.which("docker"):
         report.add("docker.cli", CheckStatus.FAIL, "docker not found in PATH")
         return
-    code, out = _run(["docker", "info"], timeout=20)
+    report.add("docker.cli", CheckStatus.OK, "docker in PATH")
+
+    docker_host = os.environ.get("DOCKER_HOST", "")
+    # Help Mac users: if Colima socket exists and DOCKER_HOST is unset, hint it.
+    if os.uname().sysname == "Darwin" and not docker_host:
+        for sock in (
+            os.path.expanduser("~/.colima/default/docker.sock"),
+            os.path.expanduser("~/.colima/docker.sock"),
+        ):
+            if os.path.exists(sock):
+                report.add(
+                    "docker.host_hint",
+                    CheckStatus.WARN,
+                    f"Colima socket at {sock} but DOCKER_HOST unset — "
+                    f"export DOCKER_HOST=unix://{sock} or source ~/.squadx/env.sh",
+                )
+                break
+
+    code, _out = _run(["docker", "info"], timeout=20)
     if code != 0:
         report.add(
             "docker.daemon",
             CheckStatus.FAIL,
-            f"docker info failed (is the daemon running? DOCKER_HOST={os.environ.get('DOCKER_HOST', 'default')})",
+            f"docker info failed (is the daemon running? DOCKER_HOST={docker_host or 'default'}; "
+            f"on Mac: colima start && source ~/.squadx/env.sh)",
         )
         return
-    report.add("docker.cli", CheckStatus.OK, "docker in PATH")
-    report.add("docker.daemon", CheckStatus.OK, "daemon reachable")
+    report.add(
+        "docker.daemon",
+        CheckStatus.OK,
+        f"daemon reachable (DOCKER_HOST={docker_host or 'default'})",
+    )
 
 
 def check_images(report: DoctorReport) -> None:
@@ -261,6 +326,7 @@ def run_doctor(
     check_sandbox_backend(report)
 
     if not skip_docker:
+        check_colima(report)
         check_docker(report)
         if not any(c.name == "docker.daemon" and c.status == CheckStatus.FAIL for c in report.checks):
             check_images(report)

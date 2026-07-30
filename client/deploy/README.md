@@ -32,6 +32,19 @@ STOMP and does the sandbox work.
 ./scripts/homolog-client-host.sh test-egress    # SQUADX_DOCKER_IT=1 (Linux/Colima)
 ```
 
+## Dev LIGHT on macOS (Colima — ADR-0009)
+
+For a Mac mini / laptop pointing at SaaS (or a local API) — **not** a production agent host:
+
+```bash
+./scripts/install-mac-client.sh
+source ~/.squadx/env.sh
+squadx-client doctor
+./scripts/smoke-mac.sh
+```
+
+Full page: `documentos/DEV-LIGHT-MAC.md`. Egress packet-proof remains a **Linux** concern (`EGRESS-RUNBOOK.md`).
+
 ## One-shot VPS install (Team DOCKER — ADR-0009)
 
 On a **Linux** host with Docker Engine and a monorepo checkout:

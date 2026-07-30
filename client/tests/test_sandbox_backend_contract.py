@@ -1,4 +1,4 @@
-"""ADR-0009 Phase 0: SandboxBackend contract, factory, and feature matrix."""
+"""ADR-0009: SandboxBackend contract, factory, and feature matrix."""
 
 from __future__ import annotations
 
@@ -8,14 +8,12 @@ from squadx_client.sandbox import (
     BackendFeatures,
     SandboxBackend,
     SandboxBackendKind,
-    SandboxHandle,
-    SandboxLifecycleStatus,
+    SandboxSession,
     features_for,
     get_sandbox_backend,
     get_sandbox_backend_kind,
     parse_backend_kind,
 )
-from squadx_client.sandbox.types import ExecResult
 
 
 def test_parse_backend_kind_defaults_and_aliases() -> None:
@@ -46,6 +44,7 @@ def test_features_docker_implemented() -> None:
     assert feats.live_view is True
     assert feats.egress_sidecar is True
     assert feats.external_cli is True
+    assert feats.requires_docker is True
 
 
 def test_features_process_implemented_no_live() -> None:
@@ -54,6 +53,7 @@ def test_features_process_implemented_no_live() -> None:
     assert feats.live_view is False
     assert feats.egress_sidecar is False
     assert feats.external_cli is False
+    assert feats.requires_docker is False
 
 
 def test_get_sandbox_backend_returns_docker_backend() -> None:
@@ -86,21 +86,17 @@ def test_create_agent_sandbox_builds_agent_sandbox() -> None:
 def test_get_sandbox_backend_process_returns_process_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "squadx_client.config.settings.sandbox_backend",
-        "process",
-    )
+    monkeypatch.setattr("squadx_client.config.settings.sandbox_backend", "process")
     monkeypatch.setenv("SQUADX_PROCESS_UNSAFE", "1")
-    from squadx_client.sandbox.process_backend import ProcessSandboxBackend
+    from squadx_client.sandbox.process import ProcessSandboxBackend
 
     backend = get_sandbox_backend()
     assert isinstance(backend, ProcessSandboxBackend)
     assert backend.kind is SandboxBackendKind.PROCESS
     assert backend.supports_live_view() is False
 
-def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
-    """A minimal duck type satisfies the Protocol for structural typing tests."""
 
+def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
     class _Stub:
         @property
         def kind(self) -> SandboxBackendKind:
@@ -115,47 +111,11 @@ def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
         def supports_egress_sidecar(self) -> bool:
             return True
 
-        async def start(self, **kwargs):  # noqa: ANN003
-            return SandboxHandle(
-                task_id=1,
-                backend=SandboxBackendKind.DOCKER,
-                id="stub",
-                workspace_path="/tmp",
-                status=SandboxLifecycleStatus.RUNNING,
-            )
-
-        async def exec(self, handle, command, **kwargs):  # noqa: ANN001, ANN003
-            return ExecResult(success=True, exit_code=0, output="")
-
-        async def exec_streaming(self, handle, command, **kwargs):  # noqa: ANN001, ANN003
-            return ExecResult(success=True, exit_code=0, output="")
-
-        async def write_file(self, handle, path, content):  # noqa: ANN001
-            return True
-
-        async def read_file(self, handle, path):  # noqa: ANN001
-            return None
-
-        async def list_dir(self, handle, path):  # noqa: ANN001
-            return []
-
-        async def stop(self, handle, *, timeout=10):  # noqa: ANN001
-            return True
-
-        async def cleanup(self, handle):  # noqa: ANN001
-            return True
-
-        def get_metrics(self, handle):  # noqa: ANN001
-            return None
-
-        async def status(self, handle):  # noqa: ANN001
-            return SandboxLifecycleStatus.RUNNING
-
     assert isinstance(_Stub(), SandboxBackend)
 
 
 def test_create_sandbox_session_is_sandbox_session() -> None:
-    from squadx_client.sandbox import SandboxSession, create_sandbox_session
+    from squadx_client.sandbox import create_sandbox_session
 
     sb = create_sandbox_session(
         task_id=1, agent_type="coder", workspace_path="/tmp/ws"

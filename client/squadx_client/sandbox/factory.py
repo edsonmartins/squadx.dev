@@ -37,6 +37,7 @@ class BackendFeatures:
     live_view: bool
     egress_sidecar: bool
     external_cli: bool
+    requires_docker: bool
     implemented: bool
     notes: str
 
@@ -47,6 +48,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         live_view=True,
         egress_sidecar=True,
         external_cli=True,
+        requires_docker=True,
         implemented=True,
         notes="Default Team DOCKER / VPS; DockerSandboxBackend → AgentSandbox",
     ),
@@ -55,6 +57,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         live_view=False,
         egress_sidecar=False,
         external_cli=False,
+        requires_docker=False,
         implemented=True,
         notes=(
             "Dev LIGHT best-effort: bwrap/Seatbelt on execute*; host-side write_file "
@@ -66,6 +69,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         live_view=False,
         egress_sidecar=False,
         external_cli=True,
+        requires_docker=True,
         implemented=False,
         notes="Enterprise path; SandboxRuntime.FIRECRACKER exists under Docker only",
     ),
@@ -74,6 +78,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         live_view=False,
         egress_sidecar=False,
         external_cli=True,
+        requires_docker=False,
         implemented=False,
         notes="Optional BYO cloud sandbox; not core open-source MVP",
     ),
@@ -150,7 +155,7 @@ def create_sandbox_session(
     Canonical production entry for orchestrator and native agents.
     """
     backend = get_sandbox_backend()
-    session = backend.create_session(
+    return backend.create_session(
         task_id=task_id,
         agent_type=agent_type,
         workspace_path=workspace_path,
@@ -158,7 +163,6 @@ def create_sandbox_session(
         enable_live_streaming=enable_live_streaming,
         ttl_seconds=ttl_seconds,
     )
-    return session  # type: ignore[return-value]
 
 
 def create_agent_sandbox(

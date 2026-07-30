@@ -302,6 +302,7 @@ Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
 
 | Data | Mudança |
 |------|---------|
+| 2026-07-30 | Review remaining: split `sandbox/process/`, slim Protocol to create_session, `requires_docker` features, shared image pull helper. |
 | 2026-07-30 | Hardening: `SandboxSession` hot path, path containment, factory table, PROCESS deadline timeout, honest PROCESS docs. |
 | 2026-07-30 | Phase 4: `ProcessSandboxBackend` (bwrap/Seatbelt); `create_sandbox_session`; External CLI Docker-only. |
 | 2026-07-30 | Phase 3: `install-mac-client.sh` + `smoke-mac.sh` + `DEV-LIGHT-MAC.md`; doctor Colima/DOCKER_HOST. |

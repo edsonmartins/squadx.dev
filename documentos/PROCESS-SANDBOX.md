@@ -22,8 +22,9 @@ squadx-client start -f
 
 ## What works
 
-- Native agent loop (tools: bash, read/write files under workspace)
-- Workspace bind + deny writes outside (Seatbelt / bwrap bind)
+- Native agent loop (tools: bash under isolator; read/write under workspace path containment)
+- Linux: bwrap bind workspace + ro host toolchain
+- macOS: Seatbelt write-limit under workspace (+ host reads for toolchain)
 
 ## What does **not** work
 
@@ -33,10 +34,21 @@ squadx-client start -f
 | External CLI (Claude Code / Codex / Gemini) | **Docker-only** |
 | RFC-0006 egress sidecar | N/A — use `SQUADX_PROCESS_NETWORK=deny` or Docker |
 | Warm pool | Docker-only |
+| Multi-tenant hard isolation | **No** — laptop threat model only |
+
+## Honest isolation model
+
+| Operation | Isolation |
+|-----------|-----------|
+| `execute` / `execute_streaming` | bwrap or Seatbelt |
+| `write_file` / `read_file` | **Host FS** under workspace only (`resolve_under_workspace`; traversal denied) |
+| Seatbelt `file-read*` | Broad (host Python/toolchain) — not a read jail |
+| Network | Shared by default; `SQUADX_PROCESS_NETWORK=deny` → bwrap `--unshare-net` or Seatbelt deny |
 
 ## Threat model
 
 **Laptop / Dev LIGHT**, not multi-tenant VPS. Prefer Team DOCKER (`install-vps.sh`) for production agent hosts.
+Never set `SQUADX_PROCESS_UNSAFE=1` outside tests (runs with **no** OS sandbox).
 
 ## Install isolators
 

@@ -1,9 +1,7 @@
 """``SandboxBackend`` Protocol — pluggable agent isolation (ADR-0009).
 
-Implemented by ``DockerSandboxBackend`` (Phase 2). Prefer
-``create_agent_sandbox()`` / ``get_sandbox_backend()`` over constructing
-``AgentSandbox`` directly. LangGraph tools still take the concrete Docker
-session object for ``execute`` / fs helpers.
+Production agents use ``create_sandbox_session()`` → ``SandboxSession``.
+Handle-based methods remain for multi-session control and tests.
 """
 
 from __future__ import annotations
@@ -11,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
+from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import (
     ExecResult,
     SandboxBackendKind,
@@ -21,7 +20,7 @@ from squadx_client.sandbox.types import (
 
 @runtime_checkable
 class SandboxBackend(Protocol):
-    """Isolation backend: start workspace, exec, fs, stop, optional live/metrics.
+    """Isolation backend: create sessions, optional handle-based control.
 
     Implementations must be safe for concurrent sandboxes (one handle per task).
     Network policy semantics differ by backend (Docker sidecar vs PROCESS proxy);
@@ -31,6 +30,27 @@ class SandboxBackend(Protocol):
     @property
     def kind(self) -> SandboxBackendKind:
         """Backend identifier (docker | process | firecracker | remote)."""
+        ...
+
+    def create_session(
+        self,
+        *,
+        task_id: int,
+        agent_type: str,
+        workspace_path: str,
+        network_policy: str | None = None,
+        enable_live_streaming: bool = True,
+        ttl_seconds: int | None = None,
+    ) -> SandboxSession:
+        """Build an unstarted session (orchestrator / factory hot path)."""
+        ...
+
+    def supports_live_view(self) -> bool:
+        """Whether this backend can expose VNC/WebRTC live view."""
+        ...
+
+    def supports_egress_sidecar(self) -> bool:
+        """Whether RFC-0006 Docker netns sidecar can apply."""
         ...
 
     async def start(
@@ -101,14 +121,6 @@ class SandboxBackend(Protocol):
 
     def get_metrics(self, handle: SandboxHandle) -> dict[str, Any] | None:
         """Optional resource metrics; ``None`` if unsupported."""
-        ...
-
-    def supports_live_view(self) -> bool:
-        """Whether this backend can expose VNC/WebRTC live view."""
-        ...
-
-    def supports_egress_sidecar(self) -> bool:
-        """Whether RFC-0006 Docker netns sidecar can apply (Docker path only today)."""
         ...
 
     async def status(self, handle: SandboxHandle) -> SandboxLifecycleStatus:

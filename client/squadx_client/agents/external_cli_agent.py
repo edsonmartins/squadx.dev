@@ -22,7 +22,7 @@ from squadx_client.agents.security import enforce_prompt_security, filter_intern
 from squadx_client.config import settings
 
 if TYPE_CHECKING:
-    from squadx_client.docker.sandbox import AgentSandbox
+    from squadx_client.sandbox.session import SandboxSession
 
 logger = structlog.get_logger()
 
@@ -82,7 +82,7 @@ class ExternalCliAgent(BaseAgent):
     def __init__(
         self,
         provider: str = "CLAUDE_CODE",
-        sandbox: Optional["AgentSandbox"] = None,
+        sandbox: Optional["SandboxSession"] = None,
         brainsentry_session_id: str | None = None,
     ):
         # Intentionally does NOT call super().__init__: we don't need the

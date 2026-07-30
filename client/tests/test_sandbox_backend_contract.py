@@ -106,6 +106,15 @@ def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
         def kind(self) -> SandboxBackendKind:
             return SandboxBackendKind.DOCKER
 
+        def create_session(self, **kwargs):  # noqa: ANN003
+            return object()
+
+        def supports_live_view(self) -> bool:
+            return True
+
+        def supports_egress_sidecar(self) -> bool:
+            return True
+
         async def start(self, **kwargs):  # noqa: ANN003
             return SandboxHandle(
                 task_id=1,
@@ -139,16 +148,19 @@ def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
         def get_metrics(self, handle):  # noqa: ANN001
             return None
 
-        def supports_live_view(self) -> bool:
-            return True
-
-        def supports_egress_sidecar(self) -> bool:
-            return True
-
         async def status(self, handle):  # noqa: ANN001
             return SandboxLifecycleStatus.RUNNING
 
     assert isinstance(_Stub(), SandboxBackend)
+
+
+def test_create_sandbox_session_is_sandbox_session() -> None:
+    from squadx_client.sandbox import SandboxSession, create_sandbox_session
+
+    sb = create_sandbox_session(
+        task_id=1, agent_type="coder", workspace_path="/tmp/ws"
+    )
+    assert isinstance(sb, SandboxSession)
 
 
 def test_doctor_reports_sandbox_backend() -> None:

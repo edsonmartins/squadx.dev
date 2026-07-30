@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from squadx_client.agents.base import BaseAgent
 
 if TYPE_CHECKING:
-    from squadx_client.docker.sandbox import AgentSandbox
+    from squadx_client.sandbox.session import SandboxSession
 
 
 # Shared discipline appended to every specialist prompt — the cross-cutting habits that keep
@@ -34,7 +34,7 @@ class FrontendAgent(BaseAgent):
 
     agent_type = "frontend"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -62,7 +62,7 @@ class BackendAgent(BaseAgent):
 
     agent_type = "backend"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -92,7 +92,7 @@ class FullstackAgent(BaseAgent):
 
     agent_type = "fullstack"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -118,7 +118,7 @@ class DevOpsAgent(BaseAgent):
 
     agent_type = "devops"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -146,7 +146,7 @@ class QAAgent(BaseAgent):
 
     agent_type = "qa"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -179,7 +179,7 @@ class CoordinatorAgent(BaseAgent):
 
     agent_type = "coordinator"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -233,7 +233,7 @@ class DatabaseAgent(BaseAgent):
 
     agent_type = "database"
 
-    def __init__(self, sandbox: Optional["AgentSandbox"] = None, brainsentry_session_id: str | None = None):
+    def __init__(self, sandbox: Optional["SandboxSession"] = None, brainsentry_session_id: str | None = None):
         super().__init__(sandbox, brainsentry_session_id=brainsentry_session_id)
 
     def get_system_prompt(self) -> str:
@@ -259,7 +259,7 @@ Always provide complete SQL or migration scripts.""" + _ENGINEERING_DISCIPLINE
 
 def create_agent(
     agent_type: str,
-    sandbox: Optional["AgentSandbox"] = None,
+    sandbox: Optional["SandboxSession"] = None,
     brainsentry_session_id: str | None = None,
     runtime_kind: str | None = None,
     cli_provider: str | None = None,
@@ -268,7 +268,7 @@ def create_agent(
 
     Args:
         agent_type: Type of agent (frontend, backend, fullstack, devops, qa, coordinator, database)
-        sandbox: Optional AgentSandbox for tool-based execution
+        sandbox: Optional SandboxSession for tool-based execution
         runtime_kind: "NATIVE" (default) or "EXTERNAL_CLI" to drive an external CLI
         cli_provider: CLI to use when runtime_kind is EXTERNAL_CLI
             (CLAUDE_CODE, CODEX, GEMINI_CLI, AIDER, OPENCODE)

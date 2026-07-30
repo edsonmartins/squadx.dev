@@ -1,7 +1,6 @@
 """Pluggable sandbox backends (ADR-0009).
 
-- Docker: ``DockerSandboxBackend`` / ``create_agent_sandbox()``
-- Process: ``ProcessSandboxBackend`` / ``create_sandbox_session()`` (bubblewrap|Seatbelt)
+Production: ``create_sandbox_session()`` → ``SandboxSession`` (Docker or PROCESS).
 """
 
 from squadx_client.sandbox.errors import (
@@ -21,6 +20,7 @@ from squadx_client.sandbox.factory import (
     parse_backend_kind,
 )
 from squadx_client.sandbox.protocol import SandboxBackend
+from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import (
     ExecResult,
     SandboxBackendKind,
@@ -39,6 +39,7 @@ __all__ = [
     "SandboxLifecycleStatus",
     "SandboxNotSupportedError",
     "SandboxPolicyError",
+    "SandboxSession",
     "SandboxStartError",
     "create_agent_sandbox",
     "create_sandbox_session",

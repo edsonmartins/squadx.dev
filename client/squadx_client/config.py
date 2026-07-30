@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     sandbox_ttl_seconds: int = Field(default=3600, alias="SQUADX_SANDBOX_TTL")
     sandbox_max_ttl_seconds: int = Field(default=86400, alias="SQUADX_SANDBOX_MAX_TTL")
 
+    # Sandbox Backend (ADR-0009) — which isolator: docker | process | firecracker | remote.
+    # Distinct from sandbox_runtime (docker|gvisor|firecracker *under* the Docker backend).
+    # Default docker; process/firecracker/remote are not selectable until later phases.
+    sandbox_backend: str = Field(default="docker", alias="SQUADX_SANDBOX_BACKEND")
+
     # Sandbox Runtime Configuration
     # Which container runtime to use: docker, gvisor, firecracker
     sandbox_runtime: str = Field(default="docker", alias="SQUADX_SANDBOX_RUNTIME")

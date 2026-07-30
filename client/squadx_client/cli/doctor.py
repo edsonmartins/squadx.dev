@@ -60,6 +60,46 @@ def _run(cmd: list[str], timeout: float = 15.0) -> tuple[int, str]:
         return 124, "timeout"
 
 
+def check_sandbox_backend(report: DoctorReport) -> None:
+    """Report configured ADR-0009 backend and feature matrix row."""
+    from squadx_client.sandbox import features_for, get_sandbox_backend_kind, parse_backend_kind
+
+    raw = getattr(settings, "sandbox_backend", "docker")
+    try:
+        kind = parse_backend_kind(raw)
+    except ValueError as e:
+        report.add("sandbox.backend", CheckStatus.FAIL, str(e))
+        return
+
+    # Ensure factory path is exercised (settings.sandbox_backend is not a dead-cap)
+    configured = get_sandbox_backend_kind()
+    feats = features_for(configured)
+    detail = (
+        f"{configured.value} | live={feats.live_view} egress_sidecar={feats.egress_sidecar} "
+        f"external_cli={feats.external_cli} implemented={feats.implemented}"
+    )
+    if kind is not configured:
+        report.add(
+            "sandbox.backend",
+            CheckStatus.FAIL,
+            f"parse mismatch raw={raw!r} kind={kind.value} configured={configured.value}",
+        )
+        return
+    if not feats.implemented:
+        report.add(
+            "sandbox.backend",
+            CheckStatus.FAIL,
+            f"{detail} — {feats.notes}. Set SQUADX_SANDBOX_BACKEND=docker",
+        )
+        return
+
+    report.add(
+        "sandbox.backend",
+        CheckStatus.OK,
+        f"{detail} (AgentSandbox path; Protocol adapter Phase 2)",
+    )
+
+
 def check_docker(report: DoctorReport) -> None:
     if not shutil.which("docker"):
         report.add("docker.cli", CheckStatus.FAIL, "docker not found in PATH")
@@ -217,6 +257,8 @@ def run_doctor(
         for fn in checks:
             fn(report)
         return report
+
+    check_sandbox_backend(report)
 
     if not skip_docker:
         check_docker(report)

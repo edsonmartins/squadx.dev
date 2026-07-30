@@ -13,4 +13,4 @@ de `0001`. Cada ADR tem: contexto, decisão, alternativas consideradas e consequ
 | [0006](ADR-0006-control-panel-bounded-context-stack.md) | Control Panel como bounded context na stack em camadas existente | Aceito |
 | [0007](ADR-0007-governanca-trabalho-de-agentes.md) | Governança de trabalho de agentes (primitivos do Agent Work Protocol) | Proposto |
 | [0008](ADR-0008-egress-enforcement-nivel-de-rede.md) | Enforcement de egress no nível de rede (sidecar) | Aceito |
-| [0009](ADR-0009-sandbox-runtime-pluggable.md) | Runtime de sandbox pluggable (Docker vs OS-primitives vs microVM) | Proposto |
+| [0009](ADR-0009-sandbox-runtime-pluggable.md) | Runtime de sandbox pluggable (Docker vs OS-primitives vs microVM) | Aceito |

@@ -25,6 +25,9 @@
 #
 set -euo pipefail
 
+# shellcheck source=lib/sandbox-images.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/sandbox-images.sh"
+
 INSTALL_DIR="${SQUADX_INSTALL_DIR:-$HOME/.squadx}"
 GHCR_REPO="${SQUADX_GHCR_REPO:-ghcr.io/edsonmartins/squadx.dev}"
 PULL_IMAGES=0
@@ -298,40 +301,8 @@ write_client_env() {
 }
 
 pull_or_build_images() {
-  if [[ "$SKIP_IMAGES" -eq 1 ]]; then
-    warn "skipping images"
-    return
-  fi
   export_colima_docker_host
-  need_cmd docker
-  docker info >/dev/null 2>&1 || fail "docker daemon not reachable"
-
-  if [[ "$PULL_IMAGES" -eq 1 ]]; then
-    info "Pulling sandbox images from $GHCR_REPO ..."
-    docker pull "${GHCR_REPO}/agent:latest"
-    docker pull "${GHCR_REPO}/egress-proxy:latest"
-    docker pull "${GHCR_REPO}/agent:live" || warn "agent:live optional (Live View)"
-    docker tag "${GHCR_REPO}/agent:latest" squadx/agent:latest
-    docker tag "${GHCR_REPO}/egress-proxy:latest" squadx/egress-proxy:latest
-    docker tag "${GHCR_REPO}/agent:live" squadx/agent:live 2>/dev/null || true
-    ok "images tagged as squadx/*"
-    return
-  fi
-
-  if docker image inspect squadx/agent:latest >/dev/null 2>&1 \
-    && docker image inspect squadx/egress-proxy:latest >/dev/null 2>&1; then
-    ok "local squadx/agent and squadx/egress-proxy already present"
-    return
-  fi
-
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  if [[ -f "$REPO_ROOT/Makefile" ]] && command -v make >/dev/null 2>&1; then
-    info "Building sandbox images (make build-sandbox-images) — may take a while..."
-    (cd "$REPO_ROOT" && make build-sandbox-images)
-  else
-    warn "Images missing. Re-run with --pull-images (docker login ghcr.io) or make build-sandbox-images"
-  fi
+  squadx_pull_or_build_images "$PULL_IMAGES" "$SKIP_IMAGES" "$GHCR_REPO"
 }
 
 print_shell_hint() {

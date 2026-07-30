@@ -17,6 +17,9 @@
 #
 set -euo pipefail
 
+# shellcheck source=lib/sandbox-images.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/sandbox-images.sh"
+
 INSTALL_ROOT="${SQUADX_INSTALL_ROOT:-/opt/squadx-client}"
 ENV_DIR="${SQUADX_ENV_DIR:-/etc/squadx}"
 ENV_FILE="${ENV_DIR}/squadx-client.env"
@@ -162,35 +165,7 @@ install_systemd() {
 }
 
 pull_images() {
-  if [[ "$SKIP_IMAGES" -eq 1 ]]; then
-    warn "skipping images"
-    return
-  fi
-  if [[ "$PULL_IMAGES" -eq 1 ]]; then
-    info "Pulling sandbox images from $GHCR_REPO ..."
-    docker pull "${GHCR_REPO}/agent:latest"
-    docker pull "${GHCR_REPO}/agent:live" || warn "agent:live pull failed (optional for Live View)"
-    docker pull "${GHCR_REPO}/egress-proxy:latest"
-    docker tag "${GHCR_REPO}/agent:latest" squadx/agent:latest
-    docker tag "${GHCR_REPO}/egress-proxy:latest" squadx/egress-proxy:latest
-    docker tag "${GHCR_REPO}/agent:live" squadx/agent:live 2>/dev/null || true
-    ok "images tagged as squadx/*"
-    return
-  fi
-  # Build from monorepo if images missing
-  if docker image inspect squadx/agent:latest >/dev/null 2>&1 \
-    && docker image inspect squadx/egress-proxy:latest >/dev/null 2>&1; then
-    ok "local squadx/agent and squadx/egress-proxy already present"
-    return
-  fi
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  if [[ -f "$REPO_ROOT/Makefile" ]] && command -v make >/dev/null 2>&1; then
-    info "Building sandbox images via make build-sandbox-images (may take a while)..."
-    (cd "$REPO_ROOT" && make build-sandbox-images)
-  else
-    warn "Images missing. Re-run with --pull-images (and docker login ghcr.io) or make build-sandbox-images"
-  fi
+  squadx_pull_or_build_images "$PULL_IMAGES" "$SKIP_IMAGES" "$GHCR_REPO"
 }
 
 main() {

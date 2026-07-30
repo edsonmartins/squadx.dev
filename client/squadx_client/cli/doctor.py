@@ -63,7 +63,6 @@ def _run(cmd: list[str], timeout: float = 15.0) -> tuple[int, str]:
 def check_sandbox_backend(report: DoctorReport) -> None:
     """Report configured ADR-0009 backend and feature matrix row."""
     from squadx_client.sandbox import (
-        SandboxBackendKind,
         features_for,
         get_sandbox_backend_kind,
         parse_backend_kind,
@@ -98,16 +97,9 @@ def check_sandbox_backend(report: DoctorReport) -> None:
         )
         return
 
-    impl = (
-        "DockerSandboxBackend → AgentSandbox"
-        if configured is SandboxBackendKind.DOCKER
-        else "ProcessSandboxBackend (bwrap/Seatbelt)"
-        if configured is SandboxBackendKind.PROCESS
-        else feats.notes
-    )
-    report.add("sandbox.backend", CheckStatus.OK, f"{detail} ({impl})")
+    report.add("sandbox.backend", CheckStatus.OK, f"{detail} ({feats.notes})")
 
-    if configured is SandboxBackendKind.PROCESS:
+    if not feats.requires_docker:
         check_process_isolator(report)
 
 
@@ -360,15 +352,16 @@ def run_doctor(
 
     check_sandbox_backend(report)
 
-    # Docker checks only when using the Docker backend (or explicitly not skipped).
-    from squadx_client.sandbox import SandboxBackendKind, get_sandbox_backend_kind
+    from squadx_client.sandbox import features_for
 
-    using_process = get_sandbox_backend_kind() is SandboxBackendKind.PROCESS
-    if skip_docker or using_process:
-        if using_process and not skip_docker:
-            report.add("docker", CheckStatus.SKIP, "SQUADX_SANDBOX_BACKEND=process")
-        else:
-            report.add("docker", CheckStatus.SKIP, "skipped")
+    feats = features_for()
+    if skip_docker or not feats.requires_docker:
+        reason = (
+            "skipped"
+            if skip_docker
+            else f"backend={feats.kind.value} does not require Docker"
+        )
+        report.add("docker", CheckStatus.SKIP, reason)
     else:
         check_colima(report)
         check_docker(report)
@@ -381,6 +374,14 @@ def run_doctor(
     check_llm_keys(report)
     if not skip_api:
         check_api(report)
-    check_egress_modules(report)
+    # Egress sidecar only meaningful when Docker backend advertises it
+    if feats.egress_sidecar:
+        check_egress_modules(report)
+    else:
+        report.add(
+            "egress.sidecar",
+            CheckStatus.SKIP,
+            f"backend={feats.kind.value} has no Docker egress sidecar",
+        )
     check_daemon_pid(report)
     return report

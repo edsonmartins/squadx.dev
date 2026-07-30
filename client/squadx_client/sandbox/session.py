@@ -1,8 +1,7 @@
 """Hot-path session contract used by orchestrator, tools, and External CLI.
 
-This is the *real* production boundary (ADR-0009 hardening). Backend Protocol
-methods that take ``SandboxHandle`` remain for multi-session control; call sites
-that drive agents use ``SandboxSession`` via ``create_sandbox_session()``.
+Production boundary (ADR-0009): ``create_sandbox_session()`` → ``SandboxSession``.
+``SandboxBackend`` only constructs sessions and advertises capabilities.
 """
 
 from __future__ import annotations

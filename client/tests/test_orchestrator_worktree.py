@@ -85,7 +85,7 @@ class TestExecuteSubtaskWorktree:
         with (
             patch("squadx_client.orchestrator.nodes.settings") as mock_settings,
             patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent),
-            patch("squadx_client.orchestrator.nodes.create_agent_sandbox", return_value=mock_sandbox),
+            patch("squadx_client.orchestrator.nodes.create_sandbox_session", return_value=mock_sandbox),
         ):
             mock_settings.workspace_path = str(temp_workspace)
             mock_settings.enable_sandbox = True
@@ -140,7 +140,7 @@ class TestExecuteSubtaskWorktree:
         with (
             patch("squadx_client.orchestrator.nodes.settings") as mock_settings,
             patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent),
-            patch("squadx_client.orchestrator.nodes.create_agent_sandbox", return_value=mock_sandbox),
+            patch("squadx_client.orchestrator.nodes.create_sandbox_session", return_value=mock_sandbox),
         ):
             mock_settings.workspace_path = str(workspace)
             mock_settings.enable_sandbox = True
@@ -173,7 +173,7 @@ class TestExecuteSubtaskWorktree:
         with (
             patch("squadx_client.orchestrator.nodes.settings") as mock_settings,
             patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent),
-            patch("squadx_client.orchestrator.nodes.create_agent_sandbox", return_value=mock_sandbox),
+            patch("squadx_client.orchestrator.nodes.create_sandbox_session", return_value=mock_sandbox),
         ):
             mock_settings.workspace_path = str(temp_workspace)
             mock_settings.enable_sandbox = True

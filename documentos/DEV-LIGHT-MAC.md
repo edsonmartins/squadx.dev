@@ -2,7 +2,7 @@
 
 **Modo:** client daemon no Mac aponta para o **painel SaaS** (ou API local opcional).  
 **Sandbox hoje:** Docker via **Colima** (não exige Docker Desktop).  
-**Meta futura:** `SQUADX_SANDBOX_BACKEND=process` sem Docker (#71).
+**Opcional sem Docker:** `SQUADX_SANDBOX_BACKEND=process` (Seatbelt). Ver [PROCESS-SANDBOX.md](./PROCESS-SANDBOX.md).
 
 ## O que este modo *não* instala
 

@@ -109,8 +109,10 @@ class Settings(BaseSettings):
 
     # Sandbox Backend (ADR-0009) — which isolator: docker | process | firecracker | remote.
     # Distinct from sandbox_runtime (docker|gvisor|firecracker *under* the Docker backend).
-    # Default docker; process/firecracker/remote are not selectable until later phases.
+    # Default docker. process = bubblewrap/Seatbelt (Dev LIGHT; no Live View / External CLI).
     sandbox_backend: str = Field(default="docker", alias="SQUADX_SANDBOX_BACKEND")
+    # PROCESS network: allow (host net, default) | deny (bwrap --unshare-net on Linux).
+    process_network: str = Field(default="allow", alias="SQUADX_PROCESS_NETWORK")
 
     # Sandbox Runtime Configuration
     # Which container runtime to use: docker, gvisor, firecracker

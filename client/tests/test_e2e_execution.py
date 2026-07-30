@@ -141,7 +141,7 @@ class TestSubtaskExecution:
         })
 
         with patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent), \
-             patch("squadx_client.orchestrator.nodes.create_agent_sandbox") as MockSandbox, \
+             patch("squadx_client.orchestrator.nodes.create_sandbox_session") as MockSandbox, \
              patch.object(sample_state, "task_id", 123):
 
             # Configure mock sandbox
@@ -317,7 +317,7 @@ class TestEndToEndFlow:
 
         with patch("squadx_client.orchestrator.nodes.get_llm", return_value=mock_llm), \
              patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent), \
-             patch("squadx_client.orchestrator.nodes.create_agent_sandbox", return_value=mock_sandbox), \
+             patch("squadx_client.orchestrator.nodes.create_sandbox_session", return_value=mock_sandbox), \
              patch("squadx_client.orchestrator.nodes.GitManager", return_value=mock_git_manager), \
              patch("squadx_client.orchestrator.nodes.settings") as mock_settings:
 
@@ -397,7 +397,7 @@ class TestSandboxExecution:
         })
 
         with patch("squadx_client.orchestrator.nodes.create_agent", return_value=mock_agent), \
-             patch("squadx_client.orchestrator.nodes.create_agent_sandbox", return_value=mock_sandbox), \
+             patch("squadx_client.orchestrator.nodes.create_sandbox_session", return_value=mock_sandbox), \
              patch("squadx_client.orchestrator.nodes.settings") as mock_settings:
 
             mock_settings.workspace_path = "/tmp/test"

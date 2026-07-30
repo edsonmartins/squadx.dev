@@ -10,7 +10,6 @@ from squadx_client.sandbox import (
     SandboxBackendKind,
     SandboxHandle,
     SandboxLifecycleStatus,
-    SandboxNotSupportedError,
     features_for,
     get_sandbox_backend,
     get_sandbox_backend_kind,
@@ -49,11 +48,12 @@ def test_features_docker_implemented() -> None:
     assert feats.external_cli is True
 
 
-def test_features_process_not_implemented() -> None:
+def test_features_process_implemented_no_live() -> None:
     feats = features_for(SandboxBackendKind.PROCESS)
-    assert feats.implemented is False
+    assert feats.implemented is True
     assert feats.live_view is False
     assert feats.egress_sidecar is False
+    assert feats.external_cli is False
 
 
 def test_get_sandbox_backend_returns_docker_backend() -> None:
@@ -83,20 +83,20 @@ def test_create_agent_sandbox_builds_agent_sandbox() -> None:
     assert sb.workspace_path == "/tmp/ws"
 
 
-def test_get_sandbox_backend_process_not_supported(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "squadx_client.sandbox.factory.settings.sandbox_backend",
-        "process",
-        raising=False,
-    )
-    # settings is a pydantic object — patch the attribute used by get_sandbox_backend_kind
+def test_get_sandbox_backend_process_returns_process_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "squadx_client.config.settings.sandbox_backend",
         "process",
     )
-    with pytest.raises(SandboxNotSupportedError, match="process"):
-        get_sandbox_backend()
+    monkeypatch.setenv("SQUADX_PROCESS_UNSAFE", "1")
+    from squadx_client.sandbox.process_backend import ProcessSandboxBackend
 
+    backend = get_sandbox_backend()
+    assert isinstance(backend, ProcessSandboxBackend)
+    assert backend.kind is SandboxBackendKind.PROCESS
+    assert backend.supports_live_view() is False
 
 def test_sandbox_backend_is_runtime_checkable_protocol() -> None:
     """A minimal duck type satisfies the Protocol for structural typing tests."""

@@ -300,6 +300,11 @@ Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
 - [ ] Docs de install por OS e por backend.
 - [ ] Testes de arquitetura: default continua DOCKER; PROCESS não quebra CI sem bwrap.
 
+## Plano de implementação
+
+Ver **[documentos/PLANO-ADR-0009-SANDBOX-E-INSTALADORES.md](../../documentos/PLANO-ADR-0009-SANDBOX-E-INSTALADORES.md)**
+(fases 0–6, instaladores VPS/Mac, extract `SandboxBackend`, PROCESS, enterprise).
+
 ## Referências
 
 ### Internas

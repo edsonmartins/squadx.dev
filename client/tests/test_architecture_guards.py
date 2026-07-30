@@ -215,12 +215,33 @@ class TestDockerSdkIsolation:
         )
 
     def test_production_call_sites_use_sandbox_factory(self):
-        """Daemon and orchestrator must not construct AgentSandbox by name."""
-        nodes = (_PACKAGE / "orchestrator" / "nodes.py").read_text(encoding="utf-8")
-        assert "create_sandbox_session" in nodes
-        assert not re.search(r"\bAgentSandbox\s*\(", nodes)
+        """Daemon and orchestrator must use the session factory, not AgentSandbox()."""
+        for rel in ("orchestrator/nodes.py", "daemon.py"):
+            text = (_PACKAGE / rel).read_text(encoding="utf-8")
+            assert "create_sandbox_session" in text, f"{rel} should call create_sandbox_session"
+            assert not re.search(r"\bAgentSandbox\s*\(", text), (
+                f"{rel} must not construct AgentSandbox(...) directly"
+            )
 
-        daemon = (_PACKAGE / "daemon.py").read_text(encoding="utf-8")
-        # External CLI stays on create_agent_sandbox (Docker-only)
-        assert "create_agent_sandbox" in daemon
-        assert not re.search(r"\bAgentSandbox\s*\(", daemon)
+    def test_agent_sandbox_construction_is_contained(self):
+        """Production packages outside docker/sandbox + docker_backend must not build AgentSandbox."""
+        # Entire docker/ package may reference AgentSandbox; factory surface is docker_backend.
+        allowed_prefixes = (
+            "docker/",
+            "sandbox/docker_backend.py",
+            "sandbox/docker_session.py",
+        )
+        offenders: list[str] = []
+        for path in _PACKAGE.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            rel = str(path.relative_to(_PACKAGE)).replace("\\", "/")
+            if any(rel == p or rel.startswith(p) for p in allowed_prefixes):
+                continue
+            text = path.read_text(encoding="utf-8")
+            if re.search(r"\bAgentSandbox\s*\(", text):
+                offenders.append(rel)
+        assert not offenders, (
+            "AgentSandbox(...) outside sanctioned modules: "
+            f"{offenders}. Use create_sandbox_session() / DockerSandboxBackend."
+        )

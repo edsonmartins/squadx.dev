@@ -26,24 +26,30 @@
 
 ## For Developers
 
-### Install SquadX Client
+### Install SquadX Client (Dev LIGHT — Mac)
+
+Supported path today (monorepo checkout, ADR-0009):
 
 ```bash
-# macOS
-brew install squadx-client
+./scripts/install-mac-client.sh
+source ~/.squadx/env.sh
+squadx-client doctor
+squadx-client start -f
+```
 
-# Windows
-winget install SquadX.Client
+Details: [DEV-LIGHT-MAC.md](./DEV-LIGHT-MAC.md). Homebrew formula is placeholder until a release tag ships.
 
-# Linux
-curl -fsSL https://squadx.dev/install.sh | sh
+### Team DOCKER (Linux VPS)
+
+```bash
+./scripts/install-vps.sh --pull-images
+# client/deploy/README.md
 ```
 
 ### Start Client
 ```bash
-squadx-client start
-# Login when prompted
-# Client runs in background
+source ~/.squadx/env.sh   # Mac Dev LIGHT
+squadx-client start -f
 ```
 
 ### Your First Live Session

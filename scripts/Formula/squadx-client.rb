@@ -33,19 +33,16 @@ class SquadxClient < Formula
 
   def caveats
     <<~EOS
-      SquadX Client has been installed!
+      PLACEHOLDER formula (sha256/URL not bound to a release tag).
 
-      Before using, configure your API keys:
-        export OPENAI_API_KEY=sk-...
-        # or
-        export ANTHROPIC_API_KEY=sk-ant-...
+      Supported Dev LIGHT install on macOS (ADR-0009):
+        ./scripts/install-mac-client.sh
+        source ~/.squadx/env.sh && squadx-client doctor
 
-      Docker is required for agent sandboxing:
-        brew install --cask docker
+      See documentos/DEV-LIGHT-MAC.md
 
-      Get started:
-        squadx-client --help
-        https://docs.squadx.dev
+      Docker via Colima (preferred) or Docker Desktop is required until
+      SQUADX_SANDBOX_BACKEND=process ships.
     EOS
   end
 

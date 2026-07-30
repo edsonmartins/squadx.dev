@@ -72,6 +72,33 @@ def test_llm_keys_missing(mock_settings):
 @patch("squadx_client.cli.doctor.check_api")
 @patch("squadx_client.cli.doctor.check_images")
 @patch("squadx_client.cli.doctor.check_docker")
+@patch("squadx_client.cli.doctor.check_colima")
+@patch("squadx_client.cli.doctor.check_sandbox_backend")
 def test_run_doctor_invokes_checks(*_mocks):
     report = run_doctor()
     assert isinstance(report, DoctorReport)
+
+
+@patch("squadx_client.cli.doctor.os.uname")
+@patch("squadx_client.cli.doctor.shutil.which")
+@patch("squadx_client.cli.doctor._run")
+def test_check_colima_running_on_darwin(mock_run, mock_which, mock_uname):
+    from squadx_client.cli.doctor import check_colima
+
+    mock_uname.return_value = MagicMock(sysname="Darwin")
+    mock_which.return_value = "/opt/homebrew/bin/colima"
+    mock_run.return_value = (0, "time=\"...\" msg=\"colima is running\"\nRunning")
+    r = DoctorReport()
+    check_colima(r)
+    assert r.checks[0].name == "docker.colima"
+    assert r.checks[0].status == CheckStatus.OK
+
+
+@patch("squadx_client.cli.doctor.os.uname")
+def test_check_colima_skips_on_linux(mock_uname):
+    from squadx_client.cli.doctor import check_colima
+
+    mock_uname.return_value = MagicMock(sysname="Linux")
+    r = DoctorReport()
+    check_colima(r)
+    assert r.checks == []

@@ -169,9 +169,11 @@ cd frontend
 pnpm install && pnpm dev
 
 # Client
-cd client
-pip install -e ".[dev]"
-squadx-client start
+# Dev LIGHT (Mac): Colima + client (ADR-0009)
+./scripts/install-mac-client.sh
+source ~/.squadx/env.sh && squadx-client doctor && squadx-client start -f
+# or manual:
+cd client && pip install -e ".[dev]" && squadx-client start
 ```
 
 ### Build da Imagem do Agent

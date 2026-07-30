@@ -1,10 +1,13 @@
-"""Agent sandbox execution environment."""
+"""Agent sandbox execution environment (Docker).
+
+Types: ``sandbox_types`` · egress: ``sandbox_egress`` · exec: ``sandbox_exec``.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from squadx_client.config import settings
@@ -13,39 +16,18 @@ from .file_ops import SandboxFileOps
 from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
 from .manager import ContainerConfig, DockerManager, docker_manager
 from .metrics import ContainerMetrics, ContainerMetricsCollector
-from .network_policy import (
-    EgressSidecarConfig,
-    NetworkPolicy,
-    generate_sidecar_setup_script,
-    get_predefined_policy,
-)
+from .network_policy import NetworkPolicy, get_predefined_policy
+from .sandbox_egress import apply_sidecar_policy, teardown_sidecar
+from .sandbox_exec import exec_command, exec_command_streaming
+from .sandbox_types import SandboxResult, SandboxStatus
+
+# Re-export for existing ``from ...sandbox import SandboxResult, SandboxStatus``
+__all__ = ["AgentSandbox", "SandboxResult", "SandboxStatus"]
 
 if TYPE_CHECKING:
     from .pool import PooledContainer
 
 logger = logging.getLogger(__name__)
-
-
-class SandboxStatus(str, Enum):
-    """Sandbox status."""
-
-    CREATED = "created"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-
-
-@dataclass
-class SandboxResult:
-    """Result of a sandbox execution."""
-
-    success: bool
-    exit_code: int
-    output: str
-    error: str | None = None
-    duration_seconds: float = 0.0
 
 
 class AgentSandbox:
@@ -335,12 +317,7 @@ class AgentSandbox:
             return False
 
     async def _apply_pooled_policy(self, pooled) -> bool:
-        """Pre-start hook for a pooled agent+sidecar pair.
-
-        Runs while the agent is still `created`, so a rejection here means the agent
-        never executed a single instruction with the wrong policy. The generated script
-        flushes before applying, which is what makes a recycled sidecar safe to reuse.
-        """
+        """Pre-start hook for a pooled agent+sidecar pair (RFC-0006)."""
         self.sidecar_id = pooled.sidecar_id
         if not self.sidecar_id:
             logger.error(
@@ -351,38 +328,26 @@ class AgentSandbox:
         return await self._apply_sidecar_policy()
 
     async def _apply_sidecar_policy(self) -> bool:
-        """Apply the egress policy on the sidecar. Returns False only when it could not
-        be applied AND fail-open is off (caller then aborts the run)."""
-        # The sidecar runs the DNS-proxy topology (RFC-0006 §3 layer 2), not the legacy
-        # one-shot `dig` allowlist: only names on the allowlist resolve at all, and the
-        # addresses they resolve to are pinned as they are handed out.
-        config = EgressSidecarConfig(
-            image=getattr(settings, "egress_sidecar_image", "squadx/egress-proxy:latest"),
+        assert self.sidecar_id is not None
+        # Pass settings through this module so tests that patch
+        # ``squadx_client.docker.sandbox.settings`` still control fail-open / image.
+        return await apply_sidecar_policy(
+            manager=self.manager,
+            sidecar_id=self.sidecar_id,
             policy=self._network_policy,
+            task_id=self.task_id,
+            egress_image=getattr(
+                settings, "egress_sidecar_image", "squadx/egress-proxy:latest"
+            ),
+            fail_open=bool(getattr(settings, "egress_fail_open", False)),
         )
-        script = generate_sidecar_setup_script(config)
-        assert self.sidecar_id is not None  # only called on the sidecar path
-        ok, log = await self.manager.apply_network_setup(self.sidecar_id, script)
-        if ok:
-            return True
-        if getattr(settings, "egress_fail_open", False):
-            logger.warning(
-                f"egress_policy_apply_failed_fail_open task={self.task_id} log={log[:500]}"
-            )
-            return True
-        logger.error(
-            f"egress_policy_apply_failed_fail_closed task={self.task_id} log={log[:500]}"
-        )
-        return False
 
     async def _teardown_sidecar(self) -> None:
-        """Best-effort removal of the egress sidecar; never raises."""
-        if not self.sidecar_id:
-            return
-        try:
-            await self.manager.remove_container(self.sidecar_id, force=True)
-        except Exception as e:  # noqa: BLE001 - best effort
-            logger.warning(f"egress_sidecar_teardown_failed task={self.task_id} error={e}")
+        await teardown_sidecar(
+            manager=self.manager,
+            sidecar_id=self.sidecar_id,
+            task_id=self.task_id,
+        )
         self.sidecar_id = None
 
     async def stop(self, timeout: int = 10) -> bool:
@@ -461,68 +426,16 @@ class AgentSandbox:
         timeout: float = 300,
     ) -> SandboxResult:
         """Execute a command in the sandbox."""
-        if self.status != SandboxStatus.RUNNING:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="",
-                error=f"Sandbox not running (status: {self.status})",
-            )
-
-        if not self.container_id:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="",
-                error="No container ID",
-            )
-
-        import time
-        start_time = time.time()
-
-        try:
-            exit_code, output = await asyncio.wait_for(
-                self.manager.exec_command(
-                    self.container_id,
-                    command,
-                    workdir=workdir,
-                    environment=self._exec_env or None,
-                ),
-                timeout=timeout,
-            )
-
-            duration = time.time() - start_time
-
-            # Notify output callback
-            if self._output_callback and output:
-                try:
-                    self._output_callback(output)
-                except Exception as e:
-                    logger.error(f"Output callback error: {e}")
-
-            return SandboxResult(
-                success=exit_code == 0,
-                exit_code=exit_code,
-                output=output,
-                duration_seconds=duration,
-            )
-
-        except TimeoutError:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="",
-                error=f"Command timed out after {timeout}s",
-                duration_seconds=timeout,
-            )
-        except Exception as e:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="",
-                error=str(e),
-                duration_seconds=time.time() - start_time,
-            )
+        return await exec_command(
+            manager=self.manager,
+            container_id=self.container_id,
+            status=self.status,
+            command=command,
+            workdir=workdir,
+            timeout=timeout,
+            exec_env=self._exec_env or None,
+            on_output=self._output_callback,
+        )
 
     async def execute_streaming(
         self,
@@ -531,68 +444,16 @@ class AgentSandbox:
         workdir: str = "/workspace",
         timeout: float = 1800,
     ) -> SandboxResult:
-        """Execute a (potentially long-running) command, streaming its output.
-
-        ``on_output`` is called on the event loop with each text chunk as it
-        arrives, suitable for forwarding live progress. The full output is also
-        buffered and returned in the result.
-        """
-        if self.status != SandboxStatus.RUNNING or not self.container_id:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="",
-                error=f"Sandbox not running (status: {self.status})",
-            )
-
-        import time
-        start_time = time.time()
-        chunks: list[str] = []
-        exit_code = 0
-        error: str | None = None
-
-        # Bind to a local so the narrowing holds inside the nested closure below.
-        container_id = self.container_id
-        assert container_id is not None  # guarded by the status check above
-
-        async def _run() -> None:
-            nonlocal exit_code, error
-            async for kind, payload in self.manager.exec_command_stream(
-                container_id,
-                command,
-                workdir=workdir,
-                environment=self._exec_env or None,
-            ):
-                if kind in ("stdout", "stderr"):
-                    chunks.append(payload)
-                    if on_output:
-                        try:
-                            on_output(payload)
-                        except Exception as cb_err:  # noqa: BLE001
-                            logger.error(f"Streaming output callback error: {cb_err}")
-                elif kind == "exit":
-                    exit_code = payload
-                elif kind == "error":
-                    error = payload
-                    exit_code = -1
-
-        try:
-            await asyncio.wait_for(_run(), timeout=timeout)
-        except TimeoutError:
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                output="".join(chunks),
-                error=f"Command timed out after {timeout}s",
-                duration_seconds=timeout,
-            )
-
-        return SandboxResult(
-            success=exit_code == 0 and error is None,
-            exit_code=exit_code,
-            output="".join(chunks),
-            error=error,
-            duration_seconds=time.time() - start_time,
+        """Execute a command, streaming output via ``on_output``."""
+        return await exec_command_streaming(
+            manager=self.manager,
+            container_id=self.container_id,
+            status=self.status,
+            command=command,
+            workdir=workdir,
+            timeout=timeout,
+            exec_env=self._exec_env or None,
+            on_output=on_output,
         )
 
     async def write_file(self, path: str, content: str) -> bool:

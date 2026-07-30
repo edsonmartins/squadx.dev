@@ -174,19 +174,15 @@ def create_agent_sandbox(
     enable_live_streaming: bool = True,
     ttl_seconds: int | None = None,
 ) -> SandboxSession:
-    """Docker-only session (External CLI / Live View path).
+    """Deprecated alias: prefer ``create_sandbox_session`` + ``features_for().external_cli``.
 
-    Raises if ``features_for().external_cli`` is false for the configured backend.
+    Still enforces Docker/External-CLI capability for callers that have not migrated.
     """
     feats = features_for()
     if not feats.external_cli:
         raise SandboxNotSupportedError(
             f"backend {feats.kind.value!r} does not support External CLI / Docker-only "
             f"sessions ({feats.notes}). Set SQUADX_SANDBOX_BACKEND=docker."
-        )
-    if feats.kind is not SandboxBackendKind.DOCKER:
-        raise SandboxNotSupportedError(
-            f"create_agent_sandbox requires docker; got {feats.kind.value!r}"
         )
     return create_sandbox_session(
         task_id=task_id,

@@ -370,7 +370,7 @@ class SquadXDaemon:
     ) -> dict[str, Any]:
         """Drive an external coding CLI (Claude Code/Codex/Gemini) in the sandbox."""
         from squadx_client.agents.factory import create_agent
-        from squadx_client.sandbox import create_agent_sandbox, features_for
+        from squadx_client.sandbox import create_sandbox_session, features_for
 
         title = task_data.get("title") or f"Task {task_id}"
         description = task_data.get("description") or title
@@ -409,7 +409,7 @@ class SquadXDaemon:
 
         network_policy = policy_name_from_backend(task_data.get("sandbox_egress_policy"))
 
-        sandbox = create_agent_sandbox(
+        sandbox = create_sandbox_session(
             task_id=task_id,
             agent_type="external_cli",
             workspace_path=workspace_path,

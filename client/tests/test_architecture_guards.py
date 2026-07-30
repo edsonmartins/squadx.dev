@@ -47,6 +47,7 @@ _SECURITY_SETTINGS = {
     "block_cloud_metadata",
     "cost_budget_usd",
     "sandbox_backend",
+    "process_network",
     "sandbox_runtime",
     "enable_sandbox",
 }
@@ -213,12 +214,13 @@ class TestDockerSdkIsolation:
             f"{offenders}. Route through DockerManager / DockerSandboxBackend."
         )
 
-    def test_production_call_sites_use_create_agent_sandbox(self):
+    def test_production_call_sites_use_sandbox_factory(self):
         """Daemon and orchestrator must not construct AgentSandbox by name."""
-        for rel in ("daemon.py", "orchestrator/nodes.py"):
-            text = (_PACKAGE / rel).read_text(encoding="utf-8")
-            assert "create_agent_sandbox" in text, f"{rel} should call create_agent_sandbox"
-            assert not re.search(
-                r"\bAgentSandbox\s*\(",
-                text,
-            ), f"{rel} still constructs AgentSandbox(...) directly"
+        nodes = (_PACKAGE / "orchestrator" / "nodes.py").read_text(encoding="utf-8")
+        assert "create_sandbox_session" in nodes
+        assert not re.search(r"\bAgentSandbox\s*\(", nodes)
+
+        daemon = (_PACKAGE / "daemon.py").read_text(encoding="utf-8")
+        # External CLI stays on create_agent_sandbox (Docker-only)
+        assert "create_agent_sandbox" in daemon
+        assert not re.search(r"\bAgentSandbox\s*\(", daemon)

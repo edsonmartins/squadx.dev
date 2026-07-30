@@ -370,12 +370,24 @@ class SquadXDaemon:
     ) -> dict[str, Any]:
         """Drive an external coding CLI (Claude Code/Codex/Gemini) in the sandbox."""
         from squadx_client.agents.factory import create_agent
-        from squadx_client.sandbox import create_agent_sandbox
+        from squadx_client.sandbox import (
+            SandboxBackendKind,
+            create_agent_sandbox,
+            get_sandbox_backend_kind,
+        )
 
         title = task_data.get("title") or f"Task {task_id}"
         description = task_data.get("description") or title
         cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
         workspace_path = task_data.get("project_path") or settings.workspace_path
+
+        # External CLI is Docker-only (ADR-0009 Phase 4).
+        if get_sandbox_backend_kind() is not SandboxBackendKind.DOCKER:
+            raise RuntimeError(
+                "External CLI requires SQUADX_SANDBOX_BACKEND=docker "
+                f"(configured={get_sandbox_backend_kind().value!r}). "
+                "PROCESS has no image toolchain for Claude Code/Codex/Gemini."
+            )
 
         # Inject provider API keys for the CLI (BYO key). Scrub defensively so only these
         # explicitly-allowed secrets (and safe vars) ever reach it (ADR-0007). These go in

@@ -25,7 +25,7 @@ from squadx_client.orchestrator.state import (
     SubTask,
     TaskPlan,
 )
-from squadx_client.sandbox import create_agent_sandbox
+from squadx_client.sandbox import create_sandbox_session
 
 logger = structlog.get_logger()
 
@@ -415,8 +415,8 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 (state.task or {}).get("sandbox_egress_policy")
             )
 
-            # Create sandbox for this subtask (ADR-0009: via DockerSandboxBackend)
-            sandbox = create_agent_sandbox(
+            # Create sandbox for this subtask (ADR-0009: docker or process backend)
+            sandbox = create_sandbox_session(
                 task_id=state.task_id,
                 agent_type=subtask.agent_type,
                 workspace_path=subtask_work_path,

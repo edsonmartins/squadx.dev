@@ -1,12 +1,9 @@
-"""Resolve configured sandbox backend kind and feature matrix (ADR-0009).
-
-Phase 2: ``get_sandbox_backend()`` returns ``DockerSandboxBackend`` for the
-default docker kind. Non-docker kinds raise until later phases.
-"""
+"""Resolve configured sandbox backend kind and feature matrix (ADR-0009)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from squadx_client.config import settings
 from squadx_client.sandbox.errors import SandboxNotSupportedError
@@ -53,8 +50,8 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         live_view=False,
         egress_sidecar=False,
         external_cli=False,
-        implemented=False,
-        notes="Planned Phase 4 (bubblewrap/Seatbelt); not selectable yet",
+        implemented=True,
+        notes="Dev LIGHT: bubblewrap (Linux) / Seatbelt (macOS); no Live View / External CLI",
     ),
     SandboxBackendKind.FIRECRACKER: BackendFeatures(
         kind=SandboxBackendKind.FIRECRACKER,
@@ -101,11 +98,7 @@ def features_for(kind: SandboxBackendKind | None = None) -> BackendFeatures:
 
 
 def get_sandbox_backend() -> SandboxBackend:
-    """Return a live ``SandboxBackend`` for the configured kind.
-
-    Default: ``DockerSandboxBackend``. Other kinds raise
-    ``SandboxNotSupportedError`` until implemented.
-    """
+    """Return a live ``SandboxBackend`` for the configured kind."""
     kind = get_sandbox_backend_kind()
     feats = features_for(kind)
     if not feats.implemented:
@@ -117,6 +110,10 @@ def get_sandbox_backend() -> SandboxBackend:
         from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
         return DockerSandboxBackend()
+    if kind is SandboxBackendKind.PROCESS:
+        from squadx_client.sandbox.process_backend import ProcessSandboxBackend
+
+        return ProcessSandboxBackend()
     raise SandboxNotSupportedError(
         f"sandbox backend {kind.value!r} marked implemented but has no factory branch"
     )
@@ -131,19 +128,21 @@ def create_agent_sandbox(
     enable_live_streaming: bool = True,
     ttl_seconds: int | None = None,
 ):
-    """Create a Docker ``AgentSandbox`` via the configured backend.
+    """Create a Docker ``AgentSandbox`` only.
 
-    Call sites that need the concrete Docker API (tools, External CLI, live_join_code)
-    should use this instead of importing ``AgentSandbox`` directly. Non-docker
-    backends raise ``SandboxNotSupportedError``.
+    Prefer ``create_sandbox_session`` when PROCESS may be selected.
     """
-    backend = get_sandbox_backend()
+    kind = get_sandbox_backend_kind()
+    if kind is not SandboxBackendKind.DOCKER:
+        raise SandboxNotSupportedError(
+            f"create_agent_sandbox requires docker backend; got {kind.value!r}. "
+            f"External CLI and Live View need SQUADX_SANDBOX_BACKEND=docker. "
+            f"For native agents use create_sandbox_session() with process."
+        )
     from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
-    if not isinstance(backend, DockerSandboxBackend):
-        raise SandboxNotSupportedError(
-            f"create_agent_sandbox requires docker backend; got {backend.kind.value!r}"
-        )
+    backend = get_sandbox_backend()
+    assert isinstance(backend, DockerSandboxBackend)
     return backend.create_session(
         task_id=task_id,
         agent_type=agent_type,
@@ -151,4 +150,47 @@ def create_agent_sandbox(
         network_policy=network_policy,
         enable_live_streaming=enable_live_streaming,
         ttl_seconds=ttl_seconds,
+    )
+
+
+def create_sandbox_session(
+    *,
+    task_id: int,
+    agent_type: str,
+    workspace_path: str,
+    network_policy: str | None = None,
+    enable_live_streaming: bool = True,
+    ttl_seconds: int | None = None,
+) -> Any:
+    """Create a sandbox session for the configured backend.
+
+    Returns ``AgentSandbox`` (docker) or ``ProcessSession`` (process). Both expose
+    ``start`` / ``execute`` / ``write_file`` / ``read_file`` / ``cleanup`` used by
+    LangGraph tools. Live View fields are always ``None`` on process.
+    """
+    kind = get_sandbox_backend_kind()
+    if kind is SandboxBackendKind.DOCKER:
+        return create_agent_sandbox(
+            task_id=task_id,
+            agent_type=agent_type,
+            workspace_path=workspace_path,
+            network_policy=network_policy,
+            enable_live_streaming=enable_live_streaming,
+            ttl_seconds=ttl_seconds,
+        )
+    if kind is SandboxBackendKind.PROCESS:
+        from squadx_client.sandbox.process_backend import ProcessSandboxBackend
+
+        backend = get_sandbox_backend()
+        assert isinstance(backend, ProcessSandboxBackend)
+        return backend.create_session(
+            task_id=task_id,
+            agent_type=agent_type,
+            workspace_path=workspace_path,
+            network_policy=network_policy,
+            enable_live_streaming=enable_live_streaming,
+            ttl_seconds=ttl_seconds,
+        )
+    raise SandboxNotSupportedError(
+        f"create_sandbox_session: backend {kind.value!r} not available"
     )

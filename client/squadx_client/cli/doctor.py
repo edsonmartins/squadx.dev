@@ -62,7 +62,12 @@ def _run(cmd: list[str], timeout: float = 15.0) -> tuple[int, str]:
 
 def check_sandbox_backend(report: DoctorReport) -> None:
     """Report configured ADR-0009 backend and feature matrix row."""
-    from squadx_client.sandbox import features_for, get_sandbox_backend_kind, parse_backend_kind
+    from squadx_client.sandbox import (
+        SandboxBackendKind,
+        features_for,
+        get_sandbox_backend_kind,
+        parse_backend_kind,
+    )
 
     raw = getattr(settings, "sandbox_backend", "docker")
     try:
@@ -93,11 +98,41 @@ def check_sandbox_backend(report: DoctorReport) -> None:
         )
         return
 
-    report.add(
-        "sandbox.backend",
-        CheckStatus.OK,
-        f"{detail} (DockerSandboxBackend → AgentSandbox)",
+    impl = (
+        "DockerSandboxBackend → AgentSandbox"
+        if configured is SandboxBackendKind.DOCKER
+        else "ProcessSandboxBackend (bwrap/Seatbelt)"
+        if configured is SandboxBackendKind.PROCESS
+        else feats.notes
     )
+    report.add("sandbox.backend", CheckStatus.OK, f"{detail} ({impl})")
+
+    if configured is SandboxBackendKind.PROCESS:
+        check_process_isolator(report)
+
+
+def check_process_isolator(report: DoctorReport) -> None:
+    """Verify bubblewrap / Seatbelt availability for PROCESS backend."""
+    from squadx_client.sandbox.errors import SandboxNotSupportedError
+    from squadx_client.sandbox.process_backend import detect_process_isolator
+
+    try:
+        isolator = detect_process_isolator()
+        net = getattr(settings, "process_network", "allow")
+        report.add(
+            "sandbox.process_isolator",
+            CheckStatus.OK,
+            f"{isolator.value} | SQUADX_PROCESS_NETWORK={net} | live_view=unsupported",
+        )
+        if str(net).lower() not in ("deny", "none", "off", "unshare"):
+            report.add(
+                "sandbox.process_network",
+                CheckStatus.WARN,
+                "host network shared (no Docker egress sidecar) — set "
+                "SQUADX_PROCESS_NETWORK=deny for bwrap --unshare-net",
+            )
+    except SandboxNotSupportedError as e:
+        report.add("sandbox.process_isolator", CheckStatus.FAIL, str(e))
 
 
 def check_colima(report: DoctorReport) -> None:
@@ -325,13 +360,22 @@ def run_doctor(
 
     check_sandbox_backend(report)
 
-    if not skip_docker:
+    # Docker checks only when using the Docker backend (or explicitly not skipped).
+    from squadx_client.sandbox import SandboxBackendKind, get_sandbox_backend_kind
+
+    using_process = get_sandbox_backend_kind() is SandboxBackendKind.PROCESS
+    if skip_docker or using_process:
+        if using_process and not skip_docker:
+            report.add("docker", CheckStatus.SKIP, "SQUADX_SANDBOX_BACKEND=process")
+        else:
+            report.add("docker", CheckStatus.SKIP, "skipped")
+    else:
         check_colima(report)
         check_docker(report)
-        if not any(c.name == "docker.daemon" and c.status == CheckStatus.FAIL for c in report.checks):
+        if not any(
+            c.name == "docker.daemon" and c.status == CheckStatus.FAIL for c in report.checks
+        ):
             check_images(report)
-    else:
-        report.add("docker", CheckStatus.SKIP, "skipped")
 
     check_token(report)
     check_llm_keys(report)

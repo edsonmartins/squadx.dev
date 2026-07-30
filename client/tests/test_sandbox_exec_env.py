@@ -13,20 +13,21 @@ import pytest
 
 from squadx_client.docker.hardening import SandboxRuntime
 from squadx_client.docker.manager import DockerManager
-from squadx_client.docker.sandbox import AgentSandbox, SandboxStatus
+from squadx_client.docker.sandbox import SandboxStatus
+from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
 SECRETS = {"ANTHROPIC_API_KEY": "sk-ant-secret"}
 
 
 def _running_sandbox(manager, exec_env=None):
-    sandbox = AgentSandbox(
+    session = DockerSandboxBackend(manager=manager).create_session(
         task_id=1,
         agent_type="external_cli",
         workspace_path="/tmp/ws",
-        manager=manager,
         enable_live_streaming=False,
-        runtime=SandboxRuntime.DOCKER,
     )
+    sandbox = session.inner
+    sandbox.runtime = SandboxRuntime.DOCKER
     sandbox.container_id = "agent-1"
     sandbox.status = SandboxStatus.RUNNING
     sandbox._exec_env = dict(exec_env or {})
@@ -85,20 +86,18 @@ async def test_start_routes_exec_env_away_from_container_create():
 
     with patch("squadx_client.docker.sandbox.settings") as s:
         s.egress_sidecar_enabled = False
-        sandbox = AgentSandbox(
+        session = DockerSandboxBackend(manager=manager).create_session(
             task_id=1,
             agent_type="external_cli",
             workspace_path="/tmp/ws",
-            manager=manager,
             enable_live_streaming=False,
-            runtime=SandboxRuntime.DOCKER,
         )
-        await sandbox.start(enable_vnc=False, exec_env=SECRETS)
+        session.inner.runtime = SandboxRuntime.DOCKER
+        await session.start(enable_vnc=False, exec_env=SECRETS)
 
     created_config = manager.create_container.await_args.kwargs["config"]
     assert "ANTHROPIC_API_KEY" not in created_config.environment
-    assert sandbox._exec_env == SECRETS
-
+    assert session.inner._exec_env == SECRETS
 
 @pytest.mark.asyncio
 async def test_manager_exec_command_forwards_environment_to_docker():

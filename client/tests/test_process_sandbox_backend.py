@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from squadx_client.sandbox.errors import SandboxNotSupportedError
 from squadx_client.sandbox.process import (
     ProcessIsolator,
     ProcessSandboxBackend,
@@ -102,12 +101,13 @@ def test_create_sandbox_session_process(tmp_path: Path, monkeypatch: pytest.Monk
     assert isinstance(session, ProcessSession)
 
 
-def test_create_agent_sandbox_rejects_process(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_process_backend_disables_external_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("squadx_client.config.settings.sandbox_backend", "process")
-    from squadx_client.sandbox import create_agent_sandbox
+    from squadx_client.sandbox import features_for
 
-    with pytest.raises(SandboxNotSupportedError, match="external_cli|docker"):
-        create_agent_sandbox(task_id=1, agent_type="x", workspace_path="/tmp")
+    feats = features_for()
+    assert feats.external_cli is False
+    assert feats.kind.value == "process"
 
 
 def test_features_process_implemented() -> None:

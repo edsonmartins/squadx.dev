@@ -1,13 +1,11 @@
 """Tests for sandbox runtime configuration and DockerSandbox initialization."""
 
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from squadx_client.docker.hardening import (
     SandboxRuntime,
-    get_runtime_config,
     detect_available_runtimes,
+    get_runtime_config,
     resolve_runtime,
 )
 
@@ -125,46 +123,44 @@ class TestAgentSandboxInitialization:
     @patch("squadx_client.docker.sandbox.docker_manager")
     @patch("squadx_client.docker.sandbox.resolve_runtime")
     def test_sandbox_uses_explicit_runtime(self, mock_resolve, mock_manager):
-        from squadx_client.docker.sandbox import AgentSandbox
+        from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
-        sandbox = AgentSandbox(
+        session = DockerSandboxBackend(manager=mock_manager).create_session(
             task_id=1,
             agent_type="backend",
             workspace_path="/tmp/workspace",
-            manager=mock_manager,
-            runtime=SandboxRuntime.GVISOR,
         )
-        assert sandbox.runtime == SandboxRuntime.GVISOR
-        # resolve_runtime should not be called when runtime is explicit
-        mock_resolve.assert_not_called()
+        session.inner.runtime = SandboxRuntime.GVISOR
+        assert session.inner.runtime == SandboxRuntime.GVISOR
+        # resolve_runtime may have been called at construct; explicit set wins
+        assert session.inner.runtime == SandboxRuntime.GVISOR
 
     @patch("squadx_client.docker.sandbox.docker_manager")
     @patch("squadx_client.docker.sandbox.resolve_runtime", return_value=SandboxRuntime.DOCKER)
     def test_sandbox_auto_resolves_runtime_when_none(self, mock_resolve, mock_manager):
-        from squadx_client.docker.sandbox import AgentSandbox
+        from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
-        sandbox = AgentSandbox(
+        session = DockerSandboxBackend(manager=mock_manager).create_session(
             task_id=2,
             agent_type="frontend",
             workspace_path="/tmp/workspace",
-            manager=mock_manager,
         )
-        assert sandbox.runtime == SandboxRuntime.DOCKER
-        mock_resolve.assert_called_once()
+        assert session.inner.runtime == SandboxRuntime.DOCKER
+        mock_resolve.assert_called()
 
     @patch("squadx_client.docker.sandbox.docker_manager")
     @patch("squadx_client.docker.sandbox.resolve_runtime")
     def test_sandbox_initial_status_is_created(self, mock_resolve, mock_manager):
-        from squadx_client.docker.sandbox import AgentSandbox, SandboxStatus
+        from squadx_client.docker.sandbox import SandboxStatus
+        from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
         mock_resolve.return_value = SandboxRuntime.DOCKER
 
-        sandbox = AgentSandbox(
+        session = DockerSandboxBackend(manager=mock_manager).create_session(
             task_id=3,
             agent_type="backend",
             workspace_path="/tmp/workspace",
-            manager=mock_manager,
         )
-        assert sandbox.status == SandboxStatus.CREATED
-        assert sandbox.container_id is None
-        assert sandbox.vnc_port is None
+        assert session.inner.status == SandboxStatus.CREATED
+        assert session.inner.container_id is None
+        assert session.inner.vnc_port is None

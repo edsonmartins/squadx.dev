@@ -177,7 +177,7 @@ async def test_live_stream_uses_the_port_published_on_the_sidecar():
             enable_live_streaming=True,
             runtime=SandboxRuntime.DOCKER,
         )
-        with patch("squadx_client.docker.sandbox.asyncio.sleep", new=AsyncMock()):
+        with patch("squadx_client.docker.sandbox_start.asyncio.sleep", new=AsyncMock()):
             started = await sandbox.start(enable_vnc=True)
 
     assert started is True

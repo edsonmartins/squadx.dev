@@ -12,7 +12,6 @@ from squadx_client.sandbox.errors import (
 )
 from squadx_client.sandbox.factory import (
     BackendFeatures,
-    create_agent_sandbox,
     create_sandbox_session,
     features_for,
     get_sandbox_backend,
@@ -41,11 +40,9 @@ __all__ = [
     "SandboxPolicyError",
     "SandboxSession",
     "SandboxStartError",
-    "create_agent_sandbox",
     "create_sandbox_session",
     "features_for",
     "get_sandbox_backend",
     "get_sandbox_backend_kind",
     "parse_backend_kind",
 ]
-

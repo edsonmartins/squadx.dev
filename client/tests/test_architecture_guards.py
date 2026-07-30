@@ -46,6 +46,7 @@ _SECURITY_SETTINGS = {
     "egress_fail_open",
     "block_cloud_metadata",
     "cost_budget_usd",
+    "sandbox_backend",
     "sandbox_runtime",
     "enable_sandbox",
 }

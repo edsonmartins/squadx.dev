@@ -50,8 +50,21 @@ sudo systemctl enable --now squadx-client
 sudo journalctl -u squadx-client -f
 ```
 
-`squadx-client doctor` validates Docker, sandbox images, API health, token, and LLM keys
-before you start the unit.
+`squadx-client doctor` validates Docker, sandbox images, API health, token, LLM keys,
+and the configured `SQUADX_SANDBOX_BACKEND` (default `docker`) before you start the unit.
+
+### Post-install smoke
+
+```bash
+./scripts/smoke-vps.sh              # doctor + env + systemd (if present)
+./scripts/smoke-vps.sh doctor       # doctor only
+```
+
+### Egress proof (Linux)
+
+See **[EGRESS-RUNBOOK.md](./EGRESS-RUNBOOK.md)** (RFC-0006 / ADR-0008): automated
+`SQUADX_DOCKER_IT=1` path via `homolog-client-host.sh test-egress`, or the manual
+sign-off table when IT cannot run on the host.
 
 ## Provision the host (manual)
 

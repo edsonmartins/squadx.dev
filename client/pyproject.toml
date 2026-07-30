@@ -98,6 +98,8 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests (require Docker)",
+    "sandbox_docker: sandbox backend tests that require Docker Engine",
+    "sandbox_process: sandbox backend tests for PROCESS (bubblewrap/Seatbelt)",
 ]
 
 [tool.mypy]

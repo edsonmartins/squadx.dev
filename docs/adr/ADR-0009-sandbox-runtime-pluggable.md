@@ -2,9 +2,9 @@
 
 ## Status
 
-**Proposto** — 2026-07-30.  
-Draft para decisão de produto/engenharia. Não implementa código; registra o mapa de
-alternativas e o impacto no client. Complementa (não substitui):
+**Aceito** — 2026-07-30.  
+Decisão de produto/engenharia: sandbox pluggable + packaging Dev LIGHT / Team DOCKER /
+Enterprise. Complementa (não substitui):
 
 - `documentos/DECISAO-ARQUITETURAL-SANDBOXING.md` (Fase 1 Docker → 2 gVisor → 3 Firecracker)
 - ADR-0007 (governança / sandbox-hardening de *policy*)
@@ -297,6 +297,13 @@ Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
 - [ ] Mesma task nativa roda em `DOCKER` e `PROCESS` (sem Live View no PROCESS).
 - [ ] External CLI mínima (ex. um provider) em PROCESS *ou* documentada como DOCKER-only.
 - [ ] Egress: PROCESS tem allowlist *ou* fail-closed se policy exigir sidecar.
+
+## Changelog
+
+| Data | Mudança |
+|------|---------|
+| 2026-07-30 | Status **Aceito**. Contrato Python em `client/squadx_client/sandbox/` (Protocol + factory + `SQUADX_SANDBOX_BACKEND`); runtime default ainda `AgentSandbox` (Docker). Fase 1: `install-vps.sh` + `doctor`. |
+| 2026-07-30 | Status **Proposto** + packaging SKUs. |
 - [ ] Docs de install por OS e por backend.
 - [ ] Testes de arquitetura: default continua DOCKER; PROCESS não quebra CI sem bwrap.
 

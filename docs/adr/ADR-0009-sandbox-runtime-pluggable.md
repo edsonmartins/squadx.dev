@@ -163,14 +163,134 @@ STOMP). Opcional depois: `sandbox_backend` preferido por squad/org.
 - Default continua Docker até PROCESS ser MVP e testado.
 - Remote sandbox fica como opção de produto (BYO cloud), não core open-source obrigatório.
 
+## Product packaging — variantes de entrega
+
+O produto **não** é “Docker ou K8s”. O produto é:
+
+> **Control plane** (API/UI) + **runtime de agentes** (claim → sandbox → logs/custo → opcional live).
+
+Dois (e depois três) canais de *onde o agente roda* coexistem. O protocolo com o backend
+(STOMP + REST claim/status/logs) é o **mesmo**.
+
+```text
+                 ┌──────────────────────────────┐
+                 │  Control plane (API / UI)    │
+                 │  SaaS SquadX  |  self-host   │
+                 └───────────────┬──────────────┘
+                                 │ STOMP / REST
+          ┌──────────────────────┼──────────────────────┐
+          ▼                                             ▼
+┌─────────────────────┐                     ┌─────────────────────┐
+│  Dev desktop (LIGHT)│                     │  Team / Enterprise  │
+│  Mac mini / laptop  │                     │  VPS / bare metal   │
+│  PROCESS (meta)     │                     │  DOCKER (+ gVisor / │
+│  Colima hoje        │                     │  Firecracker depois)│
+└─────────────────────┘                     └─────────────────────┘
+```
+
+### Matriz de SKUs / modos
+
+| Modo | Quem é o usuário | Onde o **painel** roda | Onde o **agente** roda | Sandbox backend | K8s? |
+|------|------------------|------------------------|------------------------|-----------------|------|
+| **Dev LIGHT** | Dev individual | SaaS (ou backend local opcional) | Mac mini / laptop | `PROCESS` (alvo) · `DOCKER` via Colima (**hoje**) | Não |
+| **Team DOCKER** | Time / PME | SaaS **ou** compose/VPS | **VPS com Docker** (1+ hosts) | `DOCKER` + egress | Não obrigatório |
+| **Enterprise** | Compliance / multi-host | K8s self-host ou SaaS dedicated | N hosts Docker/KVM | `DOCKER` → `GVISOR` → `FIRECRACKER` | Sim (painel) |
+
+### O que cada instalador entrega
+
+#### 1) Instalador **Dev LIGHT** (Mac mini / laptop)
+
+**Objetivo:** “um comando e o client está claimando tasks da API.”
+
+| Entrega | Conteúdo |
+|---------|----------|
+| Dependências | Homebrew path: Python 3.11+, git, **Colima + Docker CLI** (hoje); depois opcional sem Docker se `PROCESS` existir |
+| Pacote | `squadx-client` (venv / brew formula) |
+| Imagens | pull `agent` (+ `:live` se Live View) e `egress-proxy` **ou** skip se backend PROCESS |
+| Config wizard | `SQUADX_API_URL`, token, `OPENROUTER_API_KEY` / OpenAI / Anthropic, `SQUADX_DEFAULT_MODEL` |
+| Serviço | opcional `launchd` (macOS) / user systemd |
+| Doctor | `squadx-client doctor`: Docker/Colima up, imagens, ping API, key LLM presente |
+| **Fora do escopo** | K8s, Postgres local, Java, painel self-host |
+
+**Estado hoje:** viável com script (base: `scripts/install.sh` + Colima); formula Homebrew ainda placeholder. Smoke real no Mac mini (OpenRouter) prova o valor do modo.
+
+**Meta PROCESS:** mesmo instalador, sem passo Colima/Docker, com feature Live View **off** ou degradada.
+
+#### 2) Instalador **Team DOCKER** (VPS Linux)
+
+**Objetivo:** “empresa sobe um VPS, instala Docker + client, aponta para a API (SaaS ou self-host).”
+
+| Entrega | Conteúdo |
+|---------|----------|
+| Dependências | Docker Engine, (opcional) `xt_set` para egress fail-closed |
+| Pacote | `client/deploy`: venv em `/opt/squadx-client`, `squadx-client.service` |
+| Imagens | `make build-sandbox-images` **ou** pull GHCR (`agent`, `agent:live`, `egress-proxy`) |
+| Config | `/etc/squadx/squadx-client.env` (API URL, token, LLM keys, policy) |
+| Runtime | `SQUADX_SANDBOX_BACKEND=docker`, egress on por default |
+| Doctor | daemon active, docker ok, claim de smoke task |
+| **Painel** | **não** embutido: cliente usa SaaS **ou** stack separada (compose/k8s) |
+
+**Estado hoje:** documentação e unit systemd já existem (`client/deploy/`); falta empacotar em `install-vps.sh` one-shot + release de imagens estável.
+
+#### 3) Pacote **Enterprise** (painel + frota)
+
+**Objetivo:** “self-host completo ou SaaS dedicado + N hosts de agente.”
+
+| Entrega | Conteúdo |
+|---------|----------|
+| Painel | Helm / kustomize (`infra/k8s` overlays staging/prod) |
+| Secrets | Sealed Secrets / External Secrets / CI secrets (não `change-me` no git) |
+| Runtime hosts | Mesmo instalador Team DOCKER × N; claim/CAS garante 1 host por task |
+| Upgrade path | gVisor se `runsc`; Firecracker quando KVM + requisito SOC2/multi-tenant |
+| Observability | Prometheus/Grafana/Loki já esboçados em `infra/` |
+
+**Estado hoje:** overlays + CI deploy-staging (bloqueado por secrets/cluster reais); client multi-host já é o modelo mental do deploy.
+
+### Control plane: SaaS vs self-host (ortogonal ao sandbox)
+
+| Painel | Dev LIGHT | Team DOCKER | Enterprise |
+|--------|-----------|-------------|------------|
+| **SaaS SquadX** | Default | Comum | Conta dedicada / VPC |
+| **Self-host compose** | Opcional (dev full stack) | PME sem k8s | Raro |
+| **Self-host k8s** | Não | Opcional | Default |
+
+Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
+
+### Matriz de features por modo
+
+| Feature | Dev LIGHT | Team DOCKER | Enterprise |
+|---------|-----------|-------------|------------|
+| Claim + logs + status | ✅ | ✅ | ✅ |
+| LLM nativo (OpenRouter/OpenAI/…) | ✅ | ✅ | ✅ |
+| External CLI no sandbox | 🟡 Colima/Docker; PROCESS TBD | ✅ | ✅ |
+| Egress allowlist comprovado | 🟡 limitado no macOS | ✅ Linux + xt_set | ✅ |
+| Live View | 🟡 se Docker+`:live`+Supabase | ✅ | ✅ |
+| Multi-host scale-out | ❌ | ✅ (N VPS) | ✅ |
+| gVisor / Firecracker | ❌ | opcional | sob trigger |
+| “Código não sai da empresa” | laptop do dev | VPS + git interno | VPS/KVM + rede privada |
+
+### Ordem de entrega recomendada (instaladores)
+
+1. **Team DOCKER / VPS** — maior ROI: docs + systemd já existem; empacotar `install-vps.sh`.
+2. **Dev LIGHT (Mac)** — Colima path agora; PROCESS quando o backend existir (ADR body acima).
+3. **Enterprise** — endurecer staging/prod k8s (#39) + frota de clients.
+
+### Mensagem comercial (uma linha cada)
+
+- **Dev:** “Instale o client no Mac; o painel é SaaS (ou local se quiser).”
+- **Time:** “Uma VPS com Docker roda seus agentes; o código fica na sua infra.”
+- **Enterprise:** “Painel no seu cluster; agentes em hosts dedicados com isolamento reforçável.”
+
 ## Plano de implementação sugerido (não comprometido)
 
-1. **Doc-only (este ADR)** — alinhamento de stakeholders.
-2. **Extrair interface** `SandboxBackend` sem mudar comportamento (DOCKER only).
-3. **MVP PROCESS** no Linux: bubblewrap + workspace bind + network proxy simples;
-   desliga Live View; `SQUADX_SANDBOX_BACKEND=process`.
-4. **gVisor** como drop-in quando `runsc` presente (já esboçado).
-5. **Firecracker** quando houver host KVM e requisito enterprise.
+1. **Doc-only (este ADR + packaging)** — alinhamento de stakeholders. ✅ em curso
+2. **`install-vps.sh` + doctor** — modo Team DOCKER.
+3. **`install-mac-client.sh` (Colima)** — modo Dev LIGHT com Docker suave.
+4. **Extrair interface** `SandboxBackend` sem mudar comportamento (DOCKER only).
+5. **MVP PROCESS** no Linux (+ Seatbelt macOS depois): workspace bind + network proxy;
+   Live View off; `SQUADX_SANDBOX_BACKEND=process`.
+6. **gVisor** como drop-in quando `runsc` presente (já esboçado).
+7. **Firecracker** quando houver host KVM e requisito enterprise.
 
 ## Critérios de aceite (quando implementar)
 
@@ -201,3 +321,4 @@ STOMP). Opcional depois: `sandbox_backend` preferido por squad/org.
 | Data | Nota |
 |------|------|
 | 2026-07-30 | Proposto (draft pós-pesquisa de alternativas leves a Docker/K8s) |
+| 2026-07-30 | Seção **Product packaging**: Dev LIGHT / Team DOCKER / Enterprise + o que cada instalador entrega |

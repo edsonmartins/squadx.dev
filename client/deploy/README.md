@@ -32,7 +32,28 @@ STOMP and does the sandbox work.
 ./scripts/homolog-client-host.sh test-egress    # SQUADX_DOCKER_IT=1 (Linux/Colima)
 ```
 
-## Provision the host
+## One-shot VPS install (Team DOCKER — ADR-0009)
+
+On a **Linux** host with Docker Engine and a monorepo checkout:
+
+```bash
+# optional: login to GHCR if images are private
+# echo $GHCR_TOKEN | docker login ghcr.io -u USER --password-stdin
+
+./scripts/install-vps.sh --pull-images
+# or build images locally instead of pull:
+# ./scripts/install-vps.sh
+
+sudoedit /etc/squadx/squadx-client.env   # API URL, token, LLM keys
+sudo -u squadx /opt/squadx-client/.venv/bin/squadx-client doctor
+sudo systemctl enable --now squadx-client
+sudo journalctl -u squadx-client -f
+```
+
+`squadx-client doctor` validates Docker, sandbox images, API health, token, and LLM keys
+before you start the unit.
+
+## Provision the host (manual)
 
 1. **Install Docker** (Engine, **Linux** preferred for egress). The egress firewall
    needs an `xt_set`-capable kernel (standard on most distros); without it the

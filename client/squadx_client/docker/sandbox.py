@@ -1,11 +1,11 @@
 """Agent sandbox execution environment (Docker).
 
-Types: ``sandbox_types`` · egress: ``sandbox_egress`` · exec: ``sandbox_exec``.
+Types: ``sandbox_types`` · egress: ``sandbox_egress`` · exec: ``sandbox_exec`` ·
+start: ``sandbox_start``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -13,12 +13,13 @@ from typing import TYPE_CHECKING, Any
 from squadx_client.config import settings
 
 from .file_ops import SandboxFileOps
-from .hardening import SandboxRuntime, get_runtime_config, resolve_runtime
-from .manager import ContainerConfig, DockerManager, docker_manager
+from .hardening import SandboxRuntime, resolve_runtime
+from .manager import DockerManager, docker_manager
 from .metrics import ContainerMetrics, ContainerMetricsCollector
 from .network_policy import NetworkPolicy, get_predefined_policy
 from .sandbox_egress import apply_sidecar_policy, teardown_sidecar
 from .sandbox_exec import exec_command, exec_command_streaming
+from .sandbox_start import start_agent_sandbox
 from .sandbox_types import SandboxResult, SandboxStatus
 
 # Re-export for existing ``from ...sandbox import SandboxResult, SandboxStatus``
@@ -136,186 +137,17 @@ class AgentSandbox:
         environment: dict | None = None,
         exec_env: dict | None = None,
     ) -> bool:
-        """Start the sandbox container.
-
-        ``environment`` is baked into the container at create time — use it only for
-        non-secret, per-container context. ``exec_env`` carries secrets (provider API
-        keys) and is applied per ``execute``/``execute_streaming`` call instead, so it
-        never lands in container metadata and works on pooled containers.
-        """
-        if self.status not in (SandboxStatus.CREATED, SandboxStatus.STOPPED, SandboxStatus.ERROR):
-            logger.warning(f"Cannot start sandbox in status: {self.status}")
-            return False
-
-        self._set_status(SandboxStatus.STARTING)
-        self._exec_env = dict(exec_env or {})
-
-        try:
-            # Ensure Docker connection
-            if not self.manager.client:
-                if not await self.manager.connect():
-                    self._set_status(SandboxStatus.ERROR)
-                    return False
-
-            # Get runtime-specific configuration overrides
-            runtime_kwargs = get_runtime_config(self.runtime)
-            logger.info(
-                f"Starting sandbox for task {self.task_id} with "
-                f"runtime={self.runtime.value}"
-            )
-
-            # Create container config
-            config = ContainerConfig(
-                image=image,
-                memory_limit=memory_limit,
-                cpu_limit=cpu_limit,
-                enable_vnc=enable_vnc,
-                environment=environment or {},
-                volumes={
-                    self.workspace_path: {
-                        "bind": "/workspace",
-                        "mode": "rw",
-                    }
-                },
-                **runtime_kwargs,
-            )
-
-            # Pool fast path: if the manager has a warm pool, get a started
-            # container in sub-second instead of paying the 10-20s cold start.
-            # Falls back to create+start on any failure so the daemon never
-            # depends on the pool being healthy.
-            sidecar_enabled = getattr(settings, "egress_sidecar_enabled", False)
-
-            warm_pool = getattr(self.manager, "warm_pool", None)
-            used_pool = False
-            # The egress sidecar must own the netns at agent-create time. The pool
-            # satisfies that by pre-creating the agent already joined to a sidecar, so
-            # both compose: the policy is applied via the pre-start hook below, while
-            # the agent is still `created` and cannot execute anything (RFC-0006).
-            if warm_pool is not None and warm_pool.is_enabled:
-                try:
-                    pooled = await warm_pool.acquire(
-                        task_id=self.task_id,
-                        agent_type=self.agent_type,
-                        before_start=self._apply_pooled_policy if sidecar_enabled else None,
-                    )
-                    self.container_id = pooled.container_id
-                    self.sidecar_id = pooled.sidecar_id
-                    self._pooled_container = pooled
-                    used_pool = True
-                    logger.info(
-                        f"sandbox_acquired_from_pool task={self.task_id} "
-                        f"container_id={pooled.container_id[:12]} "
-                        f"use_count={pooled.use_count}"
-                    )
-                except Exception as e:  # noqa: BLE001 - cold fallback is below
-                    if sidecar_enabled and not getattr(settings, "egress_fail_open", False):
-                        # Falling back to a cold, unfiltered sandbox would defeat the
-                        # whole point of the policy the pool just refused to apply.
-                        logger.error(
-                            f"warm_pool_acquire_failed_fail_closed task={self.task_id} "
-                            f"error={e}"
-                        )
-                        self._set_status(SandboxStatus.ERROR)
-                        return False
-                    logger.warning(
-                        f"warm_pool_acquire_failed_falling_back task={self.task_id} "
-                        f"error={e}"
-                    )
-
-            if not used_pool:
-                # RFC-0006: bring up the egress sidecar first so the agent can join its
-                # netns. The sidecar publishes the VNC port the agent would expose.
-                if sidecar_enabled:
-                    published = {f"{config.vnc_port}/tcp": None} if enable_vnc else {}
-                    self.sidecar_id = await self.manager.create_egress_sidecar(
-                        task_id=self.task_id,
-                        agent_type=self.agent_type,
-                        published_ports=published,
-                    )
-                    if not self.sidecar_id:
-                        logger.error(
-                            f"egress_sidecar_failed_fail_closed task={self.task_id}"
-                        )
-                        self._set_status(SandboxStatus.ERROR)
-                        return False
-
-                    # Apply the egress policy on the sidecar (it holds NET_ADMIN) BEFORE
-                    # the agent joins the netns, so the agent never runs with open egress.
-                    # FAIL-CLOSED: abort the run if the policy cannot be applied.
-                    if not await self._apply_sidecar_policy():
-                        await self._teardown_sidecar()
-                        self._set_status(SandboxStatus.ERROR)
-                        return False
-
-                # Create and start container
-                self.container_id = await self.manager.create_container(
-                    config=config,
-                    task_id=self.task_id,
-                    agent_type=self.agent_type,
-                    netns_container=self.sidecar_id,
-                )
-
-                if not self.container_id:
-                    self._set_status(SandboxStatus.ERROR)
-                    return False
-
-                if not await self.manager.start_container(self.container_id):
-                    self._set_status(SandboxStatus.ERROR)
-                    return False
-
-            # Without the sidecar there is nowhere to enforce egress: the agent is
-            # cap-drop ALL (no NET_ADMIN, and it cannot be regained via exec) and its
-            # /tmp is noexec, so the in-agent iptables path cannot work by construction
-            # — see egress_guard's module docstring. Say so loudly rather than run a
-            # best-effort apply that always fails and reads like enforcement.
-            if not sidecar_enabled:
-                logger.error(
-                    f"egress_unenforced task={self.task_id} "
-                    f"policy={self._network_policy.default_action.value} — the egress "
-                    f"sidecar is disabled, so the agent has UNRESTRICTED network access "
-                    f"(only host-side cloud-metadata rules apply, where the host supports "
-                    f"them). Set SQUADX_EGRESS_SIDECAR=true. See RFC-0006 / ADR-0008."
-                )
-
-            # Initialize enhanced file operations and metrics collector
-            assert self.container_id is not None  # set by create_container above
-            if self.manager.client:
-                self.file_ops = SandboxFileOps(self.manager.client, self.container_id)
-                self.metrics_collector = ContainerMetricsCollector(self.manager.client)
-
-            # Get VNC port if enabled. With the sidecar the port is published on the
-            # sidecar (the agent has no own network stack), so query it there.
-            if enable_vnc:
-                await asyncio.sleep(2)  # Wait for VNC to be ready
-                vnc_host_container = self.sidecar_id or self.container_id
-                self.vnc_port = await self.manager.get_vnc_port(vnc_host_container)
-                logger.info(f"VNC available on port: {self.vnc_port}")
-
-                # Start live streaming if enabled. The stream is keyed by the agent
-                # container (that is what stop/cleanup tear down), but the port was
-                # resolved above from whichever container actually publishes it —
-                # the sidecar, when it owns the netns. Pass it explicitly rather than
-                # letting the manager re-resolve it against the agent, which has no
-                # published ports under RFC-0006 and would silently yield None.
-                if self.enable_live_streaming and self.vnc_port:
-                    self.live_join_code = await self.manager.start_live_stream(
-                        container_id=self.container_id,
-                        task_id=self.task_id,
-                        vnc_port=self.vnc_port,
-                    )
-                    if self.live_join_code:
-                        logger.info(f"Live streaming available: {self.live_join_code}")
-
-            self._set_status(SandboxStatus.RUNNING)
-            logger.info(f"Sandbox started for task {self.task_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to start sandbox: {e}")
-            self._set_status(SandboxStatus.ERROR)
-            return False
-
+        """Start the sandbox container (pool or cold path; see sandbox_start)."""
+        return await start_agent_sandbox(
+            self,
+            image=image,
+            memory_limit=memory_limit,
+            cpu_limit=cpu_limit,
+            enable_vnc=enable_vnc,
+            environment=environment,
+            exec_env=exec_env,
+            settings=settings,
+        )
     async def _apply_pooled_policy(self, pooled) -> bool:
         """Pre-start hook for a pooled agent+sidecar pair (RFC-0006)."""
         self.sidecar_id = pooled.sidecar_id

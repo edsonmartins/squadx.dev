@@ -88,6 +88,33 @@ def mock_docker_manager():
     return manager
 
 
+def make_docker_session(
+    *,
+    task_id: int = 1,
+    agent_type: str = "backend",
+    workspace_path: str = "/tmp/ws",
+    manager=None,
+    network_policy: str | None = None,
+    enable_live_streaming: bool = False,
+    runtime=None,
+):
+    """Build a real DockerSandboxSession (factory path) for unit tests."""
+    from squadx_client.sandbox.docker_backend import DockerSandboxBackend
+
+    kwargs = {
+        "task_id": task_id,
+        "agent_type": agent_type,
+        "workspace_path": workspace_path,
+        "network_policy": network_policy,
+        "enable_live_streaming": enable_live_streaming,
+    }
+    backend = DockerSandboxBackend(manager=manager)
+    session = backend.create_session(**kwargs)
+    if runtime is not None:
+        session.inner.runtime = runtime
+    return session
+
+
 @pytest.fixture
 def mock_sandbox(mock_docker_manager):
     """Create a mock sandbox for testing."""

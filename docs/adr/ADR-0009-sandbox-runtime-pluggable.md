@@ -302,6 +302,7 @@ Instalador de **painel** ≠ instalador de **client**. São artefatos separados.
 
 | Data | Mudança |
 |------|---------|
+| 2026-07-30 | Extract `sandbox_start`; remove `create_agent_sandbox`; tests via `DockerSandboxBackend`. |
 | 2026-07-30 | Extract `sandbox_types` / `sandbox_egress` / `sandbox_exec` from AgentSandbox; daemon uses `create_sandbox_session` only. |
 | 2026-07-30 | `DockerSandboxSession` thin adapter over `AgentSandbox`; start() defaults from settings. |
 | 2026-07-30 | Review remaining: split `sandbox/process/`, slim Protocol to create_session, `requires_docker` features, shared image pull helper. |

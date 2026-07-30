@@ -1,7 +1,6 @@
 """Resolve sandbox backend + create sessions (ADR-0009).
 
 Single entry for production: ``create_sandbox_session``.
-``create_agent_sandbox`` is a Docker-only alias kept for External CLI call sites.
 """
 
 from __future__ import annotations
@@ -156,35 +155,6 @@ def create_sandbox_session(
     """
     backend = get_sandbox_backend()
     return backend.create_session(
-        task_id=task_id,
-        agent_type=agent_type,
-        workspace_path=workspace_path,
-        network_policy=network_policy,
-        enable_live_streaming=enable_live_streaming,
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def create_agent_sandbox(
-    *,
-    task_id: int,
-    agent_type: str,
-    workspace_path: str,
-    network_policy: str | None = None,
-    enable_live_streaming: bool = True,
-    ttl_seconds: int | None = None,
-) -> SandboxSession:
-    """Deprecated alias: prefer ``create_sandbox_session`` + ``features_for().external_cli``.
-
-    Still enforces Docker/External-CLI capability for callers that have not migrated.
-    """
-    feats = features_for()
-    if not feats.external_cli:
-        raise SandboxNotSupportedError(
-            f"backend {feats.kind.value!r} does not support External CLI / Docker-only "
-            f"sessions ({feats.notes}). Set SQUADX_SANDBOX_BACKEND=docker."
-        )
-    return create_sandbox_session(
         task_id=task_id,
         agent_type=agent_type,
         workspace_path=workspace_path,

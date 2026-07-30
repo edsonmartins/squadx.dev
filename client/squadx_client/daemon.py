@@ -415,13 +415,8 @@ class SquadXDaemon:
             workspace_path=workspace_path,
             network_policy=network_policy,
         )
-        started = await sandbox.start(
-            image=settings.agent_image,
-            memory_limit=settings.agent_memory_limit,
-            cpu_limit=settings.agent_cpu_limit,
-            enable_vnc=settings.enable_vnc,
-            exec_env=exec_env,
-        )
+        # DockerSandboxSession fills image/memory/cpu/vnc from settings.
+        started = await sandbox.start(exec_env=exec_env)
         if not started:
             raise RuntimeError("Failed to start sandbox for external CLI agent")
 

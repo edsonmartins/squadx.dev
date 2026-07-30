@@ -415,7 +415,8 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 (state.task or {}).get("sandbox_egress_policy")
             )
 
-            # Create sandbox for this subtask (ADR-0009: docker or process backend)
+            # Create sandbox for this subtask (ADR-0009: docker or process backend).
+            # Docker session applies settings defaults on start(); PROCESS ignores image/vnc.
             sandbox = create_sandbox_session(
                 task_id=state.task_id,
                 agent_type=subtask.agent_type,
@@ -423,13 +424,7 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 network_policy=network_policy,
             )
 
-            # Start the sandbox
-            sandbox_started = await sandbox.start(
-                image=getattr(settings, "agent_image", "squadx/agent:latest"),
-                memory_limit=getattr(settings, "agent_memory_limit", "2g"),
-                cpu_limit=getattr(settings, "agent_cpu_limit", 2.0),
-                enable_vnc=getattr(settings, "enable_vnc", True),
-            )
+            sandbox_started = await sandbox.start()
 
             if not sandbox_started:
                 logger.warning("sandbox_start_failed", subtask_id=subtask_id)

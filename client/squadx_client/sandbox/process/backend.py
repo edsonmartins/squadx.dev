@@ -10,6 +10,7 @@ from squadx_client.sandbox.process.isolator import (
     process_network_mode,
 )
 from squadx_client.sandbox.process.session import ProcessSession
+from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import SandboxBackendKind
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class ProcessSandboxBackend:
         network_policy: str | None = None,
         enable_live_streaming: bool = False,
         ttl_seconds: int | None = None,
-    ) -> ProcessSession:
+    ) -> SandboxSession:
         if enable_live_streaming:
             logger.warning(
                 "process_backend_live_ignored task=%s — Live View unsupported", task_id

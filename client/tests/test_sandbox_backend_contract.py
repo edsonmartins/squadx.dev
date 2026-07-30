@@ -67,9 +67,9 @@ def test_get_sandbox_backend_returns_docker_backend() -> None:
     assert isinstance(backend, SandboxBackend)
 
 
-def test_create_agent_sandbox_builds_agent_sandbox() -> None:
-    from squadx_client.docker.sandbox import AgentSandbox
+def test_create_agent_sandbox_builds_docker_session() -> None:
     from squadx_client.sandbox import create_agent_sandbox
+    from squadx_client.sandbox.docker_session import DockerSandboxSession
 
     sb = create_agent_sandbox(
         task_id=42,
@@ -77,10 +77,11 @@ def test_create_agent_sandbox_builds_agent_sandbox() -> None:
         workspace_path="/tmp/ws",
         network_policy="agent-default",
     )
-    assert isinstance(sb, AgentSandbox)
+    assert isinstance(sb, DockerSandboxSession)
     assert sb.task_id == 42
     assert sb.agent_type == "coder"
     assert sb.workspace_path == "/tmp/ws"
+    assert sb.inner.task_id == 42
 
 
 def test_get_sandbox_backend_process_returns_process_backend(

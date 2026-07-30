@@ -49,7 +49,12 @@ class SandboxResult:
 
 
 class AgentSandbox:
-    """Sandbox environment for running agent tasks."""
+    """Docker container lifecycle for agent tasks (egress, pool, live view).
+
+    Production call sites should use ``create_sandbox_session()`` →
+    ``DockerSandboxSession``, which wraps this class. Prefer not constructing
+    ``AgentSandbox`` directly outside tests and ``DockerSandboxBackend``.
+    """
 
     def __init__(
         self,

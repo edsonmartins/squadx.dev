@@ -1,7 +1,7 @@
 """Resolve configured sandbox backend kind and feature matrix (ADR-0009).
 
-Phase 0: selection + feature flags only. Callers still use ``AgentSandbox`` for
-Docker. ``get_sandbox_backend()`` raises for non-docker kinds until Phase 2–4.
+Phase 2: ``get_sandbox_backend()`` returns ``DockerSandboxBackend`` for the
+default docker kind. Non-docker kinds raise until later phases.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         egress_sidecar=True,
         external_cli=True,
         implemented=True,
-        notes="Default Team DOCKER / VPS; AgentSandbox path today",
+        notes="Default Team DOCKER / VPS; DockerSandboxBackend → AgentSandbox",
     ),
     SandboxBackendKind.PROCESS: BackendFeatures(
         kind=SandboxBackendKind.PROCESS,
@@ -101,11 +101,10 @@ def features_for(kind: SandboxBackendKind | None = None) -> BackendFeatures:
 
 
 def get_sandbox_backend() -> SandboxBackend:
-    """Return a live ``SandboxBackend`` instance for the configured kind.
+    """Return a live ``SandboxBackend`` for the configured kind.
 
-    Phase 0–1: only documents selection. Docker work still goes through
-    ``AgentSandbox``; calling this raises until Phase 2 wires
-    ``DockerSandboxBackend``.
+    Default: ``DockerSandboxBackend``. Other kinds raise
+    ``SandboxNotSupportedError`` until implemented.
     """
     kind = get_sandbox_backend_kind()
     feats = features_for(kind)
@@ -114,9 +113,42 @@ def get_sandbox_backend() -> SandboxBackend:
             f"sandbox backend {kind.value!r} is not implemented yet "
             f"({feats.notes}). Use SQUADX_SANDBOX_BACKEND=docker."
         )
-    # Docker is "implemented" via AgentSandbox, but the Protocol adapter lands in Phase 2.
+    if kind is SandboxBackendKind.DOCKER:
+        from squadx_client.sandbox.docker_backend import DockerSandboxBackend
+
+        return DockerSandboxBackend()
     raise SandboxNotSupportedError(
-        "SandboxBackend Protocol adapter not wired yet (ADR-0009 Phase 2). "
-        "Production continues to use squadx_client.docker.sandbox.AgentSandbox. "
-        f"Configured kind={kind.value!r}."
+        f"sandbox backend {kind.value!r} marked implemented but has no factory branch"
+    )
+
+
+def create_agent_sandbox(
+    *,
+    task_id: int,
+    agent_type: str,
+    workspace_path: str,
+    network_policy: str | None = None,
+    enable_live_streaming: bool = True,
+    ttl_seconds: int | None = None,
+):
+    """Create a Docker ``AgentSandbox`` via the configured backend.
+
+    Call sites that need the concrete Docker API (tools, External CLI, live_join_code)
+    should use this instead of importing ``AgentSandbox`` directly. Non-docker
+    backends raise ``SandboxNotSupportedError``.
+    """
+    backend = get_sandbox_backend()
+    from squadx_client.sandbox.docker_backend import DockerSandboxBackend
+
+    if not isinstance(backend, DockerSandboxBackend):
+        raise SandboxNotSupportedError(
+            f"create_agent_sandbox requires docker backend; got {backend.kind.value!r}"
+        )
+    return backend.create_session(
+        task_id=task_id,
+        agent_type=agent_type,
+        workspace_path=workspace_path,
+        network_policy=network_policy,
+        enable_live_streaming=enable_live_streaming,
+        ttl_seconds=ttl_seconds,
     )

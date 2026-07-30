@@ -181,3 +181,44 @@ class TestEnforcementIsNotAspirational:
         sandbox = AgentSandbox.__new__(AgentSandbox)
         assert sandbox._resolve_policy(None) is not None
         assert sandbox._resolve_policy("nonexistent-policy") is not None
+
+
+class TestDockerSdkIsolation:
+    """ADR-0009 Phase 2: Docker SDK stays under docker/ (+ sanctioned backends)."""
+
+    # Files allowed to import the Docker Python SDK (or docker.errors / docker.models).
+    _ALLOWED_DOCKER_SDK_IMPORT = {
+        _PACKAGE / "docker" / "manager.py",
+        # Future: keep empty unless a module must call docker.from_env() directly.
+    }
+
+    def test_docker_sdk_not_imported_outside_sanctioned_modules(self):
+        offenders: list[str] = []
+        for path in _PACKAGE.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            # Entire docker/ package is the Docker integration surface.
+            if "docker" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            if re.search(
+                r"^\s*(import docker\b|from docker\b)",
+                text,
+                re.MULTILINE,
+            ):
+                if path not in self._ALLOWED_DOCKER_SDK_IMPORT:
+                    offenders.append(str(path.relative_to(_PACKAGE)))
+        assert not offenders, (
+            "Docker SDK import outside docker/ package (ADR-0009): "
+            f"{offenders}. Route through DockerManager / DockerSandboxBackend."
+        )
+
+    def test_production_call_sites_use_create_agent_sandbox(self):
+        """Daemon and orchestrator must not construct AgentSandbox by name."""
+        for rel in ("daemon.py", "orchestrator/nodes.py"):
+            text = (_PACKAGE / rel).read_text(encoding="utf-8")
+            assert "create_agent_sandbox" in text, f"{rel} should call create_agent_sandbox"
+            assert not re.search(
+                r"\bAgentSandbox\s*\(",
+                text,
+            ), f"{rel} still constructs AgentSandbox(...) directly"

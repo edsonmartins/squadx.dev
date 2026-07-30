@@ -13,7 +13,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from squadx_client.agents.factory import create_agent
 from squadx_client.agents.security import enforce_prompt_security, filter_internal_artifacts
 from squadx_client.config import settings
-from squadx_client.docker.sandbox import AgentSandbox
 from squadx_client.git.manager import GitManager
 from squadx_client.git.worktree import WorktreeManager
 from squadx_client.llm.router import get_llm
@@ -26,6 +25,7 @@ from squadx_client.orchestrator.state import (
     SubTask,
     TaskPlan,
 )
+from squadx_client.sandbox import create_agent_sandbox
 
 logger = structlog.get_logger()
 
@@ -415,8 +415,8 @@ async def execute_subtask(state: OrchestratorState) -> dict[str, Any]:
                 (state.task or {}).get("sandbox_egress_policy")
             )
 
-            # Create sandbox for this subtask
-            sandbox = AgentSandbox(
+            # Create sandbox for this subtask (ADR-0009: via DockerSandboxBackend)
+            sandbox = create_agent_sandbox(
                 task_id=state.task_id,
                 agent_type=subtask.agent_type,
                 workspace_path=subtask_work_path,

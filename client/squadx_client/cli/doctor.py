@@ -96,7 +96,7 @@ def check_sandbox_backend(report: DoctorReport) -> None:
     report.add(
         "sandbox.backend",
         CheckStatus.OK,
-        f"{detail} (AgentSandbox path; Protocol adapter Phase 2)",
+        f"{detail} (DockerSandboxBackend → AgentSandbox)",
     )
 
 

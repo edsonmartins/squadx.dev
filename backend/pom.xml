@@ -198,7 +198,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- WebFlux for WebClient (Supabase API) -->
+        <!-- WebFlux for the SquadX Live service client -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>

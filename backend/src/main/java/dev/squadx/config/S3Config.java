@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 /**
  * Configuration for AWS S3 integration.
  * Used for session recording storage.
- * Only activated when aws.s3.access-key is set.
+ * Only activated when aws.s3.enabled is explicitly true.
  */
 @Slf4j
 @Configuration
@@ -29,7 +29,7 @@ public class S3Config {
     private String secretKey;
 
     @Bean
-    @ConditionalOnProperty(name = "aws.s3.access-key", matchIfMissing = false)
+    @ConditionalOnProperty(name = "aws.s3.enabled", havingValue = "true")
     public S3Client s3Client() {
         log.info("Configuring S3 client for region: {}, bucket: {}", region, bucket);
 
@@ -42,7 +42,7 @@ public class S3Config {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "aws.s3.access-key", matchIfMissing = false)
+    @ConditionalOnProperty(name = "aws.s3.enabled", havingValue = "true")
     public S3Presigner s3Presigner() {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
 

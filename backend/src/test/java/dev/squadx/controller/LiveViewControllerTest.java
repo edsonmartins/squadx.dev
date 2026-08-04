@@ -6,21 +6,14 @@ import dev.squadx.dto.liveview.LiveChatMessageRequest;
 import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
-import dev.squadx.dto.supabase.SupabaseLiveSession;
 import dev.squadx.exception.GlobalExceptionHandler;
 import dev.squadx.exception.ResourceNotFoundException;
-import dev.squadx.model.Organization;
-import dev.squadx.model.Project;
-import dev.squadx.model.Task;
 import dev.squadx.model.User;
 import dev.squadx.model.enums.LiveSessionStatus;
 import dev.squadx.model.enums.UserRole;
-import dev.squadx.repository.OrganizationMemberRepository;
-import dev.squadx.repository.TaskRepository;
 import dev.squadx.security.JwtAuthenticationFilter;
 import dev.squadx.security.JwtService;
 import dev.squadx.service.LiveViewService;
-import dev.squadx.service.SupabaseLiveSessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -65,15 +58,6 @@ class LiveViewControllerTest {
 
     @MockBean
     private LiveViewService liveViewService;
-
-    @MockBean
-    private SupabaseLiveSessionService supabaseLiveSessionService;
-
-    @MockBean
-    private TaskRepository taskRepository;
-
-    @MockBean
-    private OrganizationMemberRepository memberRepository;
 
     @MockBean
     private JwtService jwtService;
@@ -299,100 +283,4 @@ class LiveViewControllerTest {
         }
     }
 
-    @Nested
-    @DisplayName("Supabase endpoints — organization scoping")
-    class SupabaseEndpoints {
-
-        @org.junit.jupiter.api.AfterEach
-        void clearContext() {
-            org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        }
-
-        // With addFilters=false the security filter chain never populates the
-        // SecurityContextHolder, so @AuthenticationPrincipal resolves to null.
-        // Set it directly so the resolver sees a real member for the allow-path tests.
-        private void authenticateAsTestUser() {
-            org.springframework.security.core.context.SecurityContextHolder.getContext()
-                    .setAuthentication(new UsernamePasswordAuthenticationToken(
-                            testUser, null, testUser.getAuthorities()));
-        }
-
-        private Task taskInOrg(Long taskId, Long orgId) {
-            Organization org = Organization.builder().build();
-            org.setId(orgId);
-            Project project = Project.builder().organization(org).build();
-            project.setId(100L);
-            Task task = Task.builder().title("t").project(project).build();
-            task.setId(taskId);
-            return task;
-        }
-
-        private SupabaseLiveSession supaSession(Long taskId, String code) {
-            SupabaseLiveSession s = new SupabaseLiveSession();
-            s.setTaskId(taskId);
-            s.setJoinCode(code);
-            s.setStatus("active");
-            s.setMaxViewers(25);
-            return s;
-        }
-
-        private org.springframework.test.web.servlet.request.RequestPostProcessor asTestUser() {
-            return authentication(new UsernamePasswordAuthenticationToken(
-                    testUser, null, testUser.getAuthorities()));
-        }
-
-        @Test
-        @DisplayName("active: filters to sessions in the caller's organizations")
-        void activeFiltersByOrg() throws Exception {
-            when(supabaseLiveSessionService.getActiveSessions())
-                    .thenReturn(List.of(supaSession(10L, "AAA"), supaSession(20L, "BBB")));
-            when(taskRepository.findById(10L)).thenReturn(java.util.Optional.of(taskInOrg(10L, 1L)));
-            when(taskRepository.findById(20L)).thenReturn(java.util.Optional.of(taskInOrg(20L, 2L)));
-            when(memberRepository.existsByOrganizationIdAndUserId(eq(1L), eq(1L))).thenReturn(true);
-            when(memberRepository.existsByOrganizationIdAndUserId(eq(2L), eq(1L))).thenReturn(false);
-            when(supabaseLiveSessionService.toResponse(any())).thenReturn(sampleSession);
-            authenticateAsTestUser();
-
-            mockMvc.perform(get("/api/v1/live-view/supabase/sessions/active").with(asTestUser()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.length()").value(1));
-        }
-
-        @Test
-        @DisplayName("by-task: 403 when the caller is not an organization member")
-        void byTaskForbiddenForNonMember() throws Exception {
-            when(taskRepository.findById(20L)).thenReturn(java.util.Optional.of(taskInOrg(20L, 2L)));
-            when(memberRepository.existsByOrganizationIdAndUserId(eq(2L), eq(1L))).thenReturn(false);
-
-            mockMvc.perform(get("/api/v1/live-view/supabase/sessions/task/20").with(asTestUser()))
-                    .andExpect(status().isForbidden());
-        }
-
-        @Test
-        @DisplayName("by-code: 404 (no cross-tenant leak) when the caller is not a member")
-        void byCodeNotFoundForNonMember() throws Exception {
-            when(supabaseLiveSessionService.getSessionByCode("BBB"))
-                    .thenReturn(java.util.Optional.of(supaSession(20L, "BBB")));
-            when(taskRepository.findById(20L)).thenReturn(java.util.Optional.of(taskInOrg(20L, 2L)));
-            when(memberRepository.existsByOrganizationIdAndUserId(eq(2L), eq(1L))).thenReturn(false);
-
-            mockMvc.perform(get("/api/v1/live-view/supabase/sessions/code/BBB").with(asTestUser()))
-                    .andExpect(status().isNotFound());
-        }
-
-        @Test
-        @DisplayName("by-code: 200 when the caller is an organization member")
-        void byCodeOkForMember() throws Exception {
-            when(supabaseLiveSessionService.getSessionByCode("AAA"))
-                    .thenReturn(java.util.Optional.of(supaSession(10L, "AAA")));
-            when(supabaseLiveSessionService.toResponse(any())).thenReturn(sampleSession);
-            when(taskRepository.findById(10L)).thenReturn(java.util.Optional.of(taskInOrg(10L, 1L)));
-            when(memberRepository.existsByOrganizationIdAndUserId(eq(1L), eq(1L))).thenReturn(true);
-            authenticateAsTestUser();
-
-            mockMvc.perform(get("/api/v1/live-view/supabase/sessions/code/AAA").with(asTestUser()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.code").value("ABC123"));
-        }
-    }
 }

@@ -1,6 +1,5 @@
 package dev.squadx.websocket;
 
-import dev.squadx.dto.supabase.SupabaseLiveSession;
 import dev.squadx.model.Organization;
 import dev.squadx.model.Project;
 import dev.squadx.model.Task;
@@ -9,7 +8,6 @@ import dev.squadx.repository.ExecutionRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.ProjectRepository;
 import dev.squadx.repository.TaskRepository;
-import dev.squadx.service.SupabaseLiveSessionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -34,7 +32,6 @@ class StompSubscriptionAuthorizerTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private TaskRepository taskRepository;
     @Mock private ExecutionRepository executionRepository;
-    @Mock private SupabaseLiveSessionService liveSessionService;
 
     @InjectMocks private StompSubscriptionAuthorizer authorizer;
 
@@ -101,17 +98,6 @@ class StompSubscriptionAuthorizerTest {
     }
 
     @Test
-    void resolvesLiveTopicViaSessionCode() {
-        SupabaseLiveSession session = new SupabaseLiveSession();
-        session.setTaskId(10L);
-        when(liveSessionService.getSessionByCode("ABCD1234")).thenReturn(Optional.of(session));
-        when(taskRepository.findById(10L)).thenReturn(Optional.of(taskInOrg(5L)));
-        memberOf(5L, 1L, true);
-        assertThatCode(() -> authorizer.authorize("/topic/live/ABCD1234/chat", user(1L)))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
     void deniesMissingTask() {
         when(taskRepository.findById(404L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> authorizer.authorize("/topic/tasks/404", user(1L)))
@@ -135,7 +121,7 @@ class StompSubscriptionAuthorizerTest {
         assertThatCode(() -> authorizer.authorize("/user/queue/tasks", user(1L)))
                 .doesNotThrowAnyException();
         verifyNoInteractions(memberRepository, taskRepository, projectRepository,
-                executionRepository, liveSessionService);
+                executionRepository);
     }
 
     @Test

@@ -58,7 +58,7 @@ public class SquadxLiveClient {
 
         try {
             restClient.get()
-                    .uri("/health")
+                    .uri("/api/ready")
                     .retrieve()
                     .toBodilessEntity();
             status.put("reachable", true);

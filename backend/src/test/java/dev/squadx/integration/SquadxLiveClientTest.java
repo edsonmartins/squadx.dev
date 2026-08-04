@@ -41,7 +41,7 @@ class SquadxLiveClientTest {
     @DisplayName("healthCheck should report UP when live service is reachable")
     void healthCheckShouldReportUp() throws Exception {
         server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/health", exchange -> respond(exchange, 200, "{\"status\":\"ok\"}"));
+        server.createContext("/api/ready", exchange -> respond(exchange, 200, "{\"status\":\"ok\"}"));
         server.start();
 
         SquadxLiveClient client = new SquadxLiveClient(configFor(server), jwtProviderFor(server), liveSessionRepository);

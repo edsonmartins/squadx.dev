@@ -5,7 +5,6 @@ import dev.squadx.repository.ExecutionRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.ProjectRepository;
 import dev.squadx.repository.TaskRepository;
-import dev.squadx.service.SupabaseLiveSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -36,7 +35,6 @@ public class StompSubscriptionAuthorizer {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final ExecutionRepository executionRepository;
-    private final SupabaseLiveSessionService liveSessionService;
 
     /**
      * @throws AccessDeniedException if the caller may not subscribe to this destination
@@ -84,18 +82,8 @@ public class StompSubscriptionAuthorizer {
             case "executions" -> executionRepository.findById(parseId(id, destination))
                     .map(e -> e.getTask().getProject().getOrganization().getId())
                     .orElseThrow(() -> denied(destination));
-            case "live" -> resolveLiveOrganizationId(id, destination);
             default -> null; // unknown topic namespace — not tenant-scoped
         };
-    }
-
-    private Long resolveLiveOrganizationId(String sessionCode, String destination) {
-        Long taskId = liveSessionService.getSessionByCode(sessionCode)
-                .map(session -> session.getTaskId())
-                .orElseThrow(() -> denied(destination));
-        return taskRepository.findById(taskId)
-                .map(t -> t.getProject().getOrganization().getId())
-                .orElseThrow(() -> denied(destination));
     }
 
     private Long parseId(String raw, String destination) {

@@ -67,6 +67,7 @@ public class ServiceJwtProvider {
         try {
             var claims = Jwts.parser()
                     .verifyWith(signingKey)
+                    .requireAudience("squadx-backend")
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();

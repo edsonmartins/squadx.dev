@@ -6,13 +6,8 @@ import dev.squadx.dto.liveview.LiveChatMessageRequest;
 import dev.squadx.dto.liveview.LiveChatMessageResponse;
 import dev.squadx.dto.liveview.LiveSessionRequest;
 import dev.squadx.dto.liveview.LiveSessionResponse;
-import dev.squadx.dto.supabase.SupabaseLiveSession;
-import dev.squadx.exception.ForbiddenException;
 import dev.squadx.model.User;
-import dev.squadx.repository.OrganizationMemberRepository;
-import dev.squadx.repository.TaskRepository;
 import dev.squadx.service.LiveViewService;
-import dev.squadx.service.SupabaseLiveSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,7 +18,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/live-view")
@@ -32,26 +26,6 @@ import java.util.Optional;
 public class LiveViewController {
 
     private final LiveViewService liveViewService;
-    private final SupabaseLiveSessionService supabaseLiveSessionService;
-    private final TaskRepository taskRepository;
-    private final OrganizationMemberRepository memberRepository;
-
-    /** True when the user is a member of the organization that owns the session's task. */
-    private boolean hasTaskAccess(Long taskId, User user) {
-        if (taskId == null || user == null) {
-            return false;
-        }
-        return taskRepository.findById(taskId)
-                .map(task -> memberRepository.existsByOrganizationIdAndUserId(
-                        task.getProject().getOrganization().getId(), user.getId()))
-                .orElse(false);
-    }
-
-    private void assertTaskAccess(Long taskId, User user) {
-        if (!hasTaskAccess(taskId, user)) {
-            throw new ForbiddenException("User does not have access to this live session");
-        }
-    }
 
     @PostMapping("/sessions")
     @Operation(summary = "Create a new live session for a task")
@@ -166,94 +140,6 @@ public class LiveViewController {
     ) {
         LiveSessionResponse response = liveViewService.revokeControl(sessionId, userId, user);
         return ResponseEntity.ok(ApiResponse.success(response, "Control revoked"));
-    }
-
-    // ==================== Supabase Endpoints ====================
-    // These endpoints query Supabase for sessions created by the Python client
-
-    @GetMapping("/supabase/sessions/code/{code}")
-    @Operation(summary = "Get live session by join code from Supabase (for Python client sessions)")
-    public ResponseEntity<ApiResponse<LiveSessionResponse>> getSupabaseSessionByCode(
-            @PathVariable String code,
-            @AuthenticationPrincipal User user
-    ) {
-        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.getSessionByCode(code);
-        // Only reveal the session to a member of its task's organization — otherwise
-        // return 404 (do not leak existence across tenants).
-        if (session.isPresent() && hasTaskAccess(session.get().getTaskId(), user)) {
-            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
-            return ResponseEntity.ok(ApiResponse.success(response));
-        }
-        return ResponseEntity.notFound().build();
-    }
-
-    @GetMapping("/supabase/sessions/task/{taskId}")
-    @Operation(summary = "Get active live session for a task from Supabase")
-    public ResponseEntity<ApiResponse<LiveSessionResponse>> getSupabaseSessionByTaskId(
-            @PathVariable Long taskId,
-            @AuthenticationPrincipal User user
-    ) {
-        assertTaskAccess(taskId, user);
-        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.getActiveSessionByTaskId(taskId);
-        if (session.isPresent()) {
-            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
-            return ResponseEntity.ok(ApiResponse.success(response));
-        }
-        return ResponseEntity.notFound().build();
-    }
-
-    @GetMapping("/supabase/sessions/active")
-    @Operation(summary = "Get all active live sessions from Supabase (scoped to the caller's organizations)")
-    public ResponseEntity<ApiResponse<List<LiveSessionResponse>>> getSupabaseActiveSessions(
-            @AuthenticationPrincipal User user
-    ) {
-        List<LiveSessionResponse> responses = supabaseLiveSessionService.getActiveSessions().stream()
-                // Only sessions whose task belongs to an org the caller is a member of.
-                .filter(s -> hasTaskAccess(s.getTaskId(), user))
-                .map(supabaseLiveSessionService::toResponse)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(responses));
-    }
-
-    @PostMapping("/supabase/sessions")
-    @Operation(summary = "Create a new live session in Supabase")
-    public ResponseEntity<ApiResponse<LiveSessionResponse>> createSupabaseSession(
-            @RequestParam Long taskId,
-            @RequestParam(required = false) String hostUserId,
-            @RequestParam(defaultValue = "p2p") String mode,
-            @RequestParam(defaultValue = "25") Integer maxViewers,
-            @AuthenticationPrincipal User user
-    ) {
-        assertTaskAccess(taskId, user);
-        Optional<SupabaseLiveSession> session = supabaseLiveSessionService.createSession(
-                taskId, hostUserId, mode, maxViewers);
-        if (session.isPresent()) {
-            LiveSessionResponse response = supabaseLiveSessionService.toResponse(session.get());
-            return ResponseEntity
-                    .status(HttpStatus.CREATED)
-                    .body(ApiResponse.success(response, "Live session created in Supabase"));
-        }
-        return ResponseEntity.badRequest().build();
-    }
-
-    @PostMapping("/supabase/sessions/{sessionId}/end")
-    @Operation(summary = "End a live session in Supabase")
-    public ResponseEntity<ApiResponse<Void>> endSupabaseSession(
-            @PathVariable String sessionId,
-            @AuthenticationPrincipal User user
-    ) {
-        // Resolve the session's task and enforce org access before ending it.
-        SupabaseLiveSession session = supabaseLiveSessionService.getSessionById(sessionId)
-                .orElse(null);
-        if (session == null) {
-            return ResponseEntity.notFound().build();
-        }
-        assertTaskAccess(session.getTaskId(), user);
-        boolean success = supabaseLiveSessionService.endSession(sessionId);
-        if (success) {
-            return ResponseEntity.ok(ApiResponse.success(null, "Live session ended"));
-        }
-        return ResponseEntity.badRequest().build();
     }
 
     @GetMapping("/sessions/{sessionId}/chat")

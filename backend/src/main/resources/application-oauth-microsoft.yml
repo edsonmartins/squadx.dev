@@ -1,0 +1,15 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          microsoft:
+            client-id: ${OAUTH2_MICROSOFT_CLIENT_ID}
+            client-secret: ${OAUTH2_MICROSOFT_CLIENT_SECRET}
+            scope: openid,profile,email
+            client-name: Microsoft
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          microsoft:
+            issuer-uri: https://login.microsoftonline.com/${OAUTH2_MICROSOFT_TENANT_ID:common}/v2.0

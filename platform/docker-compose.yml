@@ -21,7 +21,9 @@ networks:
 
 volumes:
   pg_orchestrator:
+  pg_live:
   pg_brainsentry:
+  minio_live:
   redis_data:
   falkordb_data:
 
@@ -75,6 +77,43 @@ services:
         limits:
           memory: 512M
           cpus: "0.5"
+
+  postgres-live:
+    image: postgres:16-alpine
+    container_name: squadx-live-postgres
+    environment:
+      POSTGRES_USER: squadx_live
+      POSTGRES_PASSWORD: ${LIVE_POSTGRES_PASSWORD:-squadx_live_dev}
+      POSTGRES_DB: squadx_live
+    ports:
+      - "5444:5432"
+    volumes:
+      - pg_live:/var/lib/postgresql/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U squadx_live -d squadx_live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-live:
+    image: minio/minio:latest
+    container_name: squadx-live-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-squadx_live}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_live:/data
+    networks: [squadx-platform]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -148,7 +187,7 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3100
       SQUADX_BRAINSENTRY_URL: http://brainsentry-api:8080
       SQUADX_BRAINSENTRY_ENABLED: "true"
-      SQUADX_LIVE_URL: http://squadx-live-web:3000
+      SQUADX_LIVE_URL: http://squadx-live-web:8080
       SQUADX_LIVE_ENABLED: "true"
     depends_on:
       postgres-orchestrator: { condition: service_healthy }
@@ -187,24 +226,46 @@ services:
 
   squadx-live-web:
     build:
-      context: ../../squadx-live/apps/web
-      dockerfile: Dockerfile
+      context: ../../squadx-live
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: http://localhost:3100
+        NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
     container_name: squadx-live-web
     ports:
-      - "3100:3000"
+      - "3100:8080"
     environment:
-      <<: *common-env
-      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      POSTGRES_URL: postgres://squadx_live:${LIVE_POSTGRES_PASSWORD:-squadx_live_dev}@postgres-live:5432/squadx_live
+      POSTGRES_POOL_MAX: "10"
+      RUN_DB_MIGRATIONS: "true"
+      ARCHGUARD_ISSUER_URL: ${ARCHGUARD_ISSUER_URL:?Set ARCHGUARD_ISSUER_URL in .env}
+      ARCHGUARD_CLIENT_ID: ${ARCHGUARD_CLIENT_ID:-squadx-live}
+      ARCHGUARD_CLIENT_SECRET: ${ARCHGUARD_CLIENT_SECRET:-}
+      ARCHGUARD_REDIRECT_URI: http://localhost:3100/api/auth/callback
+      SESSION_SECRET: ${LIVE_SESSION_SECRET:?Set LIVE_SESSION_SECRET in .env}
+      MINIO_ENDPOINT: http://minio-live:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-squadx_live}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-squadx-live-media}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
       NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      TURN_SERVER_URL: ${TURN_SERVER_URL:?Set TURN_SERVER_URL in .env}
+      TURN_SERVER_USERNAME: ${TURN_SERVER_USERNAME:?Set TURN_SERVER_USERNAME in .env}
+      TURN_SERVER_CREDENTIAL: ${TURN_SERVER_CREDENTIAL:?Set TURN_SERVER_CREDENTIAL in .env}
       NEXT_PUBLIC_APP_URL: http://localhost:3100
+      SQUADX_SERVICE_SECRET: ${SQUADX_SERVICE_SECRET}
       SQUADX_BACKEND_WEBHOOK_URL: http://squadx-backend:8080/api/v1/webhooks/live
-    depends_on: [livekit]
+      SQUADX_EMBED_ORIGINS: http://localhost:3000
+      GATE_ENABLED: "false"
+    depends_on:
+      postgres-live: { condition: service_healthy }
+      minio-live: { condition: service_healthy }
+      livekit: { condition: service_started }
     networks: [squadx-platform]
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

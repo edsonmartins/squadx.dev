@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 
 class SandboxBackendKind(str, Enum):
@@ -21,7 +20,7 @@ class SandboxBackendKind(str, Enum):
 
 
 class SandboxLifecycleStatus(str, Enum):
-    """Backend-agnostic lifecycle for a sandbox handle."""
+    """Backend-agnostic lifecycle for every sandbox session."""
 
     CREATED = "created"
     STARTING = "starting"
@@ -31,27 +30,9 @@ class SandboxLifecycleStatus(str, Enum):
     ERROR = "error"
 
 
-@dataclass(frozen=True)
-class SandboxHandle:
-    """Opaque handle returned by ``SandboxBackend.start``.
-
-    Callers must not inspect backend-specific ids beyond logging.
-    """
-
-    task_id: int
-    backend: SandboxBackendKind
-    id: str
-    workspace_path: str
-    status: SandboxLifecycleStatus = SandboxLifecycleStatus.RUNNING
-    # Optional live-view join metadata (only when backend supports it)
-    vnc_port: int | None = None
-    live_join_code: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
 @dataclass
-class ExecResult:
-    """Result of a one-shot ``exec`` in a sandbox."""
+class CommandResult:
+    """Backend-independent result of a sandbox command."""
 
     success: bool
     exit_code: int

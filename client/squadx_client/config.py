@@ -153,14 +153,12 @@ class Settings(BaseSettings):
 
     # SquadX Live Integration
     squadx_live_url: str | None = Field(default=None, alias="SQUADX_LIVE_URL")
+    squadx_service_secret: str | None = Field(
+        default=None, alias="SQUADX_SERVICE_SECRET"
+    )
     livekit_url: str | None = Field(default=None, alias="LIVEKIT_URL")
     livekit_api_key: str | None = Field(default=None, alias="LIVEKIT_API_KEY")
     livekit_api_secret: str | None = Field(default=None, alias="LIVEKIT_API_SECRET")
-
-    # Supabase Configuration (Live Streaming)
-    supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
-    supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")
-    supabase_service_key: str | None = Field(default=None, alias="SUPABASE_SERVICE_KEY")
 
     # WebRTC / TURN Configuration
     turn_url: str | None = Field(default=None, alias="TURN_URL")

@@ -49,7 +49,7 @@ _FEATURES: dict[SandboxBackendKind, BackendFeatures] = {
         external_cli=True,
         requires_docker=True,
         implemented=True,
-        notes="Default Team DOCKER / VPS; DockerSandboxSession → AgentSandbox",
+        notes="Default Team DOCKER / VPS; AgentSandbox implements SandboxSession",
     ),
     SandboxBackendKind.PROCESS: BackendFeatures(
         kind=SandboxBackendKind.PROCESS,
@@ -91,7 +91,7 @@ def _make_docker() -> SandboxBackend:
 
 
 def _make_process() -> SandboxBackend:
-    from squadx_client.sandbox.process_backend import ProcessSandboxBackend
+    from squadx_client.sandbox.process import ProcessSandboxBackend
 
     return ProcessSandboxBackend()
 

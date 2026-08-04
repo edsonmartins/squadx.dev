@@ -21,20 +21,18 @@ from squadx_client.sandbox.factory import (
 from squadx_client.sandbox.protocol import SandboxBackend
 from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import (
-    ExecResult,
+    CommandResult,
     SandboxBackendKind,
-    SandboxHandle,
     SandboxLifecycleStatus,
 )
 
 __all__ = [
     "BackendFeatures",
-    "ExecResult",
+    "CommandResult",
     "SandboxBackend",
     "SandboxBackendError",
     "SandboxBackendKind",
     "SandboxExecError",
-    "SandboxHandle",
     "SandboxLifecycleStatus",
     "SandboxNotSupportedError",
     "SandboxPolicyError",

@@ -7,11 +7,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from squadx_client.live.supabase_client import (
-    RealtimeMessage,
-    SupabaseClient,
-    get_supabase_client,
-)
+from squadx_client.config import settings
+from squadx_client.live.live_api_client import SquadxLiveApiClient
+from squadx_client.live.live_api_client import RealtimeMessage
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +54,16 @@ class LiveSessionManager:
     """Manages live streaming sessions for agent observation.
 
     This class coordinates:
-    1. Session creation/management via Supabase
+    1. Session creation/management via the SquadX Live API
     2. WebRTC signaling for peer connections
     3. VNC capture and streaming
     """
 
     def __init__(
         self,
-        supabase_client: SupabaseClient | None = None,
+        client: Any | None = None,
     ):
-        self._client = supabase_client or get_supabase_client()
+        self._client = client or self._default_client()
         self._sessions: dict[str, LiveSession] = {}
         self._peers: dict[str, dict[str, PeerConnection]] = {}  # session_id -> peer_id -> peer
         # Callbacks may be sync or async (webrtc_bridge registers coroutines);
@@ -73,6 +71,14 @@ class LiveSessionManager:
         self._on_peer_join: Callable[[str, PeerConnection], Any] | None = None
         self._on_peer_leave: Callable[[str, str], Any] | None = None
         self._on_signal: Callable[[str, str, dict], Any] | None = None
+
+    @staticmethod
+    def _default_client() -> Any:
+        if not settings.squadx_live_url or not settings.squadx_service_secret:
+            raise RuntimeError(
+                "Live view requires SQUADX_LIVE_URL and SQUADX_SERVICE_SECRET"
+            )
+        return SquadxLiveApiClient()
 
     @staticmethod
     def _dispatch(callback: Callable[..., Any], *args: Any) -> None:

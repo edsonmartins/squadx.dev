@@ -229,7 +229,6 @@ class TestDockerSdkIsolation:
         allowed_prefixes = (
             "docker/",
             "sandbox/docker_backend.py",
-            "sandbox/docker_session.py",
         )
         offenders: list[str] = []
         for path in _PACKAGE.rglob("*.py"):

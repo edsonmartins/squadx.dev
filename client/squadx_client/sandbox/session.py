@@ -9,12 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-from squadx_client.sandbox.types import ExecResult
+from squadx_client.sandbox.types import CommandResult
 
 
 @runtime_checkable
 class SandboxSession(Protocol):
-    """Duck-typed session: ``DockerSandboxSession`` or PROCESS ``ProcessSession``."""
+    """Common contract implemented by Docker and PROCESS sessions."""
 
     @property
     def live_join_code(self) -> str | None:
@@ -23,18 +23,11 @@ class SandboxSession(Protocol):
 
     async def start(
         self,
-        image: str | None = ...,
-        memory_limit: str | None = ...,
-        cpu_limit: float | None = ...,
-        enable_vnc: bool | None = ...,
+        *,
         environment: dict | None = ...,
         exec_env: dict | None = ...,
     ) -> bool:
-        """Start the session.
-
-        Docker: omitted image/memory/cpu/vnc come from settings.
-        PROCESS: image/memory/cpu/vnc are ignored.
-        """
+        """Start the session with backend-independent environment options."""
         ...
 
     async def execute(
@@ -42,7 +35,7 @@ class SandboxSession(Protocol):
         command: list[str],
         workdir: str = ...,
         timeout: float = ...,
-    ) -> ExecResult | Any:
+    ) -> CommandResult:
         """Run a command; result exposes success/exit_code/output/error."""
         ...
 
@@ -52,7 +45,7 @@ class SandboxSession(Protocol):
         on_output: Callable[[str], Any] | None = ...,
         workdir: str = ...,
         timeout: float = ...,
-    ) -> ExecResult | Any: ...
+    ) -> CommandResult: ...
 
     async def write_file(self, path: str, content: str) -> bool: ...
 

@@ -19,7 +19,7 @@ from .metrics import ContainerMetrics, ContainerMetricsCollector
 from .network_policy import NetworkPolicy, get_predefined_policy
 from .sandbox_egress import apply_sidecar_policy, teardown_sidecar
 from .sandbox_exec import exec_command, exec_command_streaming
-from .sandbox_start import start_agent_sandbox
+from .sandbox_start import SandboxStartConfig, start_agent_sandbox
 from .sandbox_types import SandboxResult, SandboxStatus
 
 # Re-export for existing ``from ...sandbox import SandboxResult, SandboxStatus``
@@ -34,9 +34,8 @@ logger = logging.getLogger(__name__)
 class AgentSandbox:
     """Docker container lifecycle for agent tasks (egress, pool, live view).
 
-    Production call sites should use ``create_sandbox_session()`` →
-    ``DockerSandboxSession``, which wraps this class. Prefer not constructing
-    ``AgentSandbox`` directly outside tests and ``DockerSandboxBackend``.
+    Implements the common ``SandboxSession`` contract directly. Production call
+    sites should still use ``create_sandbox_session()`` rather than constructing it.
     """
 
     def __init__(
@@ -130,23 +129,41 @@ class AgentSandbox:
 
     async def start(
         self,
-        image: str = "squadx/agent:latest",
-        memory_limit: str = "2g",
-        cpu_limit: float = 2.0,
-        enable_vnc: bool = True,
+        *,
+        image: str | None = None,
+        memory_limit: str | None = None,
+        cpu_limit: float | None = None,
+        enable_vnc: bool | None = None,
         environment: dict | None = None,
         exec_env: dict | None = None,
     ) -> bool:
-        """Start the sandbox container (pool or cold path; see sandbox_start)."""
+        """Start the container, resolving omitted Docker options from settings."""
         return await start_agent_sandbox(
             self,
-            image=image,
-            memory_limit=memory_limit,
-            cpu_limit=cpu_limit,
-            enable_vnc=enable_vnc,
+            image=image if image is not None else str(settings.agent_image),
+            memory_limit=(
+                memory_limit
+                if memory_limit is not None
+                else str(settings.agent_memory_limit)
+            ),
+            cpu_limit=(
+                float(cpu_limit)
+                if cpu_limit is not None
+                else float(settings.agent_cpu_limit)
+            ),
+            enable_vnc=(
+                bool(enable_vnc)
+                if enable_vnc is not None
+                else bool(settings.enable_vnc)
+            ),
             environment=environment,
             exec_env=exec_env,
-            settings=settings,
+            config=SandboxStartConfig(
+                egress_sidecar_enabled=bool(
+                    getattr(settings, "egress_sidecar_enabled", False)
+                ),
+                egress_fail_open=bool(getattr(settings, "egress_fail_open", False)),
+            ),
         )
     async def _apply_pooled_policy(self, pooled) -> bool:
         """Pre-start hook for a pooled agent+sidecar pair (RFC-0006)."""

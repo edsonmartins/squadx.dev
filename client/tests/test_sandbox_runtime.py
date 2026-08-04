@@ -130,10 +130,10 @@ class TestAgentSandboxInitialization:
             agent_type="backend",
             workspace_path="/tmp/workspace",
         )
-        session.inner.runtime = SandboxRuntime.GVISOR
-        assert session.inner.runtime == SandboxRuntime.GVISOR
+        session.runtime = SandboxRuntime.GVISOR
+        assert session.runtime == SandboxRuntime.GVISOR
         # resolve_runtime may have been called at construct; explicit set wins
-        assert session.inner.runtime == SandboxRuntime.GVISOR
+        assert session.runtime == SandboxRuntime.GVISOR
 
     @patch("squadx_client.docker.sandbox.docker_manager")
     @patch("squadx_client.docker.sandbox.resolve_runtime", return_value=SandboxRuntime.DOCKER)
@@ -145,7 +145,7 @@ class TestAgentSandboxInitialization:
             agent_type="frontend",
             workspace_path="/tmp/workspace",
         )
-        assert session.inner.runtime == SandboxRuntime.DOCKER
+        assert session.runtime == SandboxRuntime.DOCKER
         mock_resolve.assert_called()
 
     @patch("squadx_client.docker.sandbox.docker_manager")
@@ -161,6 +161,6 @@ class TestAgentSandboxInitialization:
             agent_type="backend",
             workspace_path="/tmp/workspace",
         )
-        assert session.inner.status == SandboxStatus.CREATED
-        assert session.inner.container_id is None
-        assert session.inner.vnc_port is None
+        assert session.status == SandboxStatus.CREATED
+        assert session.container_id is None
+        assert session.vnc_port is None

@@ -20,7 +20,7 @@ from squadx_client.sandbox.process.commands import (
     write_seatbelt_profile,
 )
 from squadx_client.sandbox.process.isolator import ProcessIsolator
-from squadx_client.sandbox.types import ExecResult, SandboxLifecycleStatus
+from squadx_client.sandbox.types import CommandResult, SandboxLifecycleStatus
 
 logger = logging.getLogger(__name__)
 
@@ -44,18 +44,10 @@ class ProcessSession:
 
     async def start(
         self,
-        image: str | None = None,
-        memory_limit: str | None = None,
-        cpu_limit: float | None = None,
-        enable_vnc: bool | None = None,
+        *,
         environment: dict | None = None,
         exec_env: dict | None = None,
     ) -> bool:
-        if enable_vnc:
-            logger.warning(
-                "process_live_view_unsupported task=%s — Live View requires Docker",
-                self.task_id,
-            )
         self._exec_env = dict(exec_env or {})
         if environment:
             self._exec_env = {**dict(environment), **self._exec_env}
@@ -106,7 +98,7 @@ class ProcessSession:
         command: list[str],
         workdir: str = "/workspace",
         timeout: float = 300,
-    ) -> ExecResult:
+    ) -> CommandResult:
         return await self._run(command, workdir=workdir, timeout=timeout, on_output=None)
 
     async def execute_streaming(
@@ -115,7 +107,7 @@ class ProcessSession:
         on_output=None,
         workdir: str = "/workspace",
         timeout: float = 1800,
-    ) -> ExecResult:
+    ) -> CommandResult:
         return await self._run(
             command, workdir=workdir, timeout=timeout, on_output=on_output
         )
@@ -154,9 +146,9 @@ class ProcessSession:
         workdir: str,
         timeout: float,
         on_output: Callable[[str], Any] | None,
-    ) -> ExecResult:
+    ) -> CommandResult:
         if not self._started or self.status is not SandboxLifecycleStatus.RUNNING:
-            return ExecResult(
+            return CommandResult(
                 success=False,
                 exit_code=-1,
                 output="",
@@ -214,7 +206,7 @@ class ProcessSession:
             except TimeoutError:
                 proc.kill()
                 await proc.wait()
-                return ExecResult(
+                return CommandResult(
                     success=False,
                     exit_code=-1,
                     output="".join(chunks),
@@ -223,14 +215,14 @@ class ProcessSession:
                 )
 
             exit_code = proc.returncode if proc.returncode is not None else -1
-            return ExecResult(
+            return CommandResult(
                 success=exit_code == 0,
                 exit_code=exit_code,
                 output="".join(chunks),
                 duration_seconds=time.monotonic() - start,
             )
         except FileNotFoundError as e:
-            return ExecResult(
+            return CommandResult(
                 success=False,
                 exit_code=-1,
                 output="",
@@ -239,7 +231,7 @@ class ProcessSession:
             )
         except Exception as e:  # noqa: BLE001
             logger.exception("process_exec_failed")
-            return ExecResult(
+            return CommandResult(
                 success=False,
                 exit_code=-1,
                 output="",

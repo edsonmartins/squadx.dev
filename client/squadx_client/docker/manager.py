@@ -62,7 +62,9 @@ class DockerManager:
         self._lock = asyncio.Lock()
         # Live streaming tracking
         self._live_streams: dict[str, LiveStreamInfo] = {}  # container_id -> LiveStreamInfo
-        self._live_enabled = bool(settings.supabase_url and settings.supabase_anon_key)
+        self._live_enabled = bool(
+            settings.squadx_live_url and settings.squadx_service_secret
+        )
         # Optional warm pool, attached by the daemon at startup (RFC-0006 / pool.py).
         self.warm_pool: WarmContainerPool | None = None
 
@@ -609,7 +611,9 @@ class DockerManager:
             The join code for the live session, or None if failed
         """
         if not self._live_enabled:
-            logger.warning("Live streaming not enabled (Supabase not configured)")
+            logger.warning(
+                "Live streaming not enabled (SquadX Live API not configured)"
+            )
             return None
 
         # Check if already streaming
@@ -626,7 +630,7 @@ class DockerManager:
         try:
             from squadx_client.streaming.webrtc_bridge import create_live_stream
 
-            # Create live stream (connects to VNC and creates Supabase session)
+            # Create live stream (connects to VNC and creates a SquadX Live session)
             bridge, join_code = await create_live_stream(
                 task_id=task_id,
                 vnc_host="localhost",

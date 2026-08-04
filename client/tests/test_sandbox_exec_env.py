@@ -26,7 +26,7 @@ def _running_sandbox(manager, exec_env=None):
         workspace_path="/tmp/ws",
         enable_live_streaming=False,
     )
-    sandbox = session.inner
+    sandbox = session
     sandbox.runtime = SandboxRuntime.DOCKER
     sandbox.container_id = "agent-1"
     sandbox.status = SandboxStatus.RUNNING
@@ -92,12 +92,12 @@ async def test_start_routes_exec_env_away_from_container_create():
             workspace_path="/tmp/ws",
             enable_live_streaming=False,
         )
-        session.inner.runtime = SandboxRuntime.DOCKER
+        session.runtime = SandboxRuntime.DOCKER
         await session.start(enable_vnc=False, exec_env=SECRETS)
 
     created_config = manager.create_container.await_args.kwargs["config"]
     assert "ANTHROPIC_API_KEY" not in created_config.environment
-    assert session.inner._exec_env == SECRETS
+    assert session._exec_env == SECRETS
 
 @pytest.mark.asyncio
 async def test_manager_exec_command_forwards_environment_to_docker():

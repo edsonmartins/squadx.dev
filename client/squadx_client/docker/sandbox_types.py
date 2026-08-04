@@ -1,28 +1,11 @@
-"""Shared Docker sandbox status/result types."""
+"""Compatibility names for the shared sandbox lifecycle and command result."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+from squadx_client.sandbox.types import CommandResult, SandboxLifecycleStatus
 
+# Keep old import paths working without maintaining duplicate runtime types.
+SandboxStatus = SandboxLifecycleStatus
+SandboxResult = CommandResult
 
-class SandboxStatus(str, Enum):
-    """Sandbox lifecycle status."""
-
-    CREATED = "created"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-
-
-@dataclass
-class SandboxResult:
-    """Result of a sandbox command execution."""
-
-    success: bool
-    exit_code: int
-    output: str
-    error: str | None = None
-    duration_seconds: float = 0.0
+__all__ = ["SandboxResult", "SandboxStatus"]

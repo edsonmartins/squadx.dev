@@ -38,7 +38,7 @@ def mock_supabase_client():
 @pytest.fixture
 def session_manager(mock_supabase_client):
     """Create a LiveSessionManager with mocked client."""
-    return LiveSessionManager(supabase_client=mock_supabase_client)
+    return LiveSessionManager(client=mock_supabase_client)
 
 
 class TestCreateSession:

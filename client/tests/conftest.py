@@ -98,7 +98,7 @@ def make_docker_session(
     enable_live_streaming: bool = False,
     runtime=None,
 ):
-    """Build a real DockerSandboxSession (factory path) for unit tests."""
+    """Build a real AgentSandbox through the production factory path."""
     from squadx_client.sandbox.docker_backend import DockerSandboxBackend
 
     kwargs = {
@@ -111,7 +111,7 @@ def make_docker_session(
     backend = DockerSandboxBackend(manager=manager)
     session = backend.create_session(**kwargs)
     if runtime is not None:
-        session.inner.runtime = runtime
+        session.runtime = runtime
     return session
 
 

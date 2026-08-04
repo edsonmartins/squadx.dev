@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from squadx_client.docker.file_ops import SandboxFileOps
 from squadx_client.docker.hardening import get_runtime_config
@@ -21,6 +22,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class SandboxStartConfig:
+    """Typed configuration needed by the extracted start workflow."""
+
+    egress_sidecar_enabled: bool
+    egress_fail_open: bool
+
+
 async def start_agent_sandbox(
     sandbox: AgentSandbox,
     *,
@@ -30,15 +39,9 @@ async def start_agent_sandbox(
     enable_vnc: bool = True,
     environment: dict | None = None,
     exec_env: dict | None = None,
-    settings: Any | None = None,
+    config: SandboxStartConfig,
 ) -> bool:
-    """Start container (+ optional egress sidecar / warm pool / live stream).
-
-    ``settings`` should be the settings object bound in ``docker.sandbox`` so tests
-    that patch ``squadx_client.docker.sandbox.settings`` keep working.
-    """
-    if settings is None:
-        from squadx_client.config import settings as settings  # noqa: PLW0621
+    """Start container (+ optional egress sidecar / warm pool / live stream)."""
 
     if sandbox.status not in (
         SandboxStatus.CREATED,
@@ -63,7 +66,7 @@ async def start_agent_sandbox(
             f"runtime={sandbox.runtime.value}"
         )
 
-        config = ContainerConfig(
+        container_config = ContainerConfig(
             image=image,
             memory_limit=memory_limit,
             cpu_limit=cpu_limit,
@@ -78,9 +81,13 @@ async def start_agent_sandbox(
             **runtime_kwargs,
         )
 
-        sidecar_enabled = getattr(settings, "egress_sidecar_enabled", False)
+        sidecar_enabled = config.egress_sidecar_enabled
         if not await _acquire_or_create(
-            sandbox, config, enable_vnc, sidecar_enabled, settings
+            sandbox,
+            container_config,
+            enable_vnc,
+            sidecar_enabled,
+            config.egress_fail_open,
         ):
             return False
 
@@ -118,7 +125,7 @@ async def _acquire_or_create(
     config: ContainerConfig,
     enable_vnc: bool,
     sidecar_enabled: bool,
-    settings: Any,
+    egress_fail_open: bool,
 ) -> bool:
     """Warm pool acquire or cold create+start. Returns False on hard failure."""
     warm_pool = getattr(sandbox.manager, "warm_pool", None)
@@ -141,7 +148,7 @@ async def _acquire_or_create(
                 f"use_count={pooled.use_count}"
             )
         except Exception as e:  # noqa: BLE001 - cold fallback below
-            if sidecar_enabled and not getattr(settings, "egress_fail_open", False):
+            if sidecar_enabled and not egress_fail_open:
                 logger.error(
                     f"warm_pool_acquire_failed_fail_closed task={sandbox.task_id} "
                     f"error={e}"

@@ -1,10 +1,9 @@
-"""Docker ``SandboxBackend`` — builds ``DockerSandboxSession`` over ``AgentSandbox``."""
+"""Docker ``SandboxBackend`` — builds ``AgentSandbox`` sessions."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from squadx_client.sandbox.docker_session import DockerSandboxSession
 from squadx_client.sandbox.session import SandboxSession
 from squadx_client.sandbox.types import SandboxBackendKind
 
@@ -52,4 +51,4 @@ class DockerSandboxBackend:
             kwargs["manager"] = self._manager
         if ttl_seconds is not None:
             kwargs["ttl_seconds"] = ttl_seconds
-        return DockerSandboxSession(AgentSandbox(**kwargs))
+        return AgentSandbox(**kwargs)

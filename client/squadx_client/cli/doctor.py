@@ -106,7 +106,7 @@ def check_sandbox_backend(report: DoctorReport) -> None:
 def check_process_isolator(report: DoctorReport) -> None:
     """Verify bubblewrap / Seatbelt availability for PROCESS backend."""
     from squadx_client.sandbox.errors import SandboxNotSupportedError
-    from squadx_client.sandbox.process_backend import detect_process_isolator
+    from squadx_client.sandbox.process import detect_process_isolator
 
     try:
         isolator = detect_process_isolator()

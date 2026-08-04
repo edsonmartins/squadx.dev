@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({
 // Mock live view API
 vi.mock('@/lib/api', () => ({
   liveViewApi: {
-    supabase: { getActive: vi.fn().mockResolvedValue([]) },
+    getByTask: vi.fn().mockRejectedValue(new Error("no live session")),
   },
 }))
 

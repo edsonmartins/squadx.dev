@@ -58,12 +58,6 @@ export default function LiveViewEmbed({ sessionCode, className = '' }: LiveViewE
         className="w-full h-full border-0"
         allow="camera; microphone; display-capture"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        onLoad={() => {
-          if (status === 'loading') {
-            // Give the embedded page a moment to initialize
-            setTimeout(() => setStatus('connected'), 2000)
-          }
-        }}
         onError={() => setStatus('error')}
       />
     </div>

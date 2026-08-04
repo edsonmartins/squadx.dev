@@ -253,7 +253,13 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
                   <Button
                     className="w-full"
                     variant="destructive"
-                    onClick={() => router.push(`/live/${liveSession.code}`)}
+                    onClick={() => {
+                      if (liveSession.viewer_url) {
+                        window.open(liveSession.viewer_url, "_blank", "noopener,noreferrer");
+                      } else {
+                        router.push(`/live/${liveSession.code}`);
+                      }
+                    }}
                   >
                     <Video className="mr-2 h-4 w-4" />
                     Watch Live

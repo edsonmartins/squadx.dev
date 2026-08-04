@@ -40,8 +40,11 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   useEffect(() => {
     const fetchLiveSessions = async () => {
       try {
-        const sessions = await liveViewApi.supabase.getActive();
-        setLiveSessions(sessions || []);
+        const activeTasks = tasks.filter((task) => task.status === "IN_PROGRESS");
+        const sessions = await Promise.all(
+          activeTasks.map((task) => liveViewApi.getByTask(task.id).catch(() => null))
+        );
+        setLiveSessions(sessions.filter((session): session is LiveSessionResponse => session !== null));
       } catch (error) {
         // Silently fail - live sessions are optional
         console.debug("Could not fetch live sessions:", error);
@@ -52,7 +55,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     // Refresh every 10 seconds
     const interval = setInterval(fetchLiveSessions, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [tasks]);
 
   // Map taskId -> sessionCode for quick lookup
   const liveSessionMap = useMemo(() => {

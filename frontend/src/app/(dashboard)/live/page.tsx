@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Video, Users, Eye, Clock, Play, ExternalLink } from "lucide-react";
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { liveViewApi, organizationsApi, LiveSessionResponse } from "@/lib/api";
+import { liveViewApi, organizationsApi } from "@/lib/api";
 import { format } from "date-fns";
 
 export default function LiveViewPage() {
@@ -28,32 +28,12 @@ export default function LiveViewPage() {
   const defaultOrgId = organizations?.content?.[0]?.id;
 
   // Fetch active sessions from organization (Spring Boot)
-  const { data: orgSessions } = useQuery({
+  const { data: activeSessions, isLoading } = useQuery({
     queryKey: ["live-sessions-org", defaultOrgId],
     queryFn: () => liveViewApi.getActiveByOrganization(defaultOrgId!),
     enabled: !!defaultOrgId,
     refetchInterval: 10000,
   });
-
-  // Fetch active sessions from Supabase (Python client)
-  const { data: supabaseSessions, isLoading } = useQuery({
-    queryKey: ["live-sessions-supabase"],
-    queryFn: () => liveViewApi.supabase.getActive(),
-    refetchInterval: 10000,
-  });
-
-  // Combine sessions from both sources, avoiding duplicates by code
-  const activeSessions = useMemo(() => {
-    const sessionsMap = new Map<string, LiveSessionResponse>();
-
-    // Add org sessions first
-    orgSessions?.forEach(s => sessionsMap.set(s.code, s));
-
-    // Add Supabase sessions (may override if same code)
-    supabaseSessions?.forEach(s => sessionsMap.set(s.code, s));
-
-    return Array.from(sessionsMap.values());
-  }, [orgSessions, supabaseSessions]);
 
   const handleJoinSession = () => {
     if (joinCode.length >= 6 && joinCode.length <= 8) {

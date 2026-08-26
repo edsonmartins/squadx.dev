@@ -19,7 +19,8 @@ class RipgrepFallbackProviderTest {
         var provider = new RipgrepFallbackProvider(new ObjectMapper(), root.toString());
 
         assertThat(provider.descriptor().id()).isEqualTo("ripgrep");
-        assertThat(provider.descriptor().capabilities()).containsExactly(Capability.SEARCH);
+        assertThat(provider.descriptor().capabilities())
+                .containsExactly(Capability.SEARCH, Capability.ARCHITECTURE);
     }
 
     @Test

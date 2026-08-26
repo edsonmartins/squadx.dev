@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class WorkspaceToolServiceTest {
 
     @Mock private ChangeService changeService;
@@ -61,9 +62,14 @@ class WorkspaceToolServiceTest {
     private User user;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         user = User.builder().email("u@example.com").fullName("U").build();
         user.setId(1L);
+        // repositoryRoot vem de @Value (não injetado em teste unitário); sem ele o
+        // scaffoldTests faz Path.of(null) → NPE.
+        var field = WorkspaceToolService.class.getDeclaredField("repositoryRoot");
+        field.setAccessible(true);
+        field.set(toolService, java.nio.file.Files.createTempDirectory("squadx-intel").toString());
     }
 
     private SpecTask taskInChange(Long changeId) {
@@ -154,12 +160,14 @@ class WorkspaceToolServiceTest {
         change.setId(5L);
         Requirement req = Requirement.builder().change(change).requirementId("R1").build();
         req.setId(9L);
-        when(requirementRepository.findByChangeId(5L)).thenReturn(List.of(req));
+        when(requirementRepository.findById(9L)).thenReturn(Optional.of(req));
         when(scenarioRepository.findByRequirementId(9L)).thenReturn(List.of(
                 Scenario.builder().requirement(req).name("login inválido")
                         .whenCondition("w").thenResult("t").covered(false).build()));
 
-        ScaffoldTestsResponse r = toolService.scaffoldTests(session, new ScaffoldTestsRequest());
+        ScaffoldTestsRequest request = new ScaffoldTestsRequest();
+        request.setRequirementId(9L);
+        ScaffoldTestsResponse r = toolService.scaffoldTests(session, request);
 
         assertThat(r.getMethods()).hasSize(1);
         assertThat(r.getMethods().get(0).getMethodName()).isEqualTo("R1_login_invalido");

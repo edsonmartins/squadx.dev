@@ -1182,12 +1182,49 @@ export interface HarnessRequest {
   models?: string[];
 }
 
+const harnessSchema = z.object({
+  id: z.number(),
+  organization_id: z.number().catch(0),
+  key: z.string().catch(""),
+  name: z.string().catch(""),
+  vendor: z.string().catch(""),
+  status: z.string().catch(""),
+  model: z.string().nullable().catch(null),
+  models: z.array(z.string()).catch([]),
+  created_at: z.string().catch(""),
+  updated_at: z.string().nullable().catch(null),
+});
+
+function fallbackHarness(): HarnessResponse {
+  return { id: 0, organization_id: 0, key: "", name: "", vendor: "", status: "", models: [], created_at: "" };
+}
+
 export const harnessesApi = {
   list: (organizationId: number) =>
-    api.get<HarnessResponse[]>(`/api/v1/harnesses/organization/${organizationId}`),
+    getList<HarnessResponse>(
+      `/api/v1/harnesses/organization/${organizationId}`,
+      harnessSchema as unknown as z.ZodType<HarnessResponse>
+    ),
   create: (organizationId: number, data: HarnessRequest) =>
-    api.post<HarnessResponse>(`/api/v1/harnesses/organization/${organizationId}`, data),
-  update: (id: number, data: HarnessRequest) => api.put<HarnessResponse>(`/api/v1/harnesses/${id}`, data),
+    api
+      .post<unknown>(`/api/v1/harnesses/organization/${organizationId}`, data)
+      .then((d) =>
+        parseWithFallback<HarnessResponse>(
+          harnessSchema as unknown as z.ZodType<HarnessResponse>,
+          d,
+          fallbackHarness()
+        )
+      ),
+  update: (id: number, data: HarnessRequest) =>
+    api
+      .put<unknown>(`/api/v1/harnesses/${id}`, data)
+      .then((d) =>
+        parseWithFallback<HarnessResponse>(
+          harnessSchema as unknown as z.ZodType<HarnessResponse>,
+          d,
+          fallbackHarness()
+        )
+      ),
   delete: (id: number) => api.delete<void>(`/api/v1/harnesses/${id}`),
 };
 

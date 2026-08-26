@@ -1,0 +1,86 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Execuções iniciadas / min",
+      "type": "stat",
+      "id": 1,
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(squadx_business_executions_started_total[5m])) * 60", "legendFormat": "execuções/min", "refId": "A"}]
+    },
+    {
+      "title": "Taxa de sucesso (24h)",
+      "type": "stat",
+      "id": 2,
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}},
+      "targets": [{"expr": "sum(increase(squadx_business_executions_completed_total{outcome=\"completed\"}[24h])) / clamp_min(sum(increase(squadx_business_executions_completed_total[24h])), 1)", "legendFormat": "sucesso", "refId": "A"}]
+    },
+    {
+      "title": "Duração p95",
+      "type": "stat",
+      "id": 3,
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(squadx_business_execution_duration_seconds_bucket[15m])))", "legendFormat": "p95", "refId": "A"}]
+    },
+    {
+      "title": "Custo reportado (24h)",
+      "type": "stat",
+      "id": 4,
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
+      "targets": [{"expr": "sum(increase(squadx_business_execution_cost_usd_total[24h]))", "legendFormat": "USD", "refId": "A"}]
+    },
+    {
+      "title": "Execuções por estado",
+      "type": "timeseries",
+      "id": 5,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (status) (squadx_business_executions_active)", "legendFormat": "{{status}}", "refId": "A"}]
+    },
+    {
+      "title": "Resultados por runtime",
+      "type": "timeseries",
+      "id": 6,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (runtime, outcome) (rate(squadx_business_executions_completed_total[15m]))", "legendFormat": "{{runtime}} / {{outcome}}", "refId": "A"}]
+    },
+    {
+      "title": "Tokens por direção",
+      "type": "timeseries",
+      "id": 7,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum by (direction) (rate(squadx_business_execution_tokens_total[15m]))", "legendFormat": "{{direction}}", "refId": "A"}]
+    },
+    {
+      "title": "Agentes por estado",
+      "type": "timeseries",
+      "id": 8,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (state) (squadx_business_agents)", "legendFormat": "{{state}}", "refId": "A"},
+        {"expr": "sum(rate(squadx_business_agents_dead_total[15m]))", "legendFormat": "dead/s", "refId": "B"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["squadx", "business"],
+  "templating": {"list": []},
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "title": "SquadX — Business Overview",
+  "uid": "squadx-business-overview",
+  "version": 1
+}

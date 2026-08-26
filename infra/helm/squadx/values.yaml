@@ -21,13 +21,15 @@ backend:
       cpu: "500m"
   probes:
     readiness:
-      path: /api/v1/health/live
-      initialDelaySeconds: 30
+      path: /api/v1/health/ready
       periodSeconds: 10
     liveness:
       path: /api/v1/health/live
-      initialDelaySeconds: 60
       periodSeconds: 15
+    startup:
+      path: /api/v1/health/live
+      periodSeconds: 5
+      failureThreshold: 24
 
 # -- Frontend (Next.js)
 frontend:

@@ -26,6 +26,8 @@ volumes:
   minio_live:
   redis_data:
   falkordb_data:
+  prometheus_data:
+  grafana_data:
 
 services:
   # ═══════════════════════════════════════════════════════
@@ -329,6 +331,7 @@ services:
       - "9090:9090"
     volumes:
       - ../infra/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
     networks: [squadx-platform]
     profiles: [monitoring]
 
@@ -339,5 +342,9 @@ services:
       - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
     networks: [squadx-platform]
     profiles: [monitoring]

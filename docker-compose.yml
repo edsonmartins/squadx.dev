@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-squadx_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-squadx}
     ports:
-      - "5432:5432"
+      - "55433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -47,7 +47,7 @@ services:
       dockerfile: Dockerfile
     container_name: squadx-backend
     ports:
-      - "8080:8080"
+      - "18080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/squadx
@@ -55,17 +55,17 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-squadx_dev_password}
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production-min-32-chars}
+      - SQUADX_INTELLIGENCE_NATIVE_ENABLED=true
+      - SQUADX_INTELLIGENCE_REPOSITORY_ROOT=/tmp/intelligence-repositories
+      - JAVA_TOOL_OPTIONS=-Dintelligence.native.enabled=true -Dintelligence.native.repository-root=/tmp/intelligence-repositories
+      # Base64-encoded 256-bit development key; replace via JWT_SECRET in real deployments.
+      - JWT_SECRET=${JWT_SECRET:-c3F1YWR4LWRldi1qd3Qta2V5LWZvci1sb2NhbC1vbmx5LTIwMjY=}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - maven_cache:/root/.m2
     deploy:
       resources:
         limits:
@@ -80,15 +80,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
-      - NEXT_PUBLIC_WS_URL=http://localhost:8080/ws
+      - NEXT_PUBLIC_API_URL=http://localhost:18080
+      - NEXT_PUBLIC_WS_URL=http://localhost:18080/ws
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    command: sh -c "corepack enable && pnpm dev"
     deploy:
       resources:
         limits:

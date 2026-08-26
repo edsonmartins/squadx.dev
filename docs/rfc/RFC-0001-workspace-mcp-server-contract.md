@@ -108,6 +108,33 @@ Gera o esqueleto de testes a partir dos cenários (ADR-0005).
   "coverage": { "total": number, "covered": number }
 }
 ```
+Quando houver um mirror local do projeto, a tool cria o arquivo JUnit 5 no caminho indicado
+sem sobrescrever um scaffold existente. Cada método recebe `@DisplayName` com o cenário e um
+corpo `TODO` que falha explicitamente até ser implementado; o agente pode então editar o arquivo
+e o Pass 5 executar a suíte nativa do repositório.
+
+### 4.7 `search_code`
+Consulta a inteligência de código do snapshot ativo da sessão. O agente não envia `snapshot_id`;
+o servidor resolve o snapshot `READY` do projeto/revisão escopados no token. O resultado preserva
+provider, revisão e evidências para que a resposta possa ser auditada.
+
+```jsonc
+// input
+{ "query": "string", "limit": 20 }
+// output
+{
+  "provider": "native",
+  "snapshot_id": "string",
+  "revision": "string",
+  "hits": [
+    { "path": "string", "start_line": number, "end_line": number,
+      "snippet": "string", "confidence": number,
+      "evidence": { "excerpt_hash": "string" } }
+  ],
+  "has_more": boolean
+}
+// erros: E_NOT_FOUND (snapshot ausente), E_CONFLICT (snapshot não READY), E_SCOPE
+```
 
 ## 5. Semântica de sessão
 
@@ -117,6 +144,8 @@ Gera o esqueleto de testes a partir dos cenários (ADR-0005).
 4. Em impedimento, `report_blocker`.
 5. Na aprovação de uma versão da spec, `materialize_change` é chamada (pelo painel ou pelo agente
    com permissão) e o `commit` alimenta o `SpecVersion`.
+6. Ferramentas de code intelligence usam sempre o snapshot ativo resolvido pelo servidor; o agente
+   não pode escolher outro projeto, revisão ou provider através do payload.
 
 ## 6. Versionamento do contrato
 

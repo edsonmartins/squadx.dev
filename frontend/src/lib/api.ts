@@ -989,7 +989,7 @@ export type AgentType = "FRONTEND" | "BACKEND" | "FULLSTACK" | "DEVOPS" | "QA" |
 
 // Runtime adapter: native LangGraph loop vs an external coding-agent CLI
 export type AgentRuntimeKind = "NATIVE" | "EXTERNAL_CLI";
-export type CliProvider = "CLAUDE_CODE" | "CODEX" | "GEMINI_CLI";
+export type CliProvider = "CLAUDE_CODE" | "CODEX" | "GEMINI_CLI" | "AIDER" | "OPENCODE";
 
 export interface SquadAgentSummary {
   id: number;

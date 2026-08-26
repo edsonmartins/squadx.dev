@@ -14,6 +14,9 @@ vi.mock("@/lib/api", () => ({
     create: vi.fn().mockResolvedValue({}),
     update: vi.fn().mockResolvedValue({}),
   },
+  harnessesApi: {
+    list: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -75,5 +78,32 @@ describe("AgentModal runtime selector", () => {
         squad_id: 1,
       })
     );
+  });
+
+  it("accepts the newer providers added to the client runtime adapter (AIDER value round-trips)", async () => {
+    const agent = {
+      id: 1,
+      name: "Aider Runner",
+      type: "FULLSTACK" as const,
+      runtime_kind: "EXTERNAL_CLI" as const,
+      cli_provider: "AIDER" as const,
+      model: "gpt-4o",
+      temperature: 0.7,
+      max_tokens: 4096,
+      is_active: true,
+      squad_id: 1,
+      squad_name: "Squad",
+      created_at: "2025-01-01T00:00:00Z",
+    };
+
+    renderWithProviders(<AgentModal {...baseProps} agent={agent} />);
+
+    // O valor AIDER (adicionado no adaptador do cliente) deve passar pela validação
+    // e renderizar seu rótulo no trigger — sem abrir o portal Radix em jsdom.
+    const providerTrigger = screen
+      .getAllByRole("combobox")
+      .find((b) => b.textContent?.includes("Aider"));
+    expect(providerTrigger).toBeInTheDocument();
+    expect(providerTrigger!.textContent).toContain("Aider (chat-style)");
   });
 });

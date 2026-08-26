@@ -39,7 +39,7 @@ const agentSchema = z
     name: z.string().min(1, "Name is required").max(100),
     type: z.enum(["FRONTEND", "BACKEND", "FULLSTACK", "DEVOPS", "QA", "COORDINATOR", "DATABASE"]),
     runtime_kind: z.enum(["NATIVE", "EXTERNAL_CLI"]),
-    cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI"]).nullable().optional(),
+    cli_provider: z.enum(["CLAUDE_CODE", "CODEX", "GEMINI_CLI", "AIDER", "OPENCODE"]).nullable().optional(),
     description: z.string().max(500).optional(),
     // Model only applies to native agents; external CLIs manage their own model.
     model: z.string().optional(),
@@ -68,6 +68,8 @@ const cliProviderOptions: { value: CliProvider; label: string }[] = [
   { value: "CLAUDE_CODE", label: "Claude Code" },
   { value: "CODEX", label: "Codex CLI" },
   { value: "GEMINI_CLI", label: "Gemini CLI" },
+  { value: "AIDER", label: "Aider (chat-style)" },
+  { value: "OPENCODE", label: "OpenCode (terminal-first)" },
 ];
 
 const agentTypes: { value: AgentType; label: string; description: string }[] = [
@@ -140,8 +142,13 @@ export function AgentModal({ open, onClose, agent, squadId, organizationId }: Ag
     : modelOptions;
 
   useEffect(() => {
-    if (selectedHarness?.models?.length && !selectedHarness.models.includes(model || "")) {
-      setValue("model", selectedHarness.models[0], { shouldValidate: true });
+    if (selectedHarness) {
+      // Prefere o modelo default escolhido no harness (Conectores, §8); cai
+      // para o primeiro da lista disponível quando o atual não é válido.
+      if (!model || (selectedHarness.models.length && !selectedHarness.models.includes(model))) {
+        const preferred = selectedHarness.model || selectedHarness.models?.[0];
+        if (preferred) setValue("model", preferred, { shouldValidate: true });
+      }
     }
   }, [selectedHarness, model, setValue]);
 

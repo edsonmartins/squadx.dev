@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -13,7 +15,8 @@ async def test_search_code_uses_scoped_workspace_endpoint():
         assert request.method == "POST"
         assert request.url.path == "/api/v1/workspace/tools/search_code"
         assert request.headers["authorization"] == "Bearer session-token"
-        assert request.json() == {"query": "Spring", "limit": 5}
+        # httpx.Request não expõe .json(); o payload está em request.content (bytes JSON).
+        assert json.loads(request.content) == {"query": "Spring", "limit": 5}
         return httpx.Response(200, json={"success": True, "data": {
             "provider": "native", "snapshot_id": "native:1:abc1234",
             "revision": "abc1234", "hits": [], "has_more": False

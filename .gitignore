@@ -73,3 +73,5 @@ infra/repowise-src/
 infra/repowise-repositories/
 infra/intelligence-repositories/
 /squad-maps/
+/mobile/
+/desktop/

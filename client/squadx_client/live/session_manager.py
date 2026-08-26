@@ -8,8 +8,7 @@ from enum import Enum
 from typing import Any
 
 from squadx_client.config import settings
-from squadx_client.live.live_api_client import SquadxLiveApiClient
-from squadx_client.live.live_api_client import RealtimeMessage
+from squadx_client.live.live_api_client import RealtimeMessage, SquadxLiveApiClient
 
 logger = logging.getLogger(__name__)
 

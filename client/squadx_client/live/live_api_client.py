@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from squadx_client.config import settings
+
 logger = logging.getLogger(__name__)
 
 

@@ -14,6 +14,8 @@ import {
   Video,
   Zap,
   Settings,
+  Cable,
+  History,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -32,6 +34,7 @@ import { useUIStore } from "@/stores/ui-store";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Projects", href: "/projects", icon: FolderKanban },
+  { name: "Changes", href: "/changes", icon: History },
   { name: "Tasks", href: "/tasks", icon: ListTodo },
   { name: "Squads", href: "/squads", icon: Users },
   { name: "Autopilots", href: "/autopilots", icon: Zap },
@@ -43,6 +46,7 @@ const navigation = [
 ];
 
 const bottomNavigation = [
+  { name: "Harnesses", href: "/harnesses", icon: Cable },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

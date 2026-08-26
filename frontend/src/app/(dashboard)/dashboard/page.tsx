@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { organizationsApi, projectsApi, executionsApi, liveViewApi } from "@/lib/api";
+import { organizationsApi, projectsApi, executionsApi, liveViewApi, changesApi, WhereWeAreResponse } from "@/lib/api";
 import { useOrganizationStore } from "@/stores/organization-store";
 import { ProjectModal } from "@/components/projects/project-modal";
 
@@ -44,6 +44,23 @@ export default function DashboardPage() {
     queryFn: () => projectsApi.list(),
   });
 
+  const organizations = orgsData?.content || [];
+  const projects = projectsData?.content || [];
+
+  const { data: progressByProject } = useQuery({
+    queryKey: ["change-progress", projects.map((project) => project.id)],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        projects.slice(0, 8).map(async (project) => [
+          project.id,
+          await changesApi.whereWeAre(project.id),
+        ] as const),
+      );
+      return Object.fromEntries(entries) as Record<number, WhereWeAreResponse>;
+    },
+    enabled: projects.length > 0,
+  });
+
   const { data: activeSessions } = useQuery({
     queryKey: ["active-sessions", selectedOrganization?.id],
     queryFn: () =>
@@ -62,9 +79,6 @@ export default function DashboardPage() {
     },
     enabled: !!selectedOrganization,
   });
-
-  const organizations = orgsData?.content || [];
-  const projects = projectsData?.content || [];
 
   const stats = [
     {
@@ -223,6 +237,30 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Onde estamos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {projects.slice(0, 8).map((project) => {
+              const progress = progressByProject?.[project.id];
+              const percent = Math.round((progress?.progress || 0) * 100);
+              return (
+                <div key={project.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="truncate font-medium">{project.name}</span>
+                    <span className="text-muted-foreground">{progress ? `${progress.concluidas}/${progress.total}` : "—"}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+            {projects.length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto disponível.</p>}
+          </CardContent>
+        </Card>
+
         {/* Recent Activity */}
         <Card>
           <CardHeader>

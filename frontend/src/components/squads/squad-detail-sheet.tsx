@@ -225,6 +225,7 @@ export function SquadDetailSheet({ squad, onClose, organizationId }: SquadDetail
         onClose={handleCloseAgentModal}
         agent={selectedAgent}
         squadId={squad?.id}
+        organizationId={organizationId}
       />
 
       {/* Delete Confirmation */}

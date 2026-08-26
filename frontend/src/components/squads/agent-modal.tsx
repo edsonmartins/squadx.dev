@@ -4,9 +4,10 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   agentsApi,
+  harnessesApi,
   AgentResponse,
   AgentType,
   AgentRuntimeKind,
@@ -45,6 +46,7 @@ const agentSchema = z
     system_prompt: z.string().max(4000).optional(),
     temperature: z.number().min(0).max(2),
     max_tokens: z.number().min(100).max(128000),
+    harness_id: z.number().nullable().optional(),
   })
   .refine(
     (data) => data.runtime_kind !== "EXTERNAL_CLI" || !!data.cli_provider,
@@ -91,9 +93,10 @@ interface AgentModalProps {
   onClose: () => void;
   agent?: AgentResponse | null;
   squadId?: number;
+  organizationId?: number;
 }
 
-export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
+export function AgentModal({ open, onClose, agent, squadId, organizationId }: AgentModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const isEditing = !!agent;
@@ -117,6 +120,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
       system_prompt: "",
       temperature: 0.7,
       max_tokens: 4096,
+      harness_id: null,
     },
   });
 
@@ -124,6 +128,22 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
   const model = watch("model");
   const runtimeKind = watch("runtime_kind");
   const cliProvider = watch("cli_provider");
+  const harnessId = watch("harness_id");
+  const harnessesQuery = useQuery({
+    queryKey: ["harnesses", organizationId],
+    queryFn: () => harnessesApi.list(organizationId!),
+    enabled: Boolean(organizationId),
+  });
+  const selectedHarness = harnessesQuery.data?.find((harness) => harness.id === harnessId);
+  const availableModels = selectedHarness?.models?.length
+    ? selectedHarness.models.map((value) => ({ value, label: value }))
+    : modelOptions;
+
+  useEffect(() => {
+    if (selectedHarness?.models?.length && !selectedHarness.models.includes(model || "")) {
+      setValue("model", selectedHarness.models[0], { shouldValidate: true });
+    }
+  }, [selectedHarness, model, setValue]);
 
   // Reset form when modal opens/closes or agent changes
   useEffect(() => {
@@ -139,6 +159,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
           system_prompt: agent.system_prompt || "",
           temperature: agent.temperature,
           max_tokens: agent.max_tokens,
+          harness_id: agent.harness_id ?? null,
         });
       } else {
         reset({
@@ -151,6 +172,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
           system_prompt: "",
           temperature: 0.7,
           max_tokens: 4096,
+          harness_id: null,
         });
       }
     }
@@ -169,6 +191,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
         temperature: data.temperature,
         max_tokens: data.max_tokens,
         squad_id: squadId!,
+        harness_id: data.harness_id ?? null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents", squadId] });
@@ -199,6 +222,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
         system_prompt: data.system_prompt,
         temperature: data.temperature,
         max_tokens: data.max_tokens,
+        harness_id: data.harness_id ?? null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents", squadId] });
@@ -277,6 +301,24 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
                 <p className="text-xs text-muted-foreground">
                   {agentTypes.find((t) => t.value === agentType)?.description}
                 </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Harness connector</Label>
+                <Select
+                  value={harnessId ? String(harnessId) : "none"}
+                  onValueChange={(value) => setValue("harness_id", value === "none" ? null : Number(value))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select harness" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">SquadX native default</SelectItem>
+                    {harnessesQuery.data?.map((harness) => (
+                      <SelectItem key={harness.id} value={String(harness.id)}>
+                        {harness.name} {harness.models?.length ? `(${harness.models.join(", ")})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -366,7 +408,7 @@ export function AgentModal({ open, onClose, agent, squadId }: AgentModalProps) {
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
                   <SelectContent>
-                    {modelOptions.map((option) => (
+                    {availableModels.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>

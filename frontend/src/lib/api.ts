@@ -507,6 +507,26 @@ export interface ProjectResponse {
   updated_at?: string;
 }
 
+export interface ChangeResponse {
+  id: number;
+  module?: string | null;
+  phase: string;
+  project_id: number;
+  project_name?: string | null;
+  created_by_id?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface WhereWeAreResponse {
+  project_id: number;
+  counts: Record<string, number>;
+  total: number;
+  concluidas: number;
+  progress: number;
+}
+
 export interface CreateProjectRequest {
   name: string;
   description?: string;
@@ -635,6 +655,9 @@ const agentResponseSchema = z
     is_active: z.boolean().catch(true),
     squad_id: z.number(),
     squad_name: z.string().catch(""),
+    harness_id: z.number().nullable().optional(),
+    harness_name: z.string().nullable().optional(),
+    harness_model: z.string().nullable().optional(),
     created_at: z.string().catch(""),
     updated_at: z.string().optional(),
   })
@@ -652,6 +675,9 @@ const agentResponseSchema = z
     is_active: o.is_active,
     squad_id: o.squad_id,
     squad_name: o.squad_name,
+    harness_id: o.harness_id,
+    harness_name: o.harness_name,
+    harness_model: o.harness_model,
     created_at: o.created_at,
     updated_at: o.updated_at,
   }));
@@ -729,6 +755,43 @@ export const executionsApi = {
     api.post<ExecutionResponse>(`/api/v1/executions/${id}/cancel`),
   getMetrics: (organizationId: number) =>
     api.get<Record<string, unknown>>(`/api/v1/executions/organization/${organizationId}/metrics`),
+};
+
+const executionArtifactSchema = z.object({
+  id: z.number(),
+  execution_id: z.number(),
+  artifact_key: z.string().catch(""),
+  type: z.string().catch("UNKNOWN"),
+  format: z.string().catch("UNKNOWN"),
+  name: z.string().catch("Artifact"),
+  git_revision: z.string().nullable().optional(),
+  base_revision: z.string().nullable().optional(),
+  artifact_group: z.string().nullable().optional(),
+  view_role: z.string().nullable().optional(),
+  checksum_sha256: z.string().catch(""),
+  evidence_json: z.string().nullable().optional(),
+  content: z.string().optional(),
+  created_at: z.string().catch(""),
+  updated_at: z.string().nullable().optional(),
+});
+
+export const executionArtifactsApi = {
+  list: (executionId: number) =>
+    getList<ExecutionArtifactResponse>(
+      `/api/v1/executions/${executionId}/artifacts`,
+      executionArtifactSchema
+    ),
+  get: (artifactId: number) =>
+    api.get<unknown>(`/api/v1/execution-artifacts/${artifactId}`).then((data) =>
+      parseWithFallback<ExecutionArtifactResponse>(
+        executionArtifactSchema as z.ZodType<ExecutionArtifactResponse>,
+        data,
+        {
+          id: artifactId, execution_id: 0, artifact_key: "", type: "UNKNOWN",
+          format: "UNKNOWN", name: "Artifact", checksum_sha256: "", created_at: "",
+        }
+      )
+    ),
 };
 
 export const memoryApi = {
@@ -945,6 +1008,9 @@ export interface AgentResponse {
   is_active: boolean;
   squad_id: number;
   squad_name: string;
+  harness_id?: number | null;
+  harness_name?: string | null;
+  harness_model?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -961,6 +1027,7 @@ export interface CreateAgentRequest {
   temperature?: number;
   max_tokens?: number;
   squad_id: number;
+  harness_id?: number | null;
 }
 
 export interface UpdateAgentRequest {
@@ -972,7 +1039,58 @@ export interface UpdateAgentRequest {
   system_prompt?: string;
   temperature?: number;
   max_tokens?: number;
+  harness_id?: number | null;
 }
+
+export interface HarnessResponse {
+  id: number;
+  organization_id: number;
+  key: string;
+  name: string;
+  vendor: string;
+  status: string;
+  model?: string | null;
+  models: string[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface HarnessRequest {
+  key: string;
+  name: string;
+  vendor: string;
+  status?: string;
+  model?: string;
+  models?: string[];
+}
+
+export const harnessesApi = {
+  list: (organizationId: number) =>
+    api.get<HarnessResponse[]>(`/api/v1/harnesses/organization/${organizationId}`),
+  create: (organizationId: number, data: HarnessRequest) =>
+    api.post<HarnessResponse>(`/api/v1/harnesses/organization/${organizationId}`, data),
+  update: (id: number, data: HarnessRequest) => api.put<HarnessResponse>(`/api/v1/harnesses/${id}`, data),
+  delete: (id: number) => api.delete<void>(`/api/v1/harnesses/${id}`),
+};
+
+export interface SpecVersionResponse {
+  id: number;
+  version: string;
+  current: boolean;
+  summary?: string | null;
+  author_id?: number | null;
+  commit_sha?: string | null;
+  created_at: string;
+}
+
+export const changesApi = {
+  list: (projectId: number) =>
+    api.get<PageResponse<ChangeResponse>>(`/api/v1/changes/project/${projectId}`),
+  whereWeAre: (projectId: number) =>
+    api.get<WhereWeAreResponse>(`/api/v1/changes/project/${projectId}/where-we-are`),
+  versions: (changeId: number) =>
+    api.get<SpecVersionResponse[]>(`/api/v1/changes/${changeId}/versions`),
+};
 
 // Execution Types
 export type ExecutionStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -1041,6 +1159,24 @@ export interface FollowUpResponse {
   requested_agent_id?: number;
   status: "PENDING" | "PROMOTED" | "CANCELLED";
   created_at: string;
+}
+
+export interface ExecutionArtifactResponse {
+  id: number;
+  execution_id: number;
+  artifact_key: string;
+  type: string;
+  format: string;
+  name: string;
+  git_revision?: string | null;
+  base_revision?: string | null;
+  artifact_group?: string | null;
+  view_role?: string | null;
+  checksum_sha256: string;
+  evidence_json?: string | null;
+  content?: string;
+  created_at: string;
+  updated_at?: string | null;
 }
 
 // Live Session Types
@@ -1492,4 +1628,38 @@ export const calendarSyncApi = {
     api.delete(`/api/v1/calendar-sync/disconnect?organizationId=${organizationId}`),
   getStatus: (organizationId: number) =>
     api.get<CalendarSyncStatus>(`/api/v1/calendar-sync/status?organizationId=${organizationId}`),
+};
+
+// Control Panel audit timeline
+export type SpecTaskEventType =
+  | "STARTED" | "IMPLEMENTED" | "PR_OPENED" | "BLOCKED"
+  | "UNBLOCKED" | "PASS5_APPROVED" | "PASS5_CHANGES";
+export type SpecTaskEventSource = "MCP" | "GIT" | "PASS5";
+export interface SpecTaskEvent {
+  id: number;
+  type: SpecTaskEventType;
+  source: SpecTaskEventSource;
+  sourceRef?: string;
+  payload?: string;
+  occurredAt: string;
+  receivedAt: string;
+}
+
+export const specTaskEventsApi = {
+  list: (taskId: number) =>
+    api.get<SpecTaskEvent[]>(`/api/v1/spec-tasks/${taskId}/events`),
+};
+
+export interface Pass5Status {
+  specTaskId: number;
+  outcome?: "PASS" | "FAIL" | "PENDING";
+  critique?: string;
+  coverageTotal: number;
+  coverageCovered: number;
+  scenarios: Array<{ id: number; name: string; covered: boolean }>;
+}
+
+export const pass5Api = {
+  getStatus: (taskId: number) => api.get<Pass5Status>(`/api/v1/spec-tasks/${taskId}/pass5`),
+  run: (taskId: number) => api.post<Pass5Status>(`/api/v1/spec-tasks/${taskId}/pass5/run`),
 };

@@ -42,6 +42,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { ExecutionLogs } from "@/components/executions/execution-logs";
+import { ExecutionArtifacts } from "@/components/executions/execution-artifacts";
+import { SpecTaskEventTimeline } from "@/components/tasks/spec-task-event-timeline";
+import { Pass5Panel } from "@/components/tasks/pass5-panel";
 import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/stores/task-store";
 import { cn } from "@/lib/utils";
@@ -358,6 +361,21 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
                 executionId={latestExecution.id}
                 initialLogs={latestExecution.logs}
               />
+            </div>
+          )}
+
+          {latestExecution && <ExecutionArtifacts executionId={latestExecution.id} />}
+
+          {task && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <h4 className="text-sm font-medium">Task history</h4>
+              <SpecTaskEventTimeline taskId={task.id} />
+            </div>
+          )}
+
+          {task && (
+            <div className="rounded-lg border p-4">
+              <Pass5Panel taskId={task.id} />
             </div>
           )}
 

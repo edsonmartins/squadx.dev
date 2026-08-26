@@ -1,4 +1,4 @@
-const CACHE_NAME = "squadx-v1";
+const CACHE_NAME = "squadx-v2";
 const STATIC_ASSETS = ["/dashboard", "/login"];
 
 self.addEventListener("install", (event) => {
@@ -23,11 +23,15 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
-  // Skip non-GET requests and API calls
+  // CacheStorage only supports HTTP(S). Browser extensions can issue fetches
+  // visible to this worker using chrome-extension:// and similar schemes.
   if (request.method !== "GET") return;
-  if (request.url.includes("/api/")) return;
-  if (request.url.includes("/ws")) return;
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.includes("/api/")) return;
+  if (url.pathname.includes("/ws")) return;
 
   event.respondWith(
     fetch(request)
@@ -35,10 +39,15 @@ self.addEventListener("fetch", (event) => {
         // Cache successful responses for static assets
         if (response.ok && request.url.match(/\.(js|css|png|jpg|svg|woff2?)$/)) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          event.waitUntil(
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(request, clone))
+              .catch(() => undefined)
+          );
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(async () => (await caches.match(request)) ?? Response.error())
   );
 });

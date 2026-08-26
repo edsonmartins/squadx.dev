@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # Workspace Configuration
     workspace_path: str = Field(default="/workspace", alias="SQUADX_WORKSPACE_PATH")
     workspace_mount_path: str | None = Field(default=None, alias="SQUADX_WORKSPACE_MOUNT_PATH")
+    # Token de autenticação da bridge MCP do workspace (RFC-0001 / RFC-0003).
+    workspace_token: str | None = Field(default=None, alias="SQUADX_WORKSPACE_TOKEN")
 
     # SquadX Maps post-execution artifacts. Disabled until a maps service is deployed on
     # the daemon host; failures are non-fatal to an already successful code execution.

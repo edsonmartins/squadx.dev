@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -99,6 +100,8 @@ class SquadXDaemon:
         self.orchestrator = create_orchestrator()
         self.running = False
         self.current_tasks: dict[int, asyncio.Task] = {}
+        self._task_agent_ids: dict[int, int] = {}
+        self._known_agent_ids: set[int] = set()
         self._bg_tasks: set[asyncio.Task] = set()
         self._task_handler = TaskMessageHandler(self)
         # Warm container pool — set in run() when SQUADX_SANDBOX_POOL_ENABLED
@@ -284,6 +287,16 @@ class SquadXDaemon:
             await self._send_task_rejected(task_id, "Max concurrent tasks reached")
             return
 
+        # Remember all agents seen by this daemon so idle agents keep reporting liveness.
+        raw_agent_id = task_data.get("agent_id") or task_data.get("assigned_agent_id")
+        if raw_agent_id is not None:
+            try:
+                agent_id = int(raw_agent_id)
+                self._known_agent_ids.add(agent_id)
+                self._task_agent_ids[task_id] = agent_id
+            except (TypeError, ValueError):
+                logger.warning("invalid_agent_id", task_id=task_id, agent_id=raw_agent_id)
+
         # Start task execution in background
         task = asyncio.create_task(self._execute_task(task_id, task_data))
         self.current_tasks[task_id] = task
@@ -295,6 +308,7 @@ class SquadXDaemon:
             task_id: Task ID
             task_data: Task details from backend
         """
+        revision_worktree: Path | None = None
         try:
             logger.info("task_execution_started", task_id=task_id)
             await self._send_task_status(task_id, "running", progress=0)
@@ -313,8 +327,27 @@ class SquadXDaemon:
                 )
 
             runtime_kind = str(task_data.get("runtime_kind") or "NATIVE").upper()
+            execution_workspace = task_data.get("project_path", settings.workspace_path)
 
-            if settings.smoke_execution_mode:
+            if task_data.get("architecture_only"):
+                revision_worktree = await self._prepare_revision_worktree(
+                    execution_workspace,
+                    str(task_data.get("requested_git_revision") or ""),
+                    execution_id,
+                )
+                execution_workspace = str(revision_worktree)
+
+            if task_data.get("architecture_only"):
+                result = {
+                    "final_result": "Architecture snapshot generated for the Pullwise review.",
+                    "git_branch": "detached",
+                    "git_commit": task_data["requested_git_revision"],
+                    "live_session_codes": [],
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                    "total_cost": 0.0,
+                }
+            elif settings.smoke_execution_mode:
                 result = await self._run_smoke_execution(task_id, task_data, execution_id)
             elif runtime_kind == "EXTERNAL_CLI":
                 # Runtime adapter: drive an external coding CLI in the sandbox
@@ -335,6 +368,30 @@ class SquadXDaemon:
                         "messages": [],
                     }
                 )
+
+            if task_data.get("architecture_only") and not settings.maps_enabled:
+                raise RuntimeError("Architecture-only execution requires SQUADX_MAPS_ENABLED=true")
+            if settings.maps_enabled:
+                try:
+                    from squadx_client.maps import MapsArtifactPublisher
+
+                    publisher = MapsArtifactPublisher(self.api_url, self.token)
+                    await publisher.generate_and_publish(
+                        execution_id=execution_id,
+                        workspace_path=execution_workspace,
+                        git_revision=result.get("git_commit"),
+                        pullwise_review_id=task_data.get("pullwise_review_id"),
+                        canonical_context=task_data.get("code_intelligence_context"),
+                    )
+                    logger.info("architecture_map_published", execution_id=execution_id)
+                except Exception as maps_error:  # map delivery must not fail completed code work
+                    if task_data.get("architecture_only"):
+                        raise
+                    logger.warning(
+                        "architecture_map_publish_failed",
+                        execution_id=execution_id,
+                        error=str(maps_error),
+                    )
 
             logger.info("task_execution_completed", task_id=task_id)
             await brainsentry_client.end_session(
@@ -357,9 +414,64 @@ class SquadXDaemon:
             await self._send_task_failed(task_id, str(e))
 
         finally:
+            if revision_worktree is not None:
+                await self._remove_revision_worktree(
+                    task_data.get("project_path", settings.workspace_path), revision_worktree
+                )
             if "brainsentry_client" in locals():
                 await brainsentry_client.close()
             self.current_tasks.pop(task_id, None)
+            self._task_agent_ids.pop(task_id, None)
+
+    async def _prepare_revision_worktree(
+        self, repository_path: str, revision: str, execution_id: int | str
+    ) -> Path:
+        """Create a detached, isolated checkout for a Pullwise architecture run."""
+        if not re.fullmatch(r"[0-9a-fA-F]{7,64}", revision):
+            raise ValueError("Pullwise task has an invalid requested_git_revision")
+        repository = Path(repository_path).resolve()
+        if not (repository / ".git").exists():
+            raise RuntimeError(f"Architecture workspace is not a git repository: {repository}")
+        worktree = repository / ".squadx-worktrees" / f"pullwise-{execution_id}"
+        worktree.parent.mkdir(parents=True, exist_ok=True)
+
+        async def git(*args: str) -> tuple[int, str]:
+            process = await asyncio.create_subprocess_exec(
+                "git", "-C", str(repository), *args,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            )
+            output, _ = await process.communicate()
+            return process.returncode or 0, output.decode(errors="replace")
+
+        exists, _ = await git("cat-file", "-e", f"{revision}^{{commit}}")
+        if exists != 0:
+            fetched, output = await git("fetch", "--no-tags", "origin", revision)
+            if fetched != 0:
+                raise RuntimeError(f"Could not fetch Pullwise revision {revision}: {output.strip()}")
+        code, output = await git("worktree", "add", "--detach", str(worktree), revision)
+        if code != 0:
+            raise RuntimeError(f"Could not create revision worktree: {output.strip()}")
+        verified = await asyncio.create_subprocess_exec(
+            "git", "-C", str(worktree), "rev-parse", "HEAD",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await verified.communicate()
+        actual = stdout.decode().strip()
+        if verified.returncode != 0 or not actual.lower().startswith(revision.lower()):
+            await self._remove_revision_worktree(str(repository), worktree)
+            raise RuntimeError(f"Revision checkout mismatch: requested {revision}, got {actual}")
+        return worktree
+
+    async def _remove_revision_worktree(self, repository_path: str, worktree: Path) -> None:
+        repository = Path(repository_path).resolve()
+        process = await asyncio.create_subprocess_exec(
+            "git", "-C", str(repository), "worktree", "remove", "--force", str(worktree),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        output, _ = await process.communicate()
+        if process.returncode != 0:
+            logger.warning("revision_worktree_cleanup_failed", path=str(worktree),
+                           error=output.decode(errors="replace").strip())
 
     async def _run_external_cli_task(
         self,
@@ -374,6 +486,9 @@ class SquadXDaemon:
 
         title = task_data.get("title") or f"Task {task_id}"
         description = task_data.get("description") or title
+        code_context = task_data.get("code_intelligence_context")
+        if isinstance(code_context, dict) and code_context.get("hits"):
+            description = description + "\n\nRepository context (evidence only; verify before editing):\n" + str(code_context)
         cli_provider = task_data.get("cli_provider") or "CLAUDE_CODE"
         workspace_path = task_data.get("project_path") or settings.workspace_path
 
@@ -626,7 +741,12 @@ class SquadXDaemon:
         """Send pong response to ping."""
         await self.stomp.send(
             self.DEST_CLIENT_HEARTBEAT,
-            {"type": MessageType.PONG.value, "timestamp": datetime.now().isoformat()},
+            {
+                "type": MessageType.PONG.value,
+                "timestamp": datetime.now().isoformat(),
+                "agent_ids": sorted(self._known_agent_ids),
+                "active_agent_ids": sorted(set(self._task_agent_ids.values())),
+            },
         )
 
     async def _send_task_status(

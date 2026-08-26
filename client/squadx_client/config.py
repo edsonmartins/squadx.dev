@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     workspace_path: str = Field(default="/workspace", alias="SQUADX_WORKSPACE_PATH")
     workspace_mount_path: str | None = Field(default=None, alias="SQUADX_WORKSPACE_MOUNT_PATH")
 
+    # SquadX Maps post-execution artifacts. Disabled until a maps service is deployed on
+    # the daemon host; failures are non-fatal to an already successful code execution.
+    maps_enabled: bool = Field(default=False, alias="SQUADX_MAPS_ENABLED")
+    maps_url: str = Field(default="http://127.0.0.1:8090", alias="SQUADX_MAPS_URL")
+    maps_timeout_seconds: int = Field(default=120, alias="SQUADX_MAPS_TIMEOUT_SECONDS")
+    pullwise_url: str | None = Field(default=None, alias="PULLWISE_URL")
+    pullwise_service_secret: str | None = Field(default=None, alias="PULLWISE_SQUADX_SERVICE_SECRET")
+    artifact_url_template: str | None = Field(
+        default=None, alias="SQUADX_ARTIFACT_URL_TEMPLATE"
+    )
+
     # Agent Configuration
     max_concurrent_agents: int = Field(default=4, alias="SQUADX_MAX_CONCURRENT_AGENTS")
     agent_timeout: int = Field(default=3600, alias="SQUADX_AGENT_TIMEOUT")  # seconds

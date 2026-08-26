@@ -40,6 +40,11 @@ class TestExecuteTask:
     """Test execution behavior for backend-dispatched tasks."""
 
     @pytest.mark.asyncio
+    async def test_rejects_invalid_pullwise_revision_before_checkout(self, daemon, tmp_path):
+        with pytest.raises(ValueError, match="invalid requested_git_revision"):
+            await daemon._prepare_revision_worktree(str(tmp_path), "not-a-sha", 91)
+
+    @pytest.mark.asyncio
     async def test_reuses_brainsentry_session_from_task_payload(self, daemon):
         task_data = {
             "task_id": 42,

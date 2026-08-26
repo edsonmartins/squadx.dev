@@ -1,6 +1,6 @@
 """Async client for the scoped SquadX workspace tool API."""
 
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -13,12 +13,12 @@ class WorkspaceApiClient:
     """Thin async proxy over the workspace tool endpoints."""
 
     def __init__(self, base_url: str, session_token: str, timeout: float = 30.0,
-                 transport: Optional[httpx.AsyncBaseTransport] = None):
+                 transport: httpx.AsyncBaseTransport | None = None):
         self.base_url = base_url.rstrip("/")
         self.session_token = session_token
         self.timeout = timeout
         self._transport = transport
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -52,12 +52,12 @@ class WorkspaceApiClient:
     async def get_change(self) -> Any:
         return await self._call("POST", "/api/v1/workspace/tools/get_change")
 
-    async def get_tasks(self, assignee: Optional[str] = None) -> Any:
+    async def get_tasks(self, assignee: str | None = None) -> Any:
         return await self._call("POST", "/api/v1/workspace/tools/get_tasks",
                                 params={"assignee": assignee} if assignee else None)
 
     async def update_task_status(self, task_id: int, status: str,
-                                 note: Optional[str] = None) -> Any:
+                                 note: str | None = None) -> Any:
         body: dict[str, Any] = {"task_id": task_id, "status": status}
         if note:
             body["note"] = note
@@ -70,7 +70,7 @@ class WorkspaceApiClient:
     async def materialize_change(self) -> Any:
         return await self._call("POST", "/api/v1/workspace/tools/materialize_change")
 
-    async def scaffold_tests(self, requirement_id: Optional[int] = None) -> Any:
+    async def scaffold_tests(self, requirement_id: int | None = None) -> Any:
         return await self._call("POST", "/api/v1/workspace/tools/scaffold_tests",
                                 json={"requirement_id": requirement_id} if requirement_id else {})
 

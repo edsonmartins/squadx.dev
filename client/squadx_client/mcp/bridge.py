@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -10,7 +10,7 @@ from ..config import settings
 from .workspace_client import WorkspaceApiClient
 
 mcp = FastMCP("squadx-workspace")
-_client: Optional[WorkspaceApiClient] = None
+_client: WorkspaceApiClient | None = None
 
 
 def configure(client: WorkspaceApiClient) -> None:
@@ -28,11 +28,11 @@ async def get_change_impl() -> Any:
     return await _require_client().get_change()
 
 
-async def get_tasks_impl(assignee: Optional[str] = None) -> Any:
+async def get_tasks_impl(assignee: str | None = None) -> Any:
     return await _require_client().get_tasks(assignee)
 
 
-async def update_task_status_impl(task_id: int, status: str, note: Optional[str] = None) -> Any:
+async def update_task_status_impl(task_id: int, status: str, note: str | None = None) -> Any:
     return await _require_client().update_task_status(task_id, status, note)
 
 
@@ -44,7 +44,7 @@ async def materialize_change_impl() -> Any:
     return await _require_client().materialize_change()
 
 
-async def scaffold_tests_impl(requirement_id: Optional[int] = None) -> Any:
+async def scaffold_tests_impl(requirement_id: int | None = None) -> Any:
     return await _require_client().scaffold_tests(requirement_id)
 
 
@@ -59,13 +59,13 @@ async def get_change() -> Any:
 
 
 @mcp.tool()
-async def get_tasks(assignee: Optional[str] = None) -> Any:
+async def get_tasks(assignee: str | None = None) -> Any:
     """Lista tarefas da mudança."""
     return await get_tasks_impl(assignee)
 
 
 @mcp.tool()
-async def update_task_status(task_id: int, status: str, note: Optional[str] = None) -> Any:
+async def update_task_status(task_id: int, status: str, note: str | None = None) -> Any:
     """Reporta progresso de uma tarefa."""
     return await update_task_status_impl(task_id, status, note)
 
@@ -83,7 +83,7 @@ async def materialize_change() -> Any:
 
 
 @mcp.tool()
-async def scaffold_tests(requirement_id: Optional[int] = None) -> Any:
+async def scaffold_tests(requirement_id: int | None = None) -> Any:
     """Gera esqueleto de testes."""
     return await scaffold_tests_impl(requirement_id)
 

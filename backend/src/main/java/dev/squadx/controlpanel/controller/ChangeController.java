@@ -1,8 +1,10 @@
 package dev.squadx.controlpanel.controller;
 
+import dev.squadx.controlpanel.dto.change.ActivityEventResponse;
 import dev.squadx.controlpanel.dto.change.ChangeRequest;
 import dev.squadx.controlpanel.dto.change.ChangeResponse;
 import dev.squadx.controlpanel.service.ChangeService;
+import dev.squadx.controlpanel.service.SpecEventService;
 import dev.squadx.controlpanel.service.SpecVersionService;
 import dev.squadx.controlpanel.dto.change.SpecVersionResponse;
 import dev.squadx.dto.common.ApiResponse;
@@ -29,6 +31,7 @@ public class ChangeController {
 
     private final ChangeService changeService;
     private final SpecVersionService specVersionService;
+    private final SpecEventService specEventService;
 
     @GetMapping("/{id}/versions")
     @Operation(summary = "List semantic spec versions of a change")
@@ -73,5 +76,16 @@ public class ChangeController {
             @AuthenticationPrincipal User user
     ) {
         return ResponseEntity.ok(ApiResponse.success(changeService.whereWeAre(projectId, user)));
+    }
+
+    @GetMapping("/project/{projectId}/activity")
+    @Operation(summary = "Recent spec events across the project (live activity feed)")
+    public ResponseEntity<ApiResponse<java.util.List<ActivityEventResponse>>> activity(
+            @PathVariable Long projectId,
+            @RequestParam(name = "limit", defaultValue = "30") int limit,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(specEventService.recentForProject(projectId, user, limit)));
     }
 }

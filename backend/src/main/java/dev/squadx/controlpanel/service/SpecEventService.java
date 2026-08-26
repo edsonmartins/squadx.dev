@@ -1,5 +1,6 @@
 package dev.squadx.controlpanel.service;
 
+import dev.squadx.controlpanel.dto.change.ActivityEventResponse;
 import dev.squadx.controlpanel.event.SpecTaskProjectedEvent;
 import dev.squadx.controlpanel.model.SpecEvent;
 import dev.squadx.controlpanel.model.SpecTask;
@@ -7,10 +8,17 @@ import dev.squadx.controlpanel.model.enums.EventSource;
 import dev.squadx.controlpanel.model.enums.TaskEventType;
 import dev.squadx.controlpanel.repository.SpecEventRepository;
 import dev.squadx.controlpanel.repository.SpecTaskRepository;
+import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
+import dev.squadx.model.Project;
+import dev.squadx.model.User;
+import dev.squadx.repository.OrganizationMemberRepository;
+import dev.squadx.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,8 +42,29 @@ public class SpecEventService {
 
     private final SpecEventRepository specEventRepository;
     private final SpecTaskRepository specTaskRepository;
+    private final ProjectRepository projectRepository;
+    private final OrganizationMemberRepository memberRepository;
     private final SpecTaskProjector projector;
     private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * Feed de atividade recente do projeto (dashboard). Mais recentes primeiro,
+     * com contexto mínimo da tarefa; acesso validado por membership da organização.
+     */
+    @Transactional(readOnly = true)
+    public List<ActivityEventResponse> recentForProject(Long projectId, User currentUser, int limit) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        if (!memberRepository.existsByOrganizationIdAndUserId(
+                project.getOrganization().getId(), currentUser.getId())) {
+            throw new ForbiddenException("User does not have access to this organization");
+        }
+        int capped = Math.max(1, Math.min(limit, 100));
+        Pageable page = PageRequest.of(0, capped);
+        return specEventRepository.findRecentByProject(projectId, page).stream()
+                .map(ActivityEventResponse::from)
+                .toList();
+    }
 
     /**
      * Registra um evento (idempotente por {@code dedup_key}) e reprojeta o estado da tarefa.

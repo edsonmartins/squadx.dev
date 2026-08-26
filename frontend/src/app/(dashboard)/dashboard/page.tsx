@@ -12,10 +12,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Eye,
+  Bot,
+  GitCommit,
+  ShieldCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { organizationsApi, projectsApi, executionsApi, liveViewApi, changesApi, WhereWeAreResponse } from "@/lib/api";
+import { organizationsApi, projectsApi, executionsApi, liveViewApi, changesApi, WhereWeAreResponse, ActivityEventResponse } from "@/lib/api";
 import { useOrganizationStore } from "@/stores/organization-store";
 import { ProjectModal } from "@/components/projects/project-modal";
 
@@ -60,6 +63,40 @@ export default function DashboardPage() {
     },
     enabled: projects.length > 0,
   });
+
+  // Atividade real: eventos de spec (MCP/Git/Pass 5) agregados dos projetos (§8 dashboard).
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+  const { data: specActivity } = useQuery({
+    queryKey: ["spec-activity", projects.slice(0, 3).map((project) => project.id)],
+    queryFn: async (): Promise<ActivityEventResponse[]> => {
+      const groups = await Promise.all(
+        projects.slice(0, 3).map((project) =>
+          changesApi.activity(project.id, 10).catch(() => [] as ActivityEventResponse[])
+        )
+      );
+      return groups
+        .flat()
+        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+        .slice(0, 8);
+    },
+    enabled: projects.length > 0,
+    refetchInterval: 30_000, // feed "ao vivo": revalida a cada 30s
+  });
+
+  function specActivityIcon(source: string) {
+    if (source === "MCP") return { Icon: Bot, className: "text-primary" };
+    if (source === "GIT") return { Icon: GitCommit, className: "text-blue-500" };
+    if (source === "PASS5") return { Icon: ShieldCheck, className: "text-emerald-500" };
+    return { Icon: Clock, className: "text-muted-foreground" };
+  }
+
+  function timeAgo(iso: string) {
+    const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (seconds < 60) return "agora";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min atrás`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h atrás`;
+    return `${Math.floor(seconds / 86400)} d atrás`;
+  }
 
   const { data: activeSessions } = useQuery({
     queryKey: ["active-sessions", selectedOrganization?.id],
@@ -108,36 +145,6 @@ export default function DashboardPage() {
       icon: TrendingUp,
       change: "All active",
       changeType: "positive" as const,
-    },
-  ];
-
-  const recentActivity = [
-    {
-      id: 1,
-      type: "completed",
-      title: "Implement user authentication",
-      project: "squadx-frontend",
-      time: "2 hours ago",
-      icon: CheckCircle2,
-      iconColor: "text-green-500",
-    },
-    {
-      id: 2,
-      type: "in_progress",
-      title: "Fix API response handling",
-      project: "squadx-backend",
-      time: "4 hours ago",
-      icon: Clock,
-      iconColor: "text-blue-500",
-    },
-    {
-      id: 3,
-      type: "blocked",
-      title: "Database migration script",
-      project: "squadx-backend",
-      time: "1 day ago",
-      icon: AlertCircle,
-      iconColor: "text-yellow-500",
     },
   ];
 
@@ -268,22 +275,32 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer"
-                >
-                  <activity.icon className={`h-5 w-5 ${activity.iconColor}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {activity.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.project} • {activity.time}
-                    </p>
+              {(specActivity || []).map((event) => {
+                const { Icon, className } = specActivityIcon(event.source);
+                return (
+                  <div
+                    key={event.id}
+                    className="flex items-start gap-4 rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <Icon className={`h-5 w-5 shrink-0 ${className}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {event.task_title || `Evento ${event.type.toLowerCase()}`}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {event.source} · {event.actor_name || "sistema"} ·{" "}
+                        {timeAgo(event.occurred_at)}
+                        {event.spec_task_id ? ` · task #${event.spec_task_id}` : ""}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              {(!specActivity || specActivity.length === 0) && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Nenhum evento de spec ainda — conecte um harness e execute uma tarefa.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

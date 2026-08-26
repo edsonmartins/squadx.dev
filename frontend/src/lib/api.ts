@@ -1223,6 +1223,28 @@ const specVersionSchema = z.object({
   created_at: z.string().catch(""),
 });
 
+export interface ActivityEventResponse {
+  id: number;
+  spec_task_id?: number | null;
+  task_title?: string | null;
+  type: string;
+  source: string;
+  source_ref?: string | null;
+  actor_name?: string | null;
+  occurred_at: string;
+}
+
+const activityEventSchema = z.object({
+  id: z.number(),
+  spec_task_id: z.number().nullable().catch(null),
+  task_title: z.string().nullable().catch(""),
+  type: z.string().catch(""),
+  source: z.string().catch(""),
+  source_ref: z.string().nullable().catch(null),
+  actor_name: z.string().nullable().catch(null),
+  occurred_at: z.string().catch(""),
+});
+
 function fallbackChange(changeId: number): ChangeResponse {
   return { id: changeId, phase: "", project_id: 0, created_at: "" };
 }
@@ -1242,6 +1264,11 @@ export const changesApi = {
     api.get<WhereWeAreResponse>(`/api/v1/changes/project/${projectId}/where-we-are`),
   versions: (changeId: number) =>
     getList<SpecVersionResponse>(`/api/v1/changes/${changeId}/versions`, specVersionSchema),
+  activity: (projectId: number, limit = 30) =>
+    getList<ActivityEventResponse>(
+      `/api/v1/changes/project/${projectId}/activity?limit=${limit}`,
+      activityEventSchema
+    ),
 };
 
 export const requirementsApi = {

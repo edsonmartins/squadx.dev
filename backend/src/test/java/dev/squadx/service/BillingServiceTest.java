@@ -78,9 +78,17 @@ class BillingServiceTest {
     }
 
     private void setStripeApiKey(String value) throws Exception {
+        // Preserva o comportamento pré-feature-flag: testes que setam chave assumem habilitado.
+        enableStripe();
         Field field = BillingService.class.getDeclaredField("stripeApiKey");
         field.setAccessible(true);
         field.set(billingService, value);
+    }
+
+    private void enableStripe() throws Exception {
+        Field field = BillingService.class.getDeclaredField("stripeEnabled");
+        field.setAccessible(true);
+        field.set(billingService, true);
     }
 
     private void setWebhookSecret(String value) throws Exception {
@@ -148,6 +156,17 @@ class BillingServiceTest {
                     .hasMessageContaining("Stripe is not configured");
 
             verifyNoInteractions(subscriptionRepository);
+        }
+
+        @Test
+        @DisplayName("should reject operations when billing is disabled (stripe.enabled=false)")
+        void shouldRejectWhenFeatureFlagDisabled() {
+            // Não chamamos setStripeApiKey/enableStripe — default do campo é false (T-0011-5).
+            assertThatThrownBy(() -> billingService.createCheckoutSession(1L, "STARTER", testUser))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("Billing is disabled");
+
+            verifyNoInteractions(organizationRepository);
         }
     }
 

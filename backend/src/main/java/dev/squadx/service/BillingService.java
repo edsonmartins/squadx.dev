@@ -40,6 +40,9 @@ public class BillingService {
     @Value("${stripe.api-key:}")
     private String stripeApiKey;
 
+    @Value("${stripe.enabled:false}")
+    private boolean stripeEnabled;
+
     @Value("${stripe.webhook-secret:}")
     private String webhookSecret;
 
@@ -51,6 +54,10 @@ public class BillingService {
 
     @PostConstruct
     public void init() {
+        if (!stripeEnabled) {
+            log.info("Stripe billing disabled (stripe.enabled=false). Feature flag off — T-0011-5.");
+            return;
+        }
         if (stripeApiKey != null && !stripeApiKey.isBlank()) {
             Stripe.apiKey = stripeApiKey;
             log.info("Stripe API initialized successfully");
@@ -251,6 +258,9 @@ public class BillingService {
     }
 
     private void validateStripeConfigured() {
+        if (!stripeEnabled) {
+            throw new BadRequestException("Billing is disabled (stripe.enabled=false).");
+        }
         if (stripeApiKey == null || stripeApiKey.isBlank()) {
             throw new BadRequestException("Stripe is not configured. Set STRIPE_API_KEY environment variable.");
         }

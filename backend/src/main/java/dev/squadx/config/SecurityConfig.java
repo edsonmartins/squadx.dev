@@ -63,7 +63,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/health/**").permitAll()
                 .requestMatchers("/api/v1/webhooks/**").permitAll()
                 .requestMatchers("/api/v1/internal/tasks/pullwise").permitAll()
-                .requestMatchers("/api/v1/billing/webhook").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

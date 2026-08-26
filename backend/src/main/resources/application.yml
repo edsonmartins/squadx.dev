@@ -66,7 +66,11 @@ resend:
   from-email: ${RESEND_FROM_EMAIL:noreply@squadx.dev}
 
 # Billing Configuration (Stripe)
+# Feature flag (T-0011-5 / ADR-0011): billing fica OFF por default na fase
+# interna — sem produto de cobrança ainda, e o webhook público é superfície
+# de ataque sem contrapartida. Ligar apenas quando o produto for a mercado.
 stripe:
+  enabled: ${STRIPE_ENABLED:false}
   api-key: ${STRIPE_API_KEY:}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   prices:

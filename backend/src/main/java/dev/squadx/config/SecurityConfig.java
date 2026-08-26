@@ -34,8 +34,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
-    private final WorkspaceSessionFilter workspaceSessionFilter;
     private final RateLimitFilter rateLimitFilter;
+    // ObjectProvider: o WorkspaceSessionFilter é @ConditionalOnBean(WorkspaceSessionProvider)
+    // e o provider é @Component não varrido por @WebMvcTest. No slice simplesmente não é
+    // adicionado ao chain; em runtime é injetado e registrado normalmente.
+    private final org.springframework.beans.factory.ObjectProvider<WorkspaceSessionFilter> workspaceSessionFilter;
     private final UserDetailsService userDetailsService;
     private final org.springframework.beans.factory.ObjectProvider<CustomOidcUserService> customOidcUserService;
     private final org.springframework.beans.factory.ObjectProvider<AuthenticationSuccessHandler> oauth2SuccessHandler;
@@ -88,9 +91,11 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(workspaceSessionFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
+
+        workspaceSessionFilter.ifAvailable(wsf -> http.addFilterBefore(
+                wsf, UsernamePasswordAuthenticationFilter.class));
 
         return http.build();
     }

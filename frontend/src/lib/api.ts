@@ -581,7 +581,7 @@ export interface RequirementResponse {
   scenarios: ScenarioResponse[];
   task_refs: number[];
   created_at: string;
-  updated_at?: string;
+  updated_at?: string | null;
 }
 
 export interface SpecTaskResponse {
@@ -600,6 +600,50 @@ export interface SpecTaskResponse {
   blocker_reason?: string | null;
   revise_reason?: string | null;
 }
+
+// Schemas zod (parse, don't cast — CLAUDE.md). Enum drift downgrades to the
+// safe default instead of crashing the board/fila.
+const specTaskStatusSchema = z
+  .enum(["A_FAZER", "EM_CURSO", "EM_VALIDACAO", "CONCLUIDA", "BLOQUEADA", "AJUSTES"])
+  .catch("A_FAZER");
+
+export const scenarioSchema = z.object({
+  id: z.number(),
+  name: z.string().catch(""),
+  when: z.string().catch(""),
+  then: z.string().catch(""),
+  covered: z.boolean().catch(false),
+});
+
+export const requirementSchema = z.object({
+  id: z.number(),
+  change_id: z.number().catch(0),
+  requirement_id: z.string().catch(""),
+  type: z.enum(["ADDED", "MODIFIED", "REMOVED"]).catch("ADDED"),
+  title: z.string().catch(""),
+  description: z.string().nullable().catch(null),
+  scenarios: z.array(scenarioSchema).catch([]),
+  task_refs: z.array(z.number()).catch([]),
+  created_at: z.string().catch(""),
+  updated_at: z.string().nullable().catch(null),
+});
+
+export const specTaskSchema = z.object({
+  id: z.number(),
+  title: z.string().catch(""),
+  status: specTaskStatusSchema,
+  change_id: z.number().catch(0),
+  requirement_id: z.number().nullable().catch(null),
+  requirement_ref: z.string().nullable().catch(null),
+  assignee_type: z.enum(["HUMAN", "AGENT"]).catch("HUMAN"),
+  assigned_user_id: z.number().nullable().catch(null),
+  assigned_user_name: z.string().nullable().catch(null),
+  assigned_agent_id: z.number().nullable().catch(null),
+  assigned_agent_name: z.string().nullable().catch(null),
+  pass5: z.enum(["PASS", "FAIL", "PENDING"]).nullable().catch(null),
+  blocker_reason: z.string().nullable().catch(null),
+  revise_reason: z.string().nullable().catch(null),
+});
 
 export interface CreateProjectRequest {
   name: string;
@@ -1157,27 +1201,61 @@ export interface SpecVersionResponse {
   created_at: string;
 }
 
+const changeSchema = z.object({
+  id: z.number(),
+  module: z.string().nullable().catch(null),
+  phase: z.string().catch(""),
+  project_id: z.number().catch(0),
+  project_name: z.string().nullable().catch(null),
+  created_by_id: z.number().nullable().catch(null),
+  created_by_name: z.string().nullable().catch(null),
+  created_at: z.string().catch(""),
+  updated_at: z.string().nullable().catch(null),
+});
+
+const specVersionSchema = z.object({
+  id: z.number(),
+  version: z.string().catch(""),
+  current: z.boolean().catch(false),
+  summary: z.string().nullable().catch(null),
+  author_id: z.number().nullable().catch(null),
+  commit_sha: z.string().nullable().catch(null),
+  created_at: z.string().catch(""),
+});
+
+function fallbackChange(changeId: number): ChangeResponse {
+  return { id: changeId, phase: "", project_id: 0, created_at: "" };
+}
+
+function fallbackPass5(taskId: number): Pass5Status {
+  return { specTaskId: taskId, outcome: "PENDING", coverageTotal: 0, coverageCovered: 0, scenarios: [] };
+}
+
 export const changesApi = {
   list: (projectId: number) =>
-    api.get<PageResponse<ChangeResponse>>(`/api/v1/changes/project/${projectId}`),
+    getPage<ChangeResponse>(`/api/v1/changes/project/${projectId}`, changeSchema),
   get: (changeId: number) =>
-    api.get<ChangeResponse>(`/api/v1/changes/${changeId}`),
+    api
+      .get<unknown>(`/api/v1/changes/${changeId}`)
+      .then((d) => parseWithFallback<ChangeResponse>(changeSchema as unknown as z.ZodType<ChangeResponse>, d, fallbackChange(changeId))),
   whereWeAre: (projectId: number) =>
     api.get<WhereWeAreResponse>(`/api/v1/changes/project/${projectId}/where-we-are`),
   versions: (changeId: number) =>
-    api.get<SpecVersionResponse[]>(`/api/v1/changes/${changeId}/versions`),
+    getList<SpecVersionResponse>(`/api/v1/changes/${changeId}/versions`, specVersionSchema),
 };
 
 export const requirementsApi = {
   listByChange: (changeId: number) =>
-    api.get<RequirementResponse[]>(`/api/v1/requirements/change/${changeId}`),
+    getList<RequirementResponse>(`/api/v1/requirements/change/${changeId}`, requirementSchema),
 };
 
 export const specTasksApi = {
   listByChange: (changeId: number) =>
-    api.get<SpecTaskResponse[]>(`/api/v1/spec-tasks/change/${changeId}`),
+    getList<SpecTaskResponse>(`/api/v1/spec-tasks/change/${changeId}`, specTaskSchema),
   transition: (id: number, status: SpecTaskStatus, note?: string) =>
-    api.patch<SpecTaskResponse>(`/api/v1/spec-tasks/${id}/transition`, { status, note }),
+    api
+      .patch<unknown>(`/api/v1/spec-tasks/${id}/transition`, { status, note })
+      .then((d) => parseWithFallback<SpecTaskResponse>(specTaskSchema as unknown as z.ZodType<SpecTaskResponse>, d, specTaskSchema.parse({ id }))),
 };
 
 // Execution Types
@@ -1740,14 +1818,31 @@ export const specTaskEventsApi = {
 
 export interface Pass5Status {
   specTaskId: number;
-  outcome?: "PASS" | "FAIL" | "PENDING";
+  outcome?: "PASS" | "FAIL" | "PENDING" | null;
   critique?: string;
   coverageTotal: number;
   coverageCovered: number;
   scenarios: Array<{ id: number; name: string; covered: boolean }>;
 }
 
+const pass5StatusSchema = z.object({
+  specTaskId: z.number().catch(0),
+  outcome: z.enum(["PASS", "FAIL", "PENDING"]).nullable().catch("PENDING"),
+  critique: z.string().nullable().catch(null),
+  coverageTotal: z.number().catch(0),
+  coverageCovered: z.number().catch(0),
+  scenarios: z
+    .array(z.object({ id: z.number(), name: z.string().catch(""), covered: z.boolean().catch(false) }))
+    .catch([]),
+});
+
 export const pass5Api = {
-  getStatus: (taskId: number) => api.get<Pass5Status>(`/api/v1/spec-tasks/${taskId}/pass5`),
-  run: (taskId: number) => api.post<Pass5Status>(`/api/v1/spec-tasks/${taskId}/pass5/run`),
+  getStatus: (taskId: number) =>
+    api
+      .get<unknown>(`/api/v1/spec-tasks/${taskId}/pass5`)
+      .then((d) => parseWithFallback<Pass5Status>(pass5StatusSchema as unknown as z.ZodType<Pass5Status>, d, fallbackPass5(taskId))),
+  run: (taskId: number) =>
+    api
+      .post<unknown>(`/api/v1/spec-tasks/${taskId}/pass5/run`)
+      .then((d) => parseWithFallback<Pass5Status>(pass5StatusSchema as unknown as z.ZodType<Pass5Status>, d, fallbackPass5(taskId))),
 };

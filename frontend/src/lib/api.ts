@@ -527,6 +527,80 @@ export interface WhereWeAreResponse {
   progress: number;
 }
 
+// ── Control Panel: modelo de trabalho spec-native (ADR-0004, RFC-0003) ──
+
+export type SpecTaskStatus =
+  | "A_FAZER"
+  | "EM_CURSO"
+  | "EM_VALIDACAO"
+  | "CONCLUIDA"
+  | "BLOQUEADA"
+  | "AJUSTES";
+
+export const SPEC_TASK_STATUS_LABELS: Record<SpecTaskStatus, string> = {
+  A_FAZER: "A fazer",
+  EM_CURSO: "Em execução",
+  EM_VALIDACAO: "Em validação",
+  CONCLUIDA: "Concluída",
+  BLOQUEADA: "Bloqueada",
+  AJUSTES: "Ajustes necessários",
+};
+
+/**
+ * Transições oferecidas pela UI. CONCLUIDA e AJUSTES NUNCA partem daqui —
+ * são atribuídas exclusivamente pelo Pass 5 (ADR-0004 §máquina de status).
+ */
+export const SPEC_TASK_UI_TRANSITIONS: Record<SpecTaskStatus, SpecTaskStatus[]> = {
+  A_FAZER: ["EM_CURSO", "BLOQUEADA"],
+  EM_CURSO: ["EM_VALIDACAO", "BLOQUEADA"],
+  EM_VALIDACAO: [],
+  CONCLUIDA: [],
+  BLOQUEADA: ["EM_CURSO"],
+  AJUSTES: ["EM_CURSO"],
+};
+
+export type AssigneeType = "HUMAN" | "AGENT";
+export type Pass5Result = "PASS" | "FAIL" | "PENDING";
+export type RequirementType = "ADDED" | "MODIFIED" | "REMOVED";
+
+export interface ScenarioResponse {
+  id: number;
+  name: string;
+  when: string;
+  then: string;
+  covered: boolean;
+}
+
+export interface RequirementResponse {
+  id: number;
+  change_id: number;
+  requirement_id: string;
+  type: RequirementType;
+  title: string;
+  description?: string | null;
+  scenarios: ScenarioResponse[];
+  task_refs: number[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SpecTaskResponse {
+  id: number;
+  title: string;
+  status: SpecTaskStatus;
+  change_id: number;
+  requirement_id?: number | null;
+  requirement_ref?: string | null;
+  assignee_type: AssigneeType;
+  assigned_user_id?: number | null;
+  assigned_user_name?: string | null;
+  assigned_agent_id?: number | null;
+  assigned_agent_name?: string | null;
+  pass5?: Pass5Result | null;
+  blocker_reason?: string | null;
+  revise_reason?: string | null;
+}
+
 export interface CreateProjectRequest {
   name: string;
   description?: string;
@@ -1086,10 +1160,24 @@ export interface SpecVersionResponse {
 export const changesApi = {
   list: (projectId: number) =>
     api.get<PageResponse<ChangeResponse>>(`/api/v1/changes/project/${projectId}`),
+  get: (changeId: number) =>
+    api.get<ChangeResponse>(`/api/v1/changes/${changeId}`),
   whereWeAre: (projectId: number) =>
     api.get<WhereWeAreResponse>(`/api/v1/changes/project/${projectId}/where-we-are`),
   versions: (changeId: number) =>
     api.get<SpecVersionResponse[]>(`/api/v1/changes/${changeId}/versions`),
+};
+
+export const requirementsApi = {
+  listByChange: (changeId: number) =>
+    api.get<RequirementResponse[]>(`/api/v1/requirements/change/${changeId}`),
+};
+
+export const specTasksApi = {
+  listByChange: (changeId: number) =>
+    api.get<SpecTaskResponse[]>(`/api/v1/spec-tasks/change/${changeId}`),
+  transition: (id: number, status: SpecTaskStatus, note?: string) =>
+    api.patch<SpecTaskResponse>(`/api/v1/spec-tasks/${id}/transition`, { status, note }),
 };
 
 // Execution Types

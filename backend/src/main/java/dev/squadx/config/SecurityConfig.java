@@ -2,6 +2,7 @@ package dev.squadx.config;
 
 import dev.squadx.security.JwtAuthenticationFilter;
 import dev.squadx.service.CustomOidcUserService;
+import dev.squadx.controlpanel.mcp.WorkspaceSessionFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -33,6 +34,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final WorkspaceSessionFilter workspaceSessionFilter;
     private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
     private final org.springframework.beans.factory.ObjectProvider<CustomOidcUserService> customOidcUserService;
@@ -60,9 +62,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/health/**").permitAll()
                 .requestMatchers("/api/v1/webhooks/**").permitAll()
+                .requestMatchers("/api/v1/internal/tasks/pullwise").permitAll()
                 .requestMatchers("/api/v1/billing/webhook").permitAll()
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // OAuth2 login endpoints are public
                 .requestMatchers("/login/oauth2/**", "/oauth2/**").permitAll()
@@ -86,6 +89,7 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authenticationProvider(authenticationProvider())
+            .addFilterBefore(workspaceSessionFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 

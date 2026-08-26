@@ -77,4 +77,8 @@ public class Execution extends BaseEntity {
     @OrderBy("createdAt ASC")
     @Builder.Default
     private List<ExecutionLog> logs = new ArrayList<>();
+
+    @OneToMany(mappedBy = "execution", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<ExecutionArtifact> artifacts = new ArrayList<>();
 }

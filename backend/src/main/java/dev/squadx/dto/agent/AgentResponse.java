@@ -52,6 +52,15 @@ public class AgentResponse {
     @JsonProperty("squad_name")
     private String squadName;
 
+    @JsonProperty("harness_id")
+    private Long harnessId;
+
+    @JsonProperty("harness_name")
+    private String harnessName;
+
+    @JsonProperty("harness_model")
+    private String harnessModel;
+
     private Set<String> capabilities;
 
     @JsonProperty("executions_count")

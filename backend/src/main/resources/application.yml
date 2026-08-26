@@ -83,6 +83,9 @@ springdoc:
 
 # Actuator
 management:
+  # Separate management plane: ingress exposes 8080, Prometheus scrapes 9091 internally.
+  server:
+    port: ${MANAGEMENT_PORT:9091}
   endpoints:
     web:
       exposure:
@@ -119,12 +122,59 @@ squadx:
   routing:
     strategy: ${SQUADX_ROUTING_STRATEGY:nearest}
   service-secret: ${SQUADX_SERVICE_SECRET:}
+  harnesses:
+    catalog: ${SQUADX_HARNESS_CATALOG:}
+
+spec:
+  materialization:
+    enabled: ${SQUADX_SPEC_MATERIALIZATION_ENABLED:false}
   brainsentry:
     url: ${SQUADX_BRAINSENTRY_URL:http://localhost:8090}
     tenant-id: ${SQUADX_BRAINSENTRY_TENANT_ID:default}
     per-organization-tenant: ${SQUADX_BRAINSENTRY_PER_ORGANIZATION_TENANT:true}
     tenant-prefix: ${SQUADX_BRAINSENTRY_TENANT_PREFIX:org-}
     enabled: ${SQUADX_BRAINSENTRY_ENABLED:false}
+
+intelligence:
+  default-provider: ${SQUADX_INTELLIGENCE_DEFAULT_PROVIDER:native}
+  default-fallback: ${SQUADX_INTELLIGENCE_DEFAULT_FALLBACK:}
+  ripgrep:
+    enabled: ${SQUADX_INTELLIGENCE_RIPGREP_ENABLED:false}
+    repository-root: ${SQUADX_INTELLIGENCE_REPOSITORY_ROOT:}
+  native:
+    enabled: ${SQUADX_INTELLIGENCE_NATIVE_ENABLED:false}
+    repository-root: ${SQUADX_INTELLIGENCE_REPOSITORY_ROOT:}
+    scip:
+      enabled: ${SQUADX_INTELLIGENCE_SCIP_ENABLED:false}
+      java-version: ${SQUADX_SCIP_JAVA_VERSION:0.13.1}
+      artifact-root: ${SQUADX_SCIP_ARTIFACT_ROOT:/var/lib/squadx/scip}
+  repowise:
+    enabled: ${SQUADX_INTELLIGENCE_REPOWISE_ENABLED:false}
+    url: ${REPOWISE_URL:http://127.0.0.1:8765}
+    api-key: ${REPOWISE_API_KEY:}
+    repository-root: ${SQUADX_INTELLIGENCE_REPOSITORY_ROOT:}
+    timeout-seconds: ${REPOWISE_TIMEOUT_SECONDS:15}
+    failure-threshold: ${REPOWISE_FAILURE_THRESHOLD:3}
+    open-seconds: ${REPOWISE_CIRCUIT_OPEN_SECONDS:30}
+
+pullwise:
+  conformance:
+    enabled: ${PULLWISE_CONFORMANCE_ENABLED:false}
+    url: ${PULLWISE_URL:http://pullwise:8080}
+    api-key: ${PULLWISE_CONFORMANCE_API_KEY:}
+    timeout-ms: ${PULLWISE_CONFORMANCE_TIMEOUT_MS:30000}
+    failure-threshold: ${PULLWISE_CONFORMANCE_FAILURE_THRESHOLD:3}
+    open-seconds: ${PULLWISE_CONFORMANCE_OPEN_SECONDS:30}
+
+pass5:
+  tests:
+    timeout-ms: ${PASS5_TESTS_TIMEOUT_MS:120000}
+  worker:
+    poll-interval-ms: ${SQUADX_INTELLIGENCE_POLL_INTERVAL_MS:5000}
+  briefing:
+    enabled: ${SQUADX_INTELLIGENCE_BRIEFING_ENABLED:false}
+    max-hits: ${SQUADX_INTELLIGENCE_BRIEFING_MAX_HITS:5}
+    max-chars: ${SQUADX_INTELLIGENCE_BRIEFING_MAX_CHARS:6000}
   live:
     url: ${SQUADX_LIVE_URL:http://localhost:3100}
     enabled: ${SQUADX_LIVE_ENABLED:false}

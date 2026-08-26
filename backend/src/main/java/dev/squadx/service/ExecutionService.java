@@ -5,6 +5,7 @@ import dev.squadx.dto.execution.ExecutionRequest;
 import dev.squadx.dto.execution.ExecutionResponse;
 import dev.squadx.dto.execution.FollowUpResponse;
 import dev.squadx.event.ExecutionCompletedEvent;
+import dev.squadx.event.ExecutionStartedEvent;
 import dev.squadx.exception.BadRequestException;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
@@ -48,6 +49,7 @@ public class ExecutionService {
     private final FollowUpRequestRepository followUpRequestRepository;
     private final ApprovalService approvalService;
     private final ProjectRepository projectRepository;
+    private final CodeIntelligenceBriefingService codeIntelligenceBriefingService;
 
     @Transactional
     public ExecutionResponse startExecution(ExecutionRequest request, User currentUser) {
@@ -86,6 +88,7 @@ public class ExecutionService {
                 .build();
 
         execution = executionRepository.save(execution);
+        eventPublisher.publishEvent(new ExecutionStartedEvent(execution.getId()));
         appendAuditLog(execution, "admission.decided", admission.decision().getReason());
 
         if (brainSentryClient.isEnabled()) {
@@ -442,8 +445,16 @@ public class ExecutionService {
                 ? execAgent.getCliProvider().name() : null);
         payload.put("execution_id", execution.getId());
         payload.put("brain_sentry_session_id", execution.getBrainSentrySessionId());
+        payload.put("pullwise_review_id", task.getPullwiseReviewId());
+        payload.put("requested_git_revision", task.getRequestedGitRevision());
+        payload.put("architecture_only", Boolean.TRUE.equals(task.getArchitectureOnly()));
         payload.put("tags", task.getTags());
         payload.put("sandbox_egress_policy", resolveEgressPolicy(task, execAgent).name());
+        Map<String, Object> codeContext = codeIntelligenceBriefingService == null
+                ? Map.of() : codeIntelligenceBriefingService.contextFor(task);
+        if (!codeContext.isEmpty()) {
+            payload.put("code_intelligence_context", codeContext);
+        }
         return payload;
     }
 
@@ -589,6 +600,7 @@ public class ExecutionService {
                                 .agent(agent)
                                 .status(ExecutionStatus.PENDING)
                                 .build());
+                        eventPublisher.publishEvent(new ExecutionStartedEvent(promoted.getId()));
                         appendAuditLog(promoted, "run.created",
                                 "Promoted from follow-up request #" + followUp.getId());
                         followUp.setStatus(FollowUpStatus.PROMOTED);

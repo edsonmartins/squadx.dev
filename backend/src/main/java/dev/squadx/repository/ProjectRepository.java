@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
@@ -16,6 +17,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     Optional<Project> findBySlug(String slug);
 
     boolean existsBySlug(String slug);
+
+    Optional<Project> findFirstByRepositoryUrlIn(Collection<String> repositoryUrls);
 
     @EntityGraph(attributePaths = {"organization", "squad"})
     Page<Project> findByOrganizationId(Long organizationId, Pageable pageable);

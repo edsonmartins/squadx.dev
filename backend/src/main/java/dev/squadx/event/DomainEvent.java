@@ -10,6 +10,8 @@ public sealed interface DomainEvent permits
         TaskStatusChangedEvent,
         TaskDeletedEvent,
         AgentStateChangedEvent,
+        AgentDeadEvent,
+        ExecutionStartedEvent,
         ExecutionCompletedEvent {
 
     Instant occurredAt();

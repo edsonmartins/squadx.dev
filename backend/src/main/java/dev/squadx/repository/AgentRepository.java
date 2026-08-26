@@ -13,6 +13,8 @@ import java.util.List;
 @Repository
 public interface AgentRepository extends JpaRepository<Agent, Long> {
 
+    long countByLifecycleState(String lifecycleState);
+
     Page<Agent> findBySquadId(Long squadId, Pageable pageable);
 
     List<Agent> findBySquadIdAndIsActiveTrue(Long squadId);

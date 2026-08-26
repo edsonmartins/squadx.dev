@@ -17,6 +17,8 @@ import java.util.Optional;
 @Repository
 public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
+    long countByStatus(ExecutionStatus status);
+
     Page<Execution> findByTaskId(Long taskId, Pageable pageable);
 
     List<Execution> findByTaskIdAndStatus(Long taskId, ExecutionStatus status);

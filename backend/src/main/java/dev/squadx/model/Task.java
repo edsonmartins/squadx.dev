@@ -64,6 +64,22 @@ public class Task extends BaseEntity {
     @Builder.Default
     private Boolean requiresApproval = false;
 
+    @Column(name = "pullwise_review_id")
+    private Long pullwiseReviewId;
+
+    @Column(name = "external_system", length = 40)
+    private String externalSystem;
+
+    @Column(name = "external_id", length = 160)
+    private String externalId;
+
+    @Column(name = "requested_git_revision", length = 128)
+    private String requestedGitRevision;
+
+    @Column(name = "architecture_only", nullable = false)
+    @Builder.Default
+    private Boolean architectureOnly = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;

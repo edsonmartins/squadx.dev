@@ -14,6 +14,7 @@ import dev.squadx.model.enums.UserRole;
 import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
 import dev.squadx.repository.SquadRepository;
+import dev.squadx.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.List;
@@ -49,6 +51,12 @@ class AgentServiceTest {
 
     @Mock
     private OrganizationMemberRepository memberRepository;
+
+    @Mock
+    private TaskRepository taskRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AgentService agentService;

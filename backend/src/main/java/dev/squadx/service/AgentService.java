@@ -3,19 +3,23 @@ package dev.squadx.service;
 import dev.squadx.dto.agent.AgentRequest;
 import dev.squadx.dto.agent.AgentResponse;
 import dev.squadx.dto.common.PageResponse;
+import dev.squadx.event.AgentDeadEvent;
 import dev.squadx.exception.ForbiddenException;
 import dev.squadx.exception.ResourceNotFoundException;
 import dev.squadx.model.Agent;
+import dev.squadx.model.Harness;
 import dev.squadx.model.Squad;
 import dev.squadx.model.User;
 import dev.squadx.repository.AgentRepository;
 import dev.squadx.repository.OrganizationMemberRepository;
+import dev.squadx.repository.HarnessRepository;
 import dev.squadx.repository.SquadRepository;
 import dev.squadx.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,8 @@ public class AgentService {
     private final SquadRepository squadRepository;
     private final OrganizationMemberRepository memberRepository;
     private final TaskRepository taskRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final HarnessRepository harnessRepository;
 
     @Transactional
     public AgentResponse create(AgentRequest request, User currentUser) {
@@ -39,6 +45,7 @@ public class AgentService {
 
         validateUserAccess(squad.getOrganization().getId(), currentUser.getId());
 
+        Harness harness = resolveHarness(request.getHarnessId(), squad.getOrganization().getId());
         Agent agent = Agent.builder()
                 .name(request.getName())
                 .agentType(request.getAgentType())
@@ -46,11 +53,13 @@ public class AgentService {
                         ? request.getRuntimeKind() : dev.squadx.model.enums.AgentRuntimeKind.NATIVE)
                 .cliProvider(request.getCliProvider())
                 .description(request.getDescription())
-                .modelId(request.getModelId() != null ? request.getModelId() : "gpt-4o")
+                .modelId(request.getModelId() != null ? request.getModelId()
+                        : harness != null && harness.getModel() != null ? harness.getModel() : "gpt-4o")
                 .systemPrompt(request.getSystemPrompt())
                 .maxTokens(request.getMaxTokens() != null ? request.getMaxTokens() : 4096)
                 .temperature(request.getTemperature() != null ? request.getTemperature() : 0.7)
                 .squad(squad)
+                .harness(harness)
                 .capabilities(request.getCapabilities())
                 .build();
 
@@ -134,6 +143,9 @@ public class AgentService {
         if (request.getCapabilities() != null) {
             agent.setCapabilities(request.getCapabilities());
         }
+        if (request.getHarnessId() != null) {
+            agent.setHarness(resolveHarness(request.getHarnessId(), agent.getSquad().getOrganization().getId()));
+        }
 
         agent = agentRepository.save(agent);
 
@@ -167,10 +179,18 @@ public class AgentService {
 
     @Transactional
     public void heartbeat(Long agentId) {
+        heartbeat(agentId, null, true);
+    }
+
+    @Transactional
+    public void heartbeat(Long agentId, User currentUser, boolean working) {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Agent not found"));
+        if (currentUser != null) {
+            validateUserAccess(agent.getSquad().getOrganization().getId(), currentUser.getId());
+        }
         agent.setLastHeartbeat(LocalDateTime.now());
-        agent.setLifecycleState("WORKING");
+        agent.setLifecycleState(working ? "WORKING" : "IDLE");
         agentRepository.save(agent);
     }
 
@@ -203,6 +223,7 @@ public class AgentService {
         agent.setLifecycleState("DEAD");
         agent.setActive(false);
         agentRepository.save(agent);
+        eventPublisher.publishEvent(new AgentDeadEvent(agentId));
 
         // Reset in-progress tasks assigned to this agent back to pending
         taskRepository.findByAssignedAgentId(agentId).stream()
@@ -244,10 +265,23 @@ public class AgentService {
                 .isActive(agent.isActive())
                 .squadId(agent.getSquad().getId())
                 .squadName(agent.getSquad().getName())
+                .harnessId(agent.getHarness() != null ? agent.getHarness().getId() : null)
+                .harnessName(agent.getHarness() != null ? agent.getHarness().getName() : null)
+                .harnessModel(agent.getHarness() != null ? agent.getHarness().getModel() : null)
                 .capabilities(agent.getCapabilities())
                 .executionsCount(agent.getExecutions() != null ? agent.getExecutions().size() : 0)
                 .createdAt(agent.getCreatedAt())
                 .updatedAt(agent.getUpdatedAt())
                 .build();
+    }
+
+    private Harness resolveHarness(Long harnessId, Long organizationId) {
+        if (harnessId == null) return null;
+        Harness harness = harnessRepository.findById(harnessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Harness not found"));
+        if (!harness.getOrganization().getId().equals(organizationId)) {
+            throw new IllegalArgumentException("Harness does not belong to the agent organization");
+        }
+        return harness;
     }
 }

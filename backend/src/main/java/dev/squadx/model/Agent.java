@@ -60,6 +60,10 @@ public class Agent extends BaseEntity {
     @JoinColumn(name = "squad_id", nullable = false)
     private Squad squad;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "harness_id")
+    private Harness harness;
+
     @OneToMany(mappedBy = "agent", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<Execution> executions = new HashSet<>();

@@ -53,5 +53,8 @@ public class TaskRequest {
     @JsonProperty("requires_approval")
     private Boolean requiresApproval;
 
+    @JsonProperty("pullwise_review_id")
+    private Long pullwiseReviewId;
+
     private Set<String> tags;
 }

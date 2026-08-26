@@ -120,7 +120,7 @@ public class AgentController {
             @PathVariable Long id,
             @AuthenticationPrincipal User user
     ) {
-        agentService.heartbeat(id);
+        agentService.heartbeat(id, user, true);
         return ResponseEntity.ok(ApiResponse.success(null, "Heartbeat received"));
     }
 

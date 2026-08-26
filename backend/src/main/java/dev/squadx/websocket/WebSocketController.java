@@ -12,7 +12,10 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 @RequiredArgsConstructor
@@ -36,11 +39,35 @@ public class WebSocketController {
             @Payload Map<String, Object> payload,
             @AuthenticationPrincipal User user
     ) {
-        Object agentId = payload.get("agent_id");
-        if (agentId instanceof Number number) {
-            agentService.heartbeat(number.longValue());
+        Set<Long> activeAgentIds = numericIds(payload.get("active_agent_ids"));
+        Set<Long> agentIds = numericIds(payload.get("agent_ids"));
+        Object legacyAgentId = payload.get("agent_id");
+        if (legacyAgentId instanceof Number number) {
+            agentIds.add(number.longValue());
+            activeAgentIds.add(number.longValue());
+        }
+        for (Long agentId : agentIds) {
+            agentService.heartbeat(agentId, user, activeAgentIds.contains(agentId));
         }
         log.debug("Client heartbeat received from user {}", user.getEmail());
+    }
+
+    private Set<Long> numericIds(Object value) {
+        Set<Long> ids = new HashSet<>();
+        if (value instanceof Collection<?> values) {
+            for (Object item : values) {
+                if (item instanceof Number number) {
+                    ids.add(number.longValue());
+                } else if (item instanceof String text) {
+                    try {
+                        ids.add(Long.valueOf(text));
+                    } catch (NumberFormatException ignored) {
+                        log.debug("Ignoring invalid agent id in heartbeat: {}", text);
+                    }
+                }
+            }
+        }
+        return ids;
     }
 
     @MessageMapping("/tasks/{projectId}/subscribe")

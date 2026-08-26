@@ -56,6 +56,7 @@ public class TaskService {
                 .estimatedHours(request.getEstimatedHours())
                 .dueDate(request.getDueDate())
                 .requiresApproval(Boolean.TRUE.equals(request.getRequiresApproval()))
+                .pullwiseReviewId(request.getPullwiseReviewId())
                 .project(project)
                 .createdBy(currentUser)
                 .tags(request.getTags())
@@ -154,6 +155,9 @@ public class TaskService {
         }
         if (request.getRequiresApproval() != null) {
             task.setRequiresApproval(request.getRequiresApproval());
+        }
+        if (request.getPullwiseReviewId() != null) {
+            task.setPullwiseReviewId(request.getPullwiseReviewId());
         }
         if (request.getTags() != null) {
             task.setTags(request.getTags());
@@ -464,6 +468,7 @@ public class TaskService {
                 .completedAt(task.getCompletedAt())
                 .orderIndex(task.getOrderIndex())
                 .requiresApproval(task.getRequiresApproval())
+                .pullwiseReviewId(task.getPullwiseReviewId())
                 .projectId(task.getProject().getId())
                 .projectName(task.getProject().getName())
                 .assignedAgentId(task.getAssignedAgent() != null ? task.getAssignedAgent().getId() : null)

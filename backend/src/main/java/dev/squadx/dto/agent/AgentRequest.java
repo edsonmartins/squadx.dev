@@ -51,5 +51,8 @@ public class AgentRequest {
     @JsonProperty("squad_id")
     private Long squadId;
 
+    @JsonProperty("harness_id")
+    private Long harnessId;
+
     private Set<String> capabilities;
 }

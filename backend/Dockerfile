@@ -23,6 +23,9 @@ RUN ./mvnw clean package -DskipTests -B
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine
 
+# Native code-intelligence provider validates revision with git.
+RUN apk add --no-cache git ripgrep
+
 WORKDIR /app
 
 # Add non-root user

@@ -8,6 +8,14 @@ import java.util.Set;
 /**
  * Immutable value object that validates task status transitions.
  * Construction fails if the transition is not allowed.
+ *
+ * <p>Nota (T-0011-7 / ADR-0011): manteve-se <code>IN_REVIEW → DONE</code> de propósito.
+ * No fluxo clássico (domínio <em>Task</em>), o único produtor de <code>DONE</code> é o
+ * <code>ApprovalService.review</code>, que valida esta transição via
+ * {@link #isValid}. É exatamente o portão de aprovação humana que o ADR-0004 defende
+ * ("concluída só via revisão"). O <code>Pass 5</code> do Control Panel usa a máquina
+ * separada <code>SpecTaskStatus</code>; fechar aqui quebraria a aprovação de tasks sem
+ * trazer o efeito pretendido.</p>
  */
 public record TaskStatusTransition(TaskStatus from, TaskStatus to) {
 

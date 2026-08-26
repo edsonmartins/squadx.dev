@@ -15,7 +15,7 @@ Monorepo with four runtimes plus infra:
 
 - `backend/` — Spring Boot 3.4 / Java 21 REST API + STOMP WebSocket (PostgreSQL 16, Redis, Flyway).
 - `frontend/` — Next.js 16 / React 19 dashboard (TypeScript, Tailwind, Zustand, TanStack Query, shadcn/Radix).
-- `client/` — Python 3.12 daemon: LangGraph + LiteLLM orchestration, Docker sandbox lifecycle, VNC→WebRTC streaming, STOMP client.
+- `client/` — Python 3.11+ daemon (CI roda 3.11; dev local costuma usar 3.12): LangGraph + LiteLLM orchestration, Docker sandbox lifecycle, VNC→WebRTC streaming, STOMP client.
 - `mobile/` (Expo / React Native) and `desktop/` (Tauri v2) — installed clients that wrap/mirror the dashboard.
 - `infra/` — Helm, k8s, nginx (TLS 1.3), monitoring (Prometheus/Grafana/Loki/Tempo).
 
@@ -56,11 +56,14 @@ fails with `TypeTag :: UNKNOWN` (Lombok incompatibility), and JDK 17 cannot comp
 - **Vertical slice per resource**: `model/` (`@Entity extends BaseEntity`), `repository/`
   (Spring Data JPA), `service/`, `controller/`, `dto/<domain>/` (Request/Response).
   Mirror an existing resource (e.g. `Task`, `Autopilot`) rather than inventing a new shape.
-- **Multi-tenancy / authz**: every service method takes `User currentUser` and calls
-  `validateUserAccess(organizationId, userId)` (membership check via
-  `OrganizationMemberRepository`). There are no `@PreAuthorize` annotations on
-  controllers — access is enforced in the service layer. Scope is
-  Organization → Squad/Project → Agent/Task.
+- **Multi-tenancy / authz**: enforcement lives in the **service layer**, not the controller.
+  Follow the convention: service methods take `User currentUser` and call a per-owner check
+  before acting. For the core organization-scoped domains this is
+  `validateUserAccess(organizationId, userId)` (membership via `OrganizationMemberRepository`),
+  used by a subset of services — **not universal**. A few controllers carry their own
+  `@PreAuthorize` (17 uses across 3 controllers today). Before writing access control on an
+  existing domain, check what that domain already enforces and mirror it rather than assuming
+  a single global helper. Scope is Organization → Squad/Project → Agent/Task.
 - **Controllers** inject `@AuthenticationPrincipal User user`, return
   `ResponseEntity<ApiResponse<T>>`, and page with `PageResponse<T>` /
   `PageResponse.from(page)`. `201` on create, `200` otherwise.

@@ -1,8 +1,9 @@
 # ADR-0005 — Cobertura cenário↔teste como critério de validação
 
 ## Status
+Aceito — 2026-06-09.  
+**Reclassificado 2026-08-26 (T-0011-3 do ADR-0011):** spec vigente do Control Panel, em implementação — backend em `backend/src/main/java/dev/squadx/controlpanel/` e telas em `frontend/src/app/(dashboard)/{changes,validations,harnesses}`. Não confundir com código descontinuado.
 
-Aceito — 2026-06-09.
 
 ## Contexto
 

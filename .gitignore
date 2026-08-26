@@ -65,3 +65,11 @@ coverage/
 *.key
 credentials.json
 secrets.json
+
+# --- Cópias aninhadas / artefatos fora do escopo (ver ADR-0011 T-0011-1) ---
+docs/*.tar.gz
+infra/repowise
+infra/repowise-src/
+infra/repowise-repositories/
+infra/intelligence-repositories/
+/squad-maps/

@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="85%"><stop offset="0" stop-color="#0b2442"/><stop offset="1" stop-color="#020b1c"/></radialGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1c37" stop-opacity=".96"/><stop offset="1" stop-color="#061329" stop-opacity=".96"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="aw" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#f6f8ff" stroke-width="2"/></marker>
+    <marker id="at" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#43d8c2" stroke-width="2"/></marker>
+    <marker id="ao" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#ff8a2b" stroke-width="2"/></marker>
+    <marker id="ap" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#bd70e6" stroke-width="2"/></marker>
+    <style>
+      text{font-family:Inter,Arial,sans-serif;fill:#f5f7fb}.title{font-size:42px;font-weight:900;letter-spacing:1px}.sub{font-size:20px;fill:#91b5e6;font-weight:600}.h{font-size:19px;font-weight:800}.n{font-size:18px;font-weight:800}.sm{font-size:14px;fill:#d9e4f6}.xs{font-size:12px;fill:#a9bad2}.panel{fill:url(#panel);stroke:#30496d;stroke-width:2}.box{fill:#071831;stroke:#4596ed;stroke-width:1.7}.teal{stroke:#34cdb8}.orange{stroke:#ff8726}.purple{stroke:#c46ce9}.muted{stroke:#64748b;stroke-dasharray:7 6}.line{fill:none;stroke:#f6f8ff;stroke-width:2.4;marker-end:url(#aw)}.lt{fill:none;stroke:#43d8c2;stroke-width:2.4;marker-end:url(#at)}.lo{fill:none;stroke:#ff8a2b;stroke-width:2.4;marker-end:url(#ao)}.lp{fill:none;stroke:#bd70e6;stroke-width:2.4;marker-end:url(#ap)}.dash{fill:none;stroke:#f6f8ff;stroke-width:2.2;stroke-dasharray:8 6;marker-end:url(#aw)}
+    </style>
+  </defs>
+  <rect width="1536" height="1024" fill="url(#bg)"/>
+  <text x="768" y="58" text-anchor="middle" class="title">SQUADX.DEV — ARQUITETURA DE EXECUÇÃO (AS BUILT)</text>
+  <text x="768" y="91" text-anchor="middle" class="sub">control plane + agent runtime  |  validação no código 2026-08</text>
+
+  <!-- 1 clients -->
+  <rect x="35" y="120" width="350" height="280" rx="14" class="panel"/>
+  <circle cx="75" cy="154" r="20" fill="#7842ad"/><text x="75" y="162" text-anchor="middle" font-size="24" font-weight="900">1</text>
+  <text x="108" y="161" class="h">HUMANOS / CLIENTES</text>
+  <rect x="58" y="188" width="302" height="58" rx="9" class="box purple"/><text x="82" y="223" class="n">◉  Web / PWA — Next.js 16</text>
+  <rect x="58" y="260" width="145" height="64" rx="9" class="box purple"/><text x="78" y="287" class="n">▣  Desktop</text><text x="78" y="307" class="xs">Tauri v2</text>
+  <rect x="215" y="260" width="145" height="64" rx="9" class="box purple"/><text x="235" y="287" class="n">▤  Mobile</text><text x="235" y="307" class="xs">Expo / React Native</text>
+  <text x="58" y="352" class="sm">Kanban • aprovações • custos • Live View</text>
+  <text x="58" y="377" class="xs">PM / Tech Lead / Viewer / Admin</text>
+
+  <!-- 2 control plane -->
+  <rect x="415" y="120" width="620" height="280" rx="14" class="panel"/>
+  <circle cx="455" cy="154" r="20" fill="#1e5d9d"/><text x="455" y="162" text-anchor="middle" font-size="24" font-weight="900">2</text>
+  <text x="488" y="161" class="h">CONTROL PLANE — KUBERNETES / HELM</text>
+  <rect x="443" y="188" width="258" height="70" rx="9" class="box"/><text x="468" y="218" class="n">▰  Frontend</text><text x="468" y="240" class="sm">Dashboard + STOMP client</text>
+  <rect x="730" y="188" width="278" height="70" rx="9" class="box"/><text x="755" y="218" class="n">⬡  Spring Boot Core</text><text x="755" y="240" class="sm">REST • auth/RBAC • WebSocket</text>
+  <rect x="443" y="282" width="174" height="66" rx="9" class="box"/><text x="465" y="311" class="n">▱ PostgreSQL 16</text><text x="465" y="331" class="xs">source of truth</text>
+  <rect x="634" y="282" width="150" height="66" rx="9" class="box"/><text x="659" y="311" class="n">▧ Redis 7</text><text x="659" y="331" class="xs">cache / rate limit</text>
+  <rect x="801" y="282" width="207" height="66" rx="9" class="box"/><text x="824" y="311" class="n">≋ Event + Audit</text><text x="824" y="331" class="xs">executions / logs / costs</text>
+  <path d="M701 223H730" class="line"/><path d="M869 258V278H530V282" class="line"/><path d="M869 258V270H709V282" class="line"/><path d="M869 258V282" class="line"/>
+
+  <!-- 3 integrations -->
+  <rect x="1065" y="120" width="436" height="280" rx="14" class="panel"/>
+  <circle cx="1105" cy="154" r="20" fill="#1e5d9d"/><text x="1105" y="162" text-anchor="middle" font-size="24" font-weight="900">3</text>
+  <text x="1138" y="161" class="h">SERVIÇOS EXTERNOS</text>
+  <rect x="1090" y="188" width="184" height="62" rx="9" class="box purple"/><text x="1113" y="216" class="n">ArchGuard OIDC</text><text x="1113" y="236" class="xs">SSO / identidade</text>
+  <rect x="1290" y="188" width="184" height="62" rx="9" class="box teal"/><text x="1313" y="216" class="n">SquadX Live</text><text x="1313" y="236" class="xs">LiveKit / WebRTC</text>
+  <rect x="1090" y="268" width="184" height="62" rx="9" class="box orange"/><text x="1113" y="296" class="n">LLM Providers</text><text x="1113" y="316" class="xs">LiteLLM / BYOK</text>
+  <rect x="1290" y="268" width="184" height="62" rx="9" class="box orange"/><text x="1313" y="296" class="n">GitHub / GHCR</text><text x="1313" y="316" class="xs">repo • PR • images</text>
+  <text x="1090" y="364" class="sm">BrainSentry (memória) • email • Stripe</text>
+  <path d="M1035 210H1086" class="lp"/>
+
+  <!-- main flows top -->
+  <path d="M385 220H411" class="line"/><text x="388" y="207" class="xs">HTTPS</text>
+  <path d="M1035 300H1086" class="lo"/>
+
+  <!-- 4 dispatch -->
+  <rect x="35" y="430" width="350" height="360" rx="14" class="panel"/>
+  <circle cx="75" cy="464" r="20" fill="#197d78"/><text x="75" y="472" text-anchor="middle" font-size="24" font-weight="900">4</text>
+  <text x="108" y="471" class="h">DISPATCH / GOVERNANÇA</text>
+  <rect x="58" y="500" width="302" height="57" rx="9" class="box teal"/><text x="80" y="527" class="n">Task + Execution PENDING</text><text x="80" y="546" class="xs">DAG • dependências • admission gate</text>
+  <rect x="58" y="574" width="302" height="57" rx="9" class="box teal"/><text x="80" y="601" class="n">Push STOMP / Poll fallback</text><text x="80" y="620" class="xs">claim atômico → RUNNING</text>
+  <rect x="58" y="648" width="302" height="57" rx="9" class="box teal"/><text x="80" y="675" class="n">Políticas e aprovações</text><text x="80" y="694" class="xs">budget • RBAC • memory policy</text>
+  <rect x="58" y="722" width="302" height="45" rx="9" class="box teal"/><text x="80" y="750" class="n">Status + logs + heartbeat</text>
+
+  <!-- 5 host runtime -->
+  <rect x="415" y="430" width="620" height="360" rx="14" class="panel"/>
+  <circle cx="455" cy="464" r="20" fill="#b26019"/><text x="455" y="472" text-anchor="middle" font-size="24" font-weight="900">5</text>
+  <text x="488" y="471" class="h">AGENT RUNTIME — HOST DOCKER DEDICADO</text>
+  <rect x="443" y="500" width="260" height="64" rx="9" class="box orange"/><text x="467" y="529" class="n">◆ squadx-client daemon</text><text x="467" y="549" class="xs">orquestra • pool • checkpoint</text>
+  <rect x="730" y="500" width="278" height="64" rx="9" class="box orange"/><text x="754" y="529" class="n">Sandbox por subtask</text><text x="754" y="549" class="xs">non-root • seccomp • ro FS</text>
+  <rect x="443" y="588" width="260" height="78" rx="9" class="box orange"/><text x="467" y="615" class="n">Runtime nativo</text><text x="467" y="637" class="sm">LangGraph + LiteLLM + 9 tools</text><text x="467" y="656" class="xs">especialistas por tipo</text>
+  <rect x="730" y="588" width="278" height="78" rx="9" class="box orange"/><text x="754" y="615" class="n">External CLI (BYOK)</text><text x="754" y="637" class="sm">Codex • Claude • Gemini</text><text x="754" y="656" class="xs">Aider • OpenCode</text>
+  <rect x="443" y="690" width="260" height="68" rx="9" class="box orange"/><text x="467" y="718" class="n">Git worktree isolado</text><text x="467" y="740" class="xs">branch / subtask → merge final</text>
+  <rect x="730" y="690" width="278" height="68" rx="9" class="box orange"/><text x="754" y="718" class="n">Egress sidecar</text><text x="754" y="740" class="xs">default-deny • DNS allowlist</text>
+  <path d="M703 532H726" class="lo"/><path d="M573 564V584" class="lo"/><path d="M869 564V584" class="lo"/><path d="M573 666V686" class="lo"/><path d="M869 666V686" class="lo"/>
+
+  <!-- 6 loop -->
+  <rect x="1065" y="430" width="436" height="360" rx="14" class="panel"/>
+  <circle cx="1105" cy="464" r="20" fill="#7842ad"/><text x="1105" y="472" text-anchor="middle" font-size="24" font-weight="900">6</text>
+  <text x="1138" y="471" class="h">COMO OS AGENTES RODAM</text>
+  <rect x="1090" y="500" width="166" height="48" rx="9" class="box purple"/><text x="1112" y="530" class="n">1. ANALYZE</text>
+  <rect x="1288" y="500" width="166" height="48" rx="9" class="box purple"/><text x="1310" y="530" class="n">2. PLAN</text>
+  <rect x="1090" y="576" width="166" height="58" rx="9" class="box orange"/><text x="1112" y="603" class="n">3. EXECUTE</text><text x="1112" y="622" class="xs">especialista + sandbox</text>
+  <rect x="1288" y="576" width="166" height="58" rx="9" class="box teal"/><text x="1310" y="603" class="n">4. REVIEW</text><text x="1310" y="622" class="xs">adversarial findings</text>
+  <rect x="1189" y="661" width="166" height="58" rx="9" class="box purple"/><text x="1211" y="688" class="n">5. ARBITER</text><text x="1211" y="707" class="xs">loop-breaker</text>
+  <rect x="1088" y="741" width="174" height="35" rx="8" class="box teal"/><text x="1112" y="764" class="sm">APPROVE → COMMIT</text>
+  <rect x="1280" y="741" width="174" height="35" rx="8" class="box purple"/><text x="1304" y="764" class="sm">ESCALATE → HUMANO</text>
+  <path d="M1256 524H1284" class="lp"/><path d="M1371 548V572" class="lp"/><path d="M1288 605H1260" class="lt"/><path d="M1173 634V648H1272V657" class="lp"/><path d="M1189 690H1168V638" class="lo"/><text x="1076" y="662" class="xs" fill="#ff8a2b">CONTINUE / fix</text>
+
+  <!-- cross planes -->
+  <path d="M730 365V410H210V426" class="line"/><text x="425" y="407" class="xs">task events / API</text>
+  <path d="M385 604H411" class="lt"/><path d="M1035 604H1061" class="lo"/>
+  <path d="M1010 724H1058" class="dash"/><text x="1015" y="711" class="xs">evidência</text>
+
+  <!-- legend/status -->
+  <rect x="35" y="818" width="920" height="170" rx="14" class="panel"/>
+  <text x="58" y="850" class="h">FLUXOS E PAPÉIS</text>
+  <path d="M65 884H155" class="line"/><text x="65" y="914" class="sm">HTTP / API</text>
+  <path d="M245 884H335" class="lt"/><text x="230" y="914" class="sm">task / realtime</text>
+  <path d="M425 884H515" class="lo"/><text x="414" y="914" class="sm">agent / jobs</text>
+  <path d="M605 884H695" class="lp"/><text x="594" y="914" class="sm">auth / decisão</text>
+  <path d="M785 884H875" class="dash"/><text x="760" y="914" class="sm">logs / evidência</text>
+  <text x="58" y="951" class="sm">Especialistas: Coordinator • Frontend • Backend • Fullstack • DevOps • QA • Database</text>
+  <text x="58" y="974" class="xs">O Coordinator planeja; cada subtask escolhe um especialista. External CLI substitui o loop nativo quando configurada.</text>
+
+  <rect x="980" y="818" width="521" height="170" rx="14" fill="#06142a" stroke="#4596ed" stroke-width="2"/>
+  <text x="1004" y="850" class="h">STATUS DO RUNTIME</text>
+  <text x="1004" y="881" font-size="15" fill="#65df9a" font-weight="800">IMPLEMENTADO:</text><text x="1125" y="881" class="sm">Docker + Process Dev LIGHT</text>
+  <text x="1004" y="910" font-size="15" fill="#65df9a" font-weight="800">DOCKER:</text><text x="1088" y="910" class="sm">Live View + egress + External CLI</text>
+  <text x="1004" y="939" font-size="15" fill="#ff8a2b" font-weight="800">LIMITADO:</text><text x="1090" y="939" class="sm">Process sem Live / sem CLI externa</text>
+  <text x="1004" y="968" font-size="15" fill="#bd70e6" font-weight="800">FUTURO:</text><text x="1085" y="968" class="sm">Firecracker e Remote ainda scaffold</text>
+</svg>

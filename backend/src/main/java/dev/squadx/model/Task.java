@@ -2,6 +2,7 @@ package dev.squadx.model;
 
 import dev.squadx.model.enums.TaskPriority;
 import dev.squadx.model.enums.TaskStatus;
+import dev.squadx.model.enums.DecisionSourceKind;
 import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
@@ -79,6 +80,16 @@ public class Task extends BaseEntity {
     @Column(name = "architecture_only", nullable = false)
     @Builder.Default
     private Boolean architectureOnly = false;
+
+    /** Âncora da decisão de origem (RFC-0007): ex. "docs/rfc/RFC-0007.md#T-0011-6". */
+    @Column(name = "source_ref", length = 255)
+    private String sourceRef;
+
+    /** Tipo da decisão de origem (ADR|RFC|CHANGE|NONE). NONE = fora do board spec-native. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_kind", length = 16, nullable = false)
+    @Builder.Default
+    private DecisionSourceKind sourceKind = DecisionSourceKind.NONE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)

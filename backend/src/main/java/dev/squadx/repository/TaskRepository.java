@@ -43,4 +43,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByAssignedAgentId(Long agentId);
 
     Optional<Task> findByExternalSystemAndExternalId(String externalSystem, String externalId);
+
+    /** Dedup do laço decisão→tarefa (RFC-0007): mesma âncora ⇒ mesmo registro. */
+    Optional<Task> findBySourceRef(String sourceRef);
 }

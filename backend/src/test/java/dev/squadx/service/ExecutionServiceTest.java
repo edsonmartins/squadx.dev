@@ -25,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -747,6 +748,55 @@ class ExecutionServiceTest {
                     .isInstanceOf(ForbiddenException.class);
 
             verify(executionRepository, never()).findByProjectId(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("getOrganizationMetrics() — taxa de sucesso por agente (T-0011-8)")
+    class GetOrganizationMetrics {
+
+        @Test
+        @DisplayName("should aggregate executions per agent with success rate")
+        void aggregatesAgentSuccess() {
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(true);
+            when(executionRepository.sumInputTokensByOrganizationId(1L)).thenReturn(100L);
+            when(executionRepository.sumOutputTokensByOrganizationId(1L)).thenReturn(50L);
+            when(executionRepository.sumTotalCostByOrganizationId(1L)).thenReturn(1.25);
+            when(executionRepository.countByTask_Project_Organization_Id(1L)).thenReturn(4L);
+            when(executionRepository.aggregateByAgentAndStatus(1L)).thenReturn(List.of(
+                    new dev.squadx.repository.ExecutionMetric(10L, "Backend Agent",
+                            ExecutionStatus.COMPLETED, 3L),
+                    new dev.squadx.repository.ExecutionMetric(10L, "Backend Agent",
+                            ExecutionStatus.FAILED, 1L),
+                    new dev.squadx.repository.ExecutionMetric(11L, "QA Agent",
+                            ExecutionStatus.COMPLETED, 0L)
+            ));
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metrics = executionService.getOrganizationMetrics(1L, testUser);
+
+            assertThat(metrics.get("executions_total")).isEqualTo(4L);
+            @SuppressWarnings("unchecked")
+            Map<Long, Map<String, Object>> agents = (Map<Long, Map<String, Object>>) metrics.get("agents");
+            assertThat(agents).containsKey(10L);
+            Map<String, Object> backend = agents.get(10L);
+            assertThat(backend.get("completed")).isEqualTo(3L);
+            assertThat(backend.get("failed_or_cancelled")).isEqualTo(1L);
+            assertThat(backend.get("success_rate")).isEqualTo(75.0);
+            // agente com linha no agregado (mesmo se sem COMPLETED) também aparece com taxa 0
+            assertThat(agents).containsKey(11L);
+            assertThat(agents.get(11L).get("success_rate")).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("should deny non-member")
+        void deniesNonMember() {
+            when(memberRepository.existsByOrganizationIdAndUserId(1L, 1L)).thenReturn(false);
+
+            assertThatThrownBy(() -> executionService.getOrganizationMetrics(1L, testUser))
+                    .isInstanceOf(ForbiddenException.class);
+
+            verify(executionRepository, never()).aggregateByAgentAndStatus(any());
         }
     }
 }

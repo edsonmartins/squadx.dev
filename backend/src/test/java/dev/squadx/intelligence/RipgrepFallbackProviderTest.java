@@ -19,8 +19,9 @@ class RipgrepFallbackProviderTest {
         var provider = new RipgrepFallbackProvider(new ObjectMapper(), root.toString());
 
         assertThat(provider.descriptor().id()).isEqualTo("ripgrep");
+        // Set.of não garante ordem — usa ordem-insensível para evitar flakiness.
         assertThat(provider.descriptor().capabilities())
-                .containsExactly(Capability.SEARCH, Capability.ARCHITECTURE);
+                .containsExactlyInAnyOrder(Capability.SEARCH, Capability.ARCHITECTURE);
     }
 
     @Test

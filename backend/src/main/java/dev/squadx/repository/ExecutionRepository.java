@@ -68,4 +68,22 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
     @Query("SELECT SUM(e.totalCost) FROM Execution e WHERE e.task.project.organization.id = :organizationId")
     Double sumTotalCostByOrganizationId(Long organizationId);
+
+    /**
+     * Contagem de execuções por agente e status dentro de uma organização — insumo do
+     * critério de saída da fase interna (ADR-0011 T-0011-8): medição por agente.
+     * Retorna projeções [agentId, agentName, status, total].
+     */
+    @Query("""
+            SELECT new dev.squadx.repository.ExecutionMetric(
+                e.agent.id, e.agent.name, e.status, COUNT(e))
+            FROM Execution e
+            WHERE e.task.project.organization.id = :organizationId
+            GROUP BY e.agent.id, e.agent.name, e.status
+            """)
+    List<ExecutionMetric> aggregateByAgentAndStatus(Long organizationId);
+
+    long countByAgentIdAndStatus(Long agentId, ExecutionStatus status);
+
+    long countByTask_Project_Organization_Id(Long organizationId);
 }

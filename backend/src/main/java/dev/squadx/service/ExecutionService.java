@@ -348,11 +348,53 @@ public class ExecutionService {
         Long totalOutputTokens = executionRepository.sumOutputTokensByOrganizationId(organizationId);
         Double totalCost = executionRepository.sumTotalCostByOrganizationId(organizationId);
 
-        return Map.of(
-                "total_input_tokens", totalInputTokens != null ? totalInputTokens : 0,
-                "total_output_tokens", totalOutputTokens != null ? totalOutputTokens : 0,
-                "total_cost", totalCost != null ? totalCost : 0.0
-        );
+        // Insumo do critério de saída da fase interna (ADR-0011 T-0011-8): medidas, não estimadas.
+        // Agrega execuções por agente → taxa de sucesso (COMPLETED vs FAILED/CANCELLED).
+        Map<Long, Map<String, Object>> agents = aggregateAgentSuccess(organizationId);
+        long tasksTotal = executionRepository.countByTask_Project_Organization_Id(organizationId);
+
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("total_input_tokens", totalInputTokens != null ? totalInputTokens : 0);
+        metrics.put("total_output_tokens", totalOutputTokens != null ? totalOutputTokens : 0);
+        metrics.put("total_cost", totalCost != null ? totalCost : 0.0);
+        metrics.put("executions_total", tasksTotal);
+        metrics.put("agents", agents);
+        return metrics;
+    }
+
+    /** Agrega contagem de execuções por agente e status (T-0011-8). */
+    private Map<Long, Map<String, Object>> aggregateAgentSuccess(Long organizationId) {
+        List<dev.squadx.repository.ExecutionMetric> rows =
+                executionRepository.aggregateByAgentAndStatus(organizationId);
+
+        Map<Long, Map<String, Object>> byAgent = new java.util.LinkedHashMap<>();
+        for (dev.squadx.repository.ExecutionMetric row : rows) {
+            Long agentId = row.agentId();
+            if (agentId == null) {
+                continue; // execuções sem agente atribuído não entram na taxa por agente
+            }
+            Map<String, Object> acc = byAgent.computeIfAbsent(agentId, k ->
+                    new HashMap<>(Map.of("name", row.agentName(), "status", new HashMap<String, Long>())));
+            @SuppressWarnings("unchecked")
+            Map<String, Long> statusCounts = (Map<String, Long>) acc.get("status");
+            statusCounts.merge(row.status().name(), row.total(), Long::sum);
+        }
+
+        // calcula taxa de sucesso por agente
+        byAgent.values().forEach(acc -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Long> sc = (Map<String, Long>) acc.get("status");
+            long completed = sc.getOrDefault(ExecutionStatus.COMPLETED.name(), 0L);
+            long failed = sc.getOrDefault(ExecutionStatus.FAILED.name(), 0L)
+                    + sc.getOrDefault(ExecutionStatus.CANCELLED.name(), 0L);
+            long total = sc.values().stream().mapToLong(Long::longValue).sum();
+            acc.put("completed", completed);
+            acc.put("failed_or_cancelled", failed);
+            acc.put("success_rate", total > 0 ? Math.round((completed * 1000.0) / total) / 10.0 : 0.0);
+            acc.remove("status");
+        });
+
+        return byAgent;
     }
 
     private void validateUserAccess(Long organizationId, Long userId) {

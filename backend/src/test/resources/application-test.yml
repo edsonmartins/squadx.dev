@@ -29,11 +29,6 @@ jwt:
 cors:
   allowed-origins: http://localhost:3000
 
-supabase:
-  url: https://test.supabase.co
-  anon-key: test-anon-key
-  service-key: test-service-key
-
 resend:
   api-key:
   from-email: test@squadx.dev

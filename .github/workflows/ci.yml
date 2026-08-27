@@ -376,8 +376,6 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
           DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
-          SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_KEY }}
           STRIPE_API_KEY: ${{ secrets.STAGING_STRIPE_API_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}
           RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
@@ -388,8 +386,6 @@ jobs:
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
             --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
-            --from-literal=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --from-literal=SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_KEY" \
             --from-literal=STRIPE_API_KEY="$STRIPE_API_KEY" \
             --from-literal=STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
             --from-literal=RESEND_API_KEY="$RESEND_API_KEY" \

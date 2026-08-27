@@ -12,7 +12,6 @@ data:
   SPRING_DATA_REDIS_PORT: "6379"
   SERVER_PORT: "8080"
   CORS_ALLOWED_ORIGINS: "https://squadx.dev,https://www.squadx.dev"
-  SUPABASE_URL: "https://your-project.supabase.co"
   RESEND_FROM_EMAIL: "noreply@squadx.dev"
   AWS_S3_BUCKET: "squadx-recordings"
   AWS_REGION: "us-east-1"

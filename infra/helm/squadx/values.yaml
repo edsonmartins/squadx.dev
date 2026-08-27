@@ -165,7 +165,6 @@ config:
   SPRING_DATA_REDIS_PORT: "6379"
   SERVER_PORT: "8080"
   CORS_ALLOWED_ORIGINS: "https://squadx.dev,https://www.squadx.dev"
-  SUPABASE_URL: "https://your-project.supabase.co"
   RESEND_FROM_EMAIL: "noreply@squadx.dev"
   AWS_S3_BUCKET: "squadx-recordings"
   AWS_REGION: "us-east-1"
@@ -181,8 +180,6 @@ config:
 secrets:
   JWT_SECRET: "Y2hhbmdlLW1lLWluLXByb2R1Y3Rpb24tbWluLTMyLWNoYXJz"          # REPLACE: min 32-char secret
   SPRING_DATASOURCE_PASSWORD: "Y2hhbmdlLW1l"   # REPLACE: PostgreSQL password
-  SUPABASE_ANON_KEY: "Y2hhbmdlLW1l"            # REPLACE: from Supabase dashboard
-  SUPABASE_SERVICE_KEY: "Y2hhbmdlLW1l"         # REPLACE: from Supabase dashboard
   STRIPE_API_KEY: "Y2hhbmdlLW1l"               # REPLACE: from Stripe dashboard
   STRIPE_WEBHOOK_SECRET: "Y2hhbmdlLW1l"        # REPLACE: from Stripe webhook config
   RESEND_API_KEY: "Y2hhbmdlLW1l"               # REPLACE: from Resend dashboard

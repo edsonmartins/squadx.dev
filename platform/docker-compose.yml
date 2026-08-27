@@ -7,13 +7,9 @@
 #
 # Prerequisites:
 #   - Copy platform/.env.example to platform/.env and fill in values
-#   - Supabase project configured (URL + keys)
 
 x-common-env: &common-env
   SQUADX_SERVICE_SECRET: ${SQUADX_SERVICE_SECRET:?Set SQUADX_SERVICE_SECRET in .env}
-  SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in .env}
-  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY in .env}
-  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
 
 networks:
   squadx-platform:
@@ -212,8 +208,6 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8080
       NEXT_PUBLIC_WS_URL: ws://localhost:8080/ws
       NEXT_PUBLIC_LIVE_URL: http://localhost:3100
-      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     depends_on: [squadx-backend]
     networks: [squadx-platform]
     deploy:

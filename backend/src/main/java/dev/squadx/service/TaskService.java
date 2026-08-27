@@ -487,6 +487,8 @@ public class TaskService {
                 .dependentIds(dependentIds)
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
+                .sourceRef(task.getSourceRef())
+                .sourceKind(task.getSourceKind() != null ? task.getSourceKind().name() : null)
                 .build();
     }
 }

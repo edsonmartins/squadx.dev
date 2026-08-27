@@ -102,4 +102,10 @@ public class TaskResponse {
 
     @JsonProperty("updated_at")
     private Instant updatedAt;
+
+    @JsonProperty("source_ref")
+    private String sourceRef;
+
+    @JsonProperty("source_kind")
+    private String sourceKind;
 }

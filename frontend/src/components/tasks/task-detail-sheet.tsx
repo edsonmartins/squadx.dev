@@ -17,6 +17,7 @@ import {
   DollarSign,
   Zap,
   Bot,
+  GitCommit,
 } from "lucide-react";
 import {
   executionsApi,
@@ -285,6 +286,16 @@ export function TaskDetailSheet({ task, onClose, onEdit, onDelete }: TaskDetailS
               <div className="flex items-center gap-2 text-sm">
                 <Bot className="h-4 w-4 text-muted-foreground" />
                 <span>{task.assigned_agent_name}</span>
+              </div>
+            )}
+
+            {task?.source_kind && task.source_kind !== "NONE" && (
+              <div className="flex items-center gap-2 text-sm">
+                <GitCommit className="h-4 w-4 text-violet-500" />
+                <span className="truncate" title={task.source_ref ?? task.source_kind}>
+                  <span className="font-medium text-violet-600 capitalize">{task.source_kind.toLowerCase()}</span>
+                  {task.source_ref ? ` · ${task.source_ref.split("/").pop()}` : ""}
+                </span>
               </div>
             )}
 

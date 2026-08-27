@@ -84,4 +84,24 @@ describe('TaskCardContent', () => {
 
     expect(onWatchLive).toHaveBeenCalledWith('abc123')
   })
+
+  it('shows decision origin badge when the task is spec-derived (RFC-0007)', () => {
+    render(
+      <TaskCardContent
+        task={makeTask({
+          source_kind: 'RFC',
+          source_ref: 'docs/rfc/RFC-0007-laco-minimo-decisao-tarefa.md#T-0010-5',
+        })}
+      />
+    )
+    expect(screen.getByText(/rfc · RFC-0007-laco-minimo-decisao-tarefa\.md#T-0010-5/)).toBeInTheDocument()
+  })
+
+  it('does not show origin badge for tasks without decision origin', () => {
+    render(
+      <TaskCardContent task={makeTask({ source_kind: 'NONE', source_ref: null })} />
+    )
+    expect(screen.queryByText(/rfc ·/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/adr ·/)).not.toBeInTheDocument()
+  })
 })

@@ -704,6 +704,9 @@ export interface TaskResponse {
   dependent_ids?: number[];
   created_at: string;
   updated_at?: string;
+  // RFC-0007: origem da decisão que gerou a tarefa (rastreabilidade no board spec-native).
+  source_ref?: string | null;
+  source_kind?: string | null;
 }
 
 export interface CreateTaskRequest {

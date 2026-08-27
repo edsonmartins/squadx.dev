@@ -129,6 +129,14 @@ export function TaskCardContent({
               {task.subtasks_count}
             </span>
           )}
+          {task.source_kind && task.source_kind !== "NONE" && (
+            <span
+              className="badge-pill bg-violet-50 text-violet-600 text-[9px]"
+              title={`Origem da decisão: ${task.source_ref ?? task.source_kind}`}
+            >
+              {task.source_kind.toLowerCase()} · {shortSource(task.source_ref)}
+            </span>
+          )}
         </div>
 
         {/* Assigned Agent */}
@@ -145,4 +153,13 @@ export function TaskCardContent({
       </div>
     </div>
   );
+}
+
+/** Abrevia a âncora (ex.: "RFC-0007.md#T-0010-5" → "RFC-0007 #T-0010-5"). */
+function shortSource(ref?: string | null): string {
+  if (!ref) return "";
+  const hash = ref.includes("#") ? ref.slice(ref.indexOf("#")) : "";
+  const file = ref.slice(0, ref.indexOf("#") >= 0 ? ref.indexOf("#") : ref.length);
+  const base = file.split("/").pop() ?? file;
+  return `${base}${hash}`;
 }

@@ -11,3 +11,4 @@ Detalham **contratos** e **algoritmos** dos mecanismos mais profundos. Numerados
 | [0004](RFC-0004-pass5-validation-algorithm.md) | Algoritmo do Pass 5 (cobertura, desfechos, Pullwise) |
 | [0005](RFC-0005-runevent-visibility-e-run-admission.md) | RunEvent (visibility/importance) + Run Admission (dedup/follow-up) |
 | [0006](RFC-0006-egress-firewall-sidecar.md) | Egress firewall sidecar (default-deny + allowlist) — realiza ADR-0008 Fase 1 |
+| [0007](RFC-0007-laco-minimo-decisao-tarefa.md) | Laço mínimo decisão→tarefa (ADR-0010 Git-first; T-0011-6) — parser de corpus, origem, portão |
